@@ -6,6 +6,7 @@ import (
 
 	"github.com/jonezzyboy/tandem/internal/change"
 	"github.com/jonezzyboy/tandem/internal/gh"
+	"github.com/jonezzyboy/tandem/internal/graph"
 )
 
 // ChangeView is a change's state flattened for rendering or JSON.
@@ -36,6 +37,7 @@ type LegView struct {
 	Repo       string   `json:"repo"`
 	Name       string   `json:"name"`
 	Dir        string   `json:"dir"`
+	Lang       string   `json:"lang"`
 	Current    string   `json:"current"`
 	OnBranch   bool     `json:"onBranch"`
 	Base       string   `json:"base"`
@@ -92,7 +94,7 @@ func BuildView(c *change.Change, g Graph, graphErr error, states []LegState, rem
 	}
 	for _, s := range states {
 		lv := LegView{
-			Repo: s.Leg.Repo, Name: filepath.Base(s.Leg.Repo), Dir: s.Leg.Dir(),
+			Repo: s.Leg.Repo, Name: filepath.Base(s.Leg.Repo), Dir: s.Leg.Dir(), Lang: graph.Language(s.Leg.Dir()),
 			Current: s.Status.Current, OnBranch: s.OnBranch(),
 			Base: s.Leg.Base, BaseRef: s.Leg.BaseRef, Level: g.Levels[s.Leg.Repo],
 			Ahead: s.Status.Ahead, Behind: s.Status.Behind, Dirty: s.Status.Dirty, Blockers: []string{},

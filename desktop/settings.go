@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"io/fs"
 	"os"
 	"os/exec"
@@ -25,10 +24,15 @@ type Settings struct {
 	Theme string `json:"theme"`
 	// Keys maps an action id to a shortcut like "meta+shift+s". Actions left
 	// out use the frontend's defaults, so new actions need no migration.
-	Keys        map[string]string `json:"keys"`
-	Editor      string            `json:"editor"`
-	MergeMethod string            `json:"mergeMethod"`
-	DraftPRs    bool              `json:"draftPRs"`
+	Keys map[string]string `json:"keys"`
+	// Editors maps "go", "php", "js" and "other" to an editor choice; see
+	// cmdPrefix in editors.go.
+	Editors map[string]string `json:"editors"`
+	// Editor is the single editor command of settings before 0.6, read only
+	// to migrate it into Editors["other"].
+	Editor      string `json:"editor,omitempty"`
+	MergeMethod string `json:"mergeMethod"`
+	DraftPRs    bool   `json:"draftPRs"`
 }
 
 // theme is a theme's window background and whether macOS should draw it dark.
@@ -47,7 +51,7 @@ var themes = map[string]theme{
 }
 
 func defaultSettings() Settings {
-	return Settings{Theme: "graphite", Keys: map[string]string{}, MergeMethod: "squash", DraftPRs: true}
+	return normalize(Settings{Theme: "graphite", MergeMethod: "squash", DraftPRs: true})
 }
 
 // settingsPath is ~/Library/Application Support/com.alanjones.tandem/settings.json,
@@ -94,7 +98,18 @@ func normalize(s Settings) Settings {
 	if s.Keys == nil {
 		s.Keys = map[string]string{}
 	}
-	s.Editor = strings.TrimSpace(s.Editor)
+	editors := map[string]string{}
+	for _, lang := range languages {
+		choice := strings.TrimSpace(s.Editors[lang])
+		if choice == "" && lang == "other" && strings.TrimSpace(s.Editor) != "" {
+			choice = cmdPrefix + strings.TrimSpace(s.Editor)
+		}
+		if choice == "" {
+			choice = defaultEditors[lang]
+		}
+		editors[lang] = choice
+	}
+	s.Editors, s.Editor = editors, ""
 	return s
 }
 
@@ -225,22 +240,4 @@ func (a *App) Account() Account {
 	a.account = &acc
 	a.mu.Unlock()
 	return acc
-}
-
-// editorCommand is the saved editor, else $TANDEM_EDITOR, else code; it may
-// carry arguments ("open -a Cursor").
-func (a *App) editorCommand() ([]string, error) {
-	cmd := a.Settings().Editor
-	if cmd == "" {
-		cmd = os.Getenv("TANDEM_EDITOR")
-	}
-	if cmd == "" {
-		cmd = "code"
-	}
-	parts := strings.Fields(cmd)
-	bin, err := exec.LookPath(parts[0])
-	if err != nil {
-		return nil, fmt.Errorf("editor %q not found: set it in Settings → General", parts[0])
-	}
-	return append([]string{bin}, parts[1:]...), nil
 }

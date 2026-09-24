@@ -50,6 +50,7 @@ export namespace core {
 	    repo: string;
 	    name: string;
 	    dir: string;
+	    lang: string;
 	    current: string;
 	    onBranch: boolean;
 	    base: string;
@@ -72,6 +73,7 @@ export namespace core {
 	        this.repo = source["repo"];
 	        this.name = source["name"];
 	        this.dir = source["dir"];
+	        this.lang = source["lang"];
 	        this.current = source["current"];
 	        this.onBranch = source["onBranch"];
 	        this.base = source["base"];
@@ -300,6 +302,24 @@ export namespace main {
 	        this.message = source["message"];
 	    }
 	}
+	export class EditorApp {
+	    id: string;
+	    name: string;
+	    path: string;
+	    installed: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new EditorApp(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.name = source["name"];
+	        this.path = source["path"];
+	        this.installed = source["installed"];
+	    }
+	}
 	export class InboxItem {
 	    repo: string;
 	    number: number;
@@ -517,7 +537,8 @@ export namespace main {
 	export class Settings {
 	    theme: string;
 	    keys: Record<string, string>;
-	    editor: string;
+	    editors: Record<string, string>;
+	    editor?: string;
 	    mergeMethod: string;
 	    draftPRs: boolean;
 	
@@ -529,6 +550,7 @@ export namespace main {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.theme = source["theme"];
 	        this.keys = source["keys"];
+	        this.editors = source["editors"];
 	        this.editor = source["editor"];
 	        this.mergeMethod = source["mergeMethod"];
 	        this.draftPRs = source["draftPRs"];

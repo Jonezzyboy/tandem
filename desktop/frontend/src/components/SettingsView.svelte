@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onDestroy, untrack } from 'svelte'
   import {
-    actions, keycaps, prefs, problem, saveSettings, shortcutFor, shortcutFromEvent, themes, type ThemeId,
+    actions, keycaps, languages, prefs, problem, saveSettings, shortcutFor, shortcutFromEvent, themes, type ThemeId,
   } from '@lib/settings.svelte'
   import Avatar from './Avatar.svelte'
   import Kbd from './Kbd.svelte'
@@ -9,8 +9,26 @@
   let recording = $state<string | null>(null)
   let pending = $state('')
   let recordError = $state('')
-  let editor = $state(untrack(() => prefs.settings.editor))
-  let editorSaved = $state(false)
+  // Custom commands being typed, per language, seeded from saved "cmd:" choices.
+  let commands = $state<Record<string, string>>(untrack(() =>
+    Object.fromEntries(Object.entries(prefs.settings.editors).filter(([, v]) => v.startsWith('cmd:')).map(([k, v]) => [k, v.slice(4)])),
+  ))
+  let savedLang = $state('')
+
+  function choiceKind(lang: string): string {
+    const c = prefs.settings.editors[lang] ?? ''
+    return c.startsWith('cmd:') ? 'cmd' : c
+  }
+
+  async function setEditor(lang: string, choice: string) {
+    await saveSettings({ editors: { ...prefs.settings.editors, [lang]: choice } })
+    savedLang = lang
+    setTimeout(() => (savedLang = ''), 1600)
+  }
+
+  function onPick(lang: string, value: string) {
+    setEditor(lang, value === 'cmd' ? `cmd:${commands[lang] ?? ''}` : value)
+  }
 
   const scopes = [
     { id: 'app', label: 'Anywhere' },
@@ -56,12 +74,6 @@
 
   function resetAll() {
     saveSettings({ keys: {} })
-  }
-
-  async function saveEditor() {
-    await saveSettings({ editor })
-    editorSaved = true
-    setTimeout(() => (editorSaved = false), 1600)
   }
 
   onDestroy(() => {
@@ -168,18 +180,41 @@
     {/each}
   </section>
 
+  <section aria-labelledby="s-editors">
+    <h2 id="s-editors">Editors</h2>
+    <div class="card editors">
+      <p class="muted small intro">“Open in editor” picks by the repo’s language: <span class="mono">go.mod</span> is Go, <span class="mono">composer.json</span> PHP, <span class="mono">package.json</span> JavaScript. Files at the repo root win over subfolders.</p>
+      {#each languages as lang (lang.id)}
+        {@const kind = choiceKind(lang.id)}
+        {@const chosen = prefs.editorApps.find((a) => a.id === kind)}
+        <div class="editor-row">
+          <label class="editor-label" for="ed-{lang.id}">{lang.id === 'other' ? 'Other' : lang.label}
+            {#if lang.id === 'other'}<span class="muted small">{lang.label}</span>{/if}
+          </label>
+          <div class="editor-pick">
+            <select id="ed-{lang.id}" class="input" value={kind} onchange={(e) => onPick(lang.id, e.currentTarget.value)}>
+              {#each prefs.editorApps.filter((a) => a.installed) as app (app.id)}
+                <option value={app.id}>{app.name}</option>
+              {/each}
+              {#if chosen && !chosen.installed}<option value={chosen.id}>{chosen.name} (not installed)</option>{/if}
+              <option value="cmd">Custom command…</option>
+            </select>
+            {#if kind === 'cmd'}
+              <input class="input mono" aria-label="{lang.label} editor command" placeholder={lang.id === 'other' ? 'blank: code' : 'e.g. cursor'}
+                bind:value={commands[lang.id]} onchange={() => setEditor(lang.id, `cmd:${commands[lang.id] ?? ''}`)}
+                onkeydown={(e) => e.key === 'Enter' && setEditor(lang.id, `cmd:${commands[lang.id] ?? ''}`)} />
+            {/if}
+            {#if chosen && !chosen.installed}<span class="warn small">not installed: falls back to Other</span>{/if}
+            {#if savedLang === lang.id}<span class="ok small">Saved</span>{/if}
+          </div>
+        </div>
+      {/each}
+    </div>
+  </section>
+
   <section aria-labelledby="s-general">
     <h2 id="s-general">General</h2>
     <div class="card general">
-      <div class="field">
-        <label for="s-editor">Editor command</label>
-        <div class="inline">
-          <input id="s-editor" class="input mono" bind:value={editor} placeholder="code" onchange={saveEditor}
-            onkeydown={(e) => e.key === 'Enter' && saveEditor()} />
-          {#if editorSaved}<span class="ok small">Saved</span>{/if}
-        </div>
-        <span class="muted small">What “Open in editor” runs with the repo’s path, e.g. <span class="mono">code</span>, <span class="mono">cursor</span>, <span class="mono">zed</span>, <span class="mono">idea</span>. Empty uses <span class="mono">$TANDEM_EDITOR</span>, then <span class="mono">code</span>.</span>
-      </div>
       <fieldset class="field">
         <legend>Merge train default</legend>
         <div class="choices">
@@ -254,10 +289,18 @@
   .grow { flex: 1; }
 
   .general { display: flex; flex-direction: column; gap: 18px; }
+  .editors { display: flex; flex-direction: column; gap: 4px; }
+  .editors .intro { margin: 0 0 8px; line-height: 1.5; }
+  .editors .intro .mono { white-space: nowrap; }
+  .editor-row { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 16px; align-items: center; min-height: 48px; }
+  .editor-label { display: flex; flex-direction: column; gap: 2px; font-size: 14px; }
+  .editor-pick { display: flex; align-items: center; gap: 10px; }
+  .editor-pick select { width: 240px; appearance: none; padding-right: 30px; cursor: pointer;
+    background-image: linear-gradient(45deg, transparent 50%, var(--muted) 50%), linear-gradient(135deg, var(--muted) 50%, transparent 50%);
+    background-position: calc(100% - 16px) 16px, calc(100% - 11px) 16px; background-size: 5px 5px; background-repeat: no-repeat; }
+  .editor-pick .input.mono { width: 220px; }
   fieldset.field { border: 0; margin: 0; padding: 0; }
   legend { font-size: 13px; color: var(--text-2); margin-bottom: 8px; }
-  .inline { display: flex; align-items: center; gap: 10px; }
-  .inline .input { width: 320px; }
   .choices { display: flex; gap: 18px; }
   .choice { display: flex; align-items: center; gap: 8px; font-size: 14px; cursor: pointer; }
   .choice input { accent-color: var(--accent); width: 16px; height: 16px; }

@@ -3,6 +3,7 @@
   import { api } from '@lib/api'
   import { ago, reviewLabel } from '@lib/format'
   import { app, fail, log } from '@lib/state.svelte'
+  import { editorLabel } from '@lib/settings.svelte'
   import type { LegView } from '@lib/types'
   import Composer from './Composer.svelte'
   import TrainDialog from './TrainDialog.svelte'
@@ -233,6 +234,7 @@
       {#each view.legs as l (l.repo)}
         {@const local = localText(l)}
         {@const ci = prState(l)}
+        {@const editor = editorLabel(l.lang)}
         <div class="row" class:warnrow={tone(l) === 'warn'}>
           <div class="stack">
             <span class="mono strong">{l.repo}</span>
@@ -267,7 +269,7 @@
             <button class="icon-btn" aria-label="Run checks on {l.name}" title="Run checks" disabled={checking !== null} onclick={() => runChecks(l.name)}>
               <Icon name="play" spin={checking === l.name} />
             </button>
-            <button class="icon-btn" aria-label="Open {l.name} in editor" title="Open in editor" onclick={() => api.openEditor(l.dir).catch(fail)}>
+            <button class="icon-btn" aria-label="Open {l.name} in {editor}" title="Open in {editor}" onclick={() => api.openEditor(l.dir).catch(fail)}>
               <Icon name="code" />
             </button>
             <button class="icon-btn" aria-label="Show {l.name} in Finder" title="Show in Finder" onclick={() => api.openFolder(l.dir).catch(fail)}>
