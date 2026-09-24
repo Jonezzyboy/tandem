@@ -3,12 +3,10 @@ package cli
 import (
 	"context"
 	"fmt"
-	"sort"
 	"strconv"
 	"strings"
 	"time"
 
-	"github.com/jonezzyboy/tandem/internal/change"
 	"github.com/jonezzyboy/tandem/internal/core"
 	"github.com/jonezzyboy/tandem/internal/gh"
 	"github.com/jonezzyboy/tandem/internal/gitx"
@@ -34,7 +32,7 @@ func runStatus(ctx context.Context, e *env, args []string) error {
 	if err := e.store.Save(c); err != nil {
 		return err
 	}
-	sortByLevel(states, g.Levels)
+	core.SortByLevel(states, g.Levels)
 
 	blockers := 0
 	for _, s := range states {
@@ -76,19 +74,9 @@ func runStatus(ctx context.Context, e *env, args []string) error {
 	return nil
 }
 
-func sortByLevel(states []core.LegState, levels map[string]int) {
-	sort.SliceStable(states, func(i, j int) bool {
-		li, lj := levels[states[i].Leg.Repo], levels[states[j].Leg.Repo]
-		if li != lj {
-			return li < lj
-		}
-		return states[i].Leg.Repo < states[j].Leg.Repo
-	})
-}
-
 func localCell(e *env, st gitx.Status, err error) ui.Cell {
 	if err != nil {
-		return ui.Cell{Text: "error: " + firstLine(err.Error()), Color: e.ui.Orange}
+		return ui.Cell{Text: "error: " + core.FirstLine(err.Error()), Color: e.ui.Orange}
 	}
 	var parts []string
 	if st.Ahead > 0 {
@@ -109,7 +97,7 @@ func localCell(e *env, st gitx.Status, err error) ui.Cell {
 
 func prCells(e *env, pr *gh.PR, err error) []ui.Cell {
 	if err != nil {
-		return []ui.Cell{{Text: "error: " + firstLine(err.Error()), Color: e.ui.Orange}}
+		return []ui.Cell{{Text: "error: " + core.FirstLine(err.Error()), Color: e.ui.Orange}}
 	}
 	if pr == nil {
 		return []ui.Cell{{Text: "—", Color: e.ui.Dim}, {Text: "—", Color: e.ui.Dim}, {Text: "—", Color: e.ui.Dim}}
@@ -148,24 +136,4 @@ func prCells(e *env, pr *gh.PR, err error) []ui.Cell {
 		review = ui.Cell{Text: "—", Color: e.ui.Dim}
 	}
 	return []ui.Cell{num, checks, review}
-}
-
-func firstLine(s string) string {
-	s, _, _ = strings.Cut(s, "\n")
-	return s
-}
-
-func orderedLegs(c *change.Change, levels map[string]int) []*change.Leg {
-	legs := make([]*change.Leg, len(c.Legs))
-	for i := range c.Legs {
-		legs[i] = &c.Legs[i]
-	}
-	sort.SliceStable(legs, func(i, j int) bool {
-		li, lj := levels[legs[i].Repo], levels[legs[j].Repo]
-		if li != lj {
-			return li < lj
-		}
-		return legs[i].Repo < legs[j].Repo
-	})
-	return legs
 }

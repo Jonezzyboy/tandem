@@ -10,6 +10,7 @@ import (
 	"os/exec"
 	"strconv"
 	"strings"
+	"time"
 )
 
 func run(ctx context.Context, dir, stdin string, args ...string) (string, error) {
@@ -154,4 +155,33 @@ func Ref(prURL string) string {
 		return prURL
 	}
 	return parts[0] + "/" + parts[1] + "#" + parts[3]
+}
+
+type SearchPR struct {
+	Number     int       `json:"number"`
+	Title      string    `json:"title"`
+	URL        string    `json:"url"`
+	IsDraft    bool      `json:"isDraft"`
+	UpdatedAt  time.Time `json:"updatedAt"`
+	Repository struct {
+		NameWithOwner string `json:"nameWithOwner"`
+	} `json:"repository"`
+	Author struct {
+		Login string `json:"login"`
+	} `json:"author"`
+}
+
+// Search runs gh search prs with the given qualifiers, e.g. --review-requested=@me.
+func Search(ctx context.Context, qualifiers ...string) ([]SearchPR, error) {
+	args := append([]string{"search", "prs"}, qualifiers...)
+	args = append(args, "--limit", "50", "--json", "number,title,url,isDraft,updatedAt,repository,author")
+	out, err := run(ctx, "", "", args...)
+	if err != nil {
+		return nil, err
+	}
+	var prs []SearchPR
+	if err := json.Unmarshal([]byte(out), &prs); err != nil {
+		return nil, fmt.Errorf("parse gh search prs: %w", err)
+	}
+	return prs, nil
 }

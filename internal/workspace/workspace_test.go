@@ -35,3 +35,20 @@ func TestResolve(t *testing.T) {
 		t.Fatal("missing repo resolved")
 	}
 }
+
+func TestList(t *testing.T) {
+	root := t.TempDir()
+	mkRepo(t, filepath.Join(root, "acme", "api"))
+	mkRepo(t, filepath.Join(root, "acme", "web"))
+	mkRepo(t, filepath.Join(root, ".tandem", "DEV-1", "api"))
+	if err := os.MkdirAll(filepath.Join(root, "acme", "notes"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	var names []string
+	for _, r := range List([]string{root}) {
+		names = append(names, r.Name)
+	}
+	if strings.Join(names, ",") != "acme/api,acme/web" {
+		t.Errorf("List = %v", names)
+	}
+}
