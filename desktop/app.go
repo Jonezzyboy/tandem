@@ -48,6 +48,7 @@ type App struct {
 	ops      map[string]*sync.Mutex
 	inbox    *Inbox
 	inboxAt  time.Time
+	trains   map[string]context.CancelFunc
 }
 
 func NewApp(store change.Store, roots []string) *App {
@@ -59,6 +60,7 @@ func NewApp(store change.Store, roots []string) *App {
 		remoteAt: map[string]time.Time{},
 		inflight: map[string]bool{},
 		ops:      map[string]*sync.Mutex{},
+		trains:   map[string]context.CancelFunc{},
 	}
 }
 
@@ -254,18 +256,24 @@ func (a *App) Changes() []ChangeSummary {
 			s.Headline = legs + " · local only"
 		default:
 			s.Remote, s.Blocked = true, v.Blocked
+			merged := 0
 			for _, l := range v.Legs {
 				if l.PR != nil && l.PR.Fail > 0 {
 					s.Failing++
 				}
+				if l.PR != nil && l.PR.State == "MERGED" {
+					merged++
+				}
 			}
 			switch {
+			case merged > 0 && merged == len(v.Legs):
+				s.Headline, s.Tone = legs+" · merged", "ok"
 			case s.Failing > 0:
 				s.Headline, s.Tone = fmt.Sprintf("%s · %d failing", legs, s.Failing), "warn"
 			case s.Blocked > 0:
 				s.Headline = fmt.Sprintf("%s · %d blocked", legs, s.Blocked)
 			default:
-				s.Headline, s.Tone = legs + " · ready to merge", "ok"
+				s.Headline, s.Tone = legs+" · ready to merge", "ok"
 			}
 		}
 		out = append(out, s)

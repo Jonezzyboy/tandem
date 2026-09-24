@@ -49,10 +49,22 @@ type PR struct {
 	Body              string  `json:"body"`
 	IsDraft           bool    `json:"isDraft"`
 	ReviewDecision    string  `json:"reviewDecision"`
+	HeadRefOid        string  `json:"headRefOid"`
 	StatusCheckRollup []Check `json:"statusCheckRollup"`
+	MergeCommit       *struct {
+		OID string `json:"oid"`
+	} `json:"mergeCommit"`
 }
 
-const viewFields = "number,url,state,title,body,isDraft,reviewDecision,statusCheckRollup"
+// MergeSHA is the commit a merged PR landed as, or "" before it merges.
+func (pr *PR) MergeSHA() string {
+	if pr.MergeCommit == nil {
+		return ""
+	}
+	return pr.MergeCommit.OID
+}
+
+const viewFields = "number,url,state,title,body,isDraft,reviewDecision,headRefOid,statusCheckRollup,mergeCommit"
 
 // View looks a PR up by number or head branch. It returns nil, nil when the
 // branch has no PR.
@@ -136,6 +148,18 @@ func Create(ctx context.Context, dir string, o CreateOpts) (int, string, error) 
 		return 0, "", fmt.Errorf("unexpected gh pr create output %q", out)
 	}
 	return n, u, nil
+}
+
+// Merge merges a PR with method squash, merge or rebase. With a merge queue the
+// PR is only queued; callers poll View for MERGED.
+func Merge(ctx context.Context, dir string, number int, method string) error {
+	switch method {
+	case "squash", "merge", "rebase":
+	default:
+		return fmt.Errorf("unknown merge method %q: use squash, merge or rebase", method)
+	}
+	_, err := run(ctx, dir, "", "pr", "merge", strconv.Itoa(number), "--"+method)
+	return err
 }
 
 func EditBody(ctx context.Context, dir string, number int, body string) error {

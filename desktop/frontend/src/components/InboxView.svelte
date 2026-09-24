@@ -1,14 +1,18 @@
 <script lang="ts">
   import { api } from '@lib/api'
   import { ago } from '@lib/format'
-  import { app, loadInbox, navigate } from '@lib/state.svelte'
+  import { app, loadCleanPlan, loadInbox, navigate } from '@lib/state.svelte'
   import type { InboxItem } from '@lib/types'
+  import CleanDialog from './CleanDialog.svelte'
   import Icon from './Icon.svelte'
 
   const review = $derived(app.inbox?.review ?? [])
   const mine = $derived(app.inbox?.mine ?? [])
   const needAction = $derived(app.changes.filter((c) => c.remote && c.blocked > 0))
   const ready = $derived(app.changes.filter((c) => c.remote && c.blocked === 0 && c.legs > 0))
+
+  const cleanable = $derived((app.cleanPlan ?? []).filter((c) => c.ready))
+  let cleaning = $state(false)
 
   function open(it: InboxItem) {
     if (it.changeId) navigate({ name: 'change', id: it.changeId })
@@ -22,8 +26,8 @@
       <div class="muted mono small">Longest-waiting reviews first</div>
       <h1>Inbox</h1>
     </div>
-    <button class="btn" style="--wails-draggable: no-drag" onclick={() => loadInbox(true)} disabled={app.inboxLoading}>
-      <span class:spin={app.inboxLoading}><Icon name="refresh" /></span>Refresh
+    <button class="btn" style="--wails-draggable: no-drag" onclick={() => { loadInbox(true); loadCleanPlan() }} disabled={app.inboxLoading}>
+      <Icon name="refresh" spin={app.inboxLoading} />Refresh
     </button>
   </header>
 
@@ -79,6 +83,27 @@
   </section>
 </div>
 
+{#if cleanable.length}
+  <div class="page housekeeping">
+    <section>
+      <div class="eyebrow">Housekeeping</div>
+      <div class="row dashed">
+        <div class="repo mono">{cleanable.length} landed change{cleanable.length === 1 ? '' : 's'}</div>
+        <div class="stack">
+          <span class="title">{cleanable.reduce((n, c) => n + c.worktrees.length, 0)} worktrees and their branches can go</span>
+          <span class="muted small">{cleanable.map((c) => c.id).join(', ')} · every path is listed before anything is removed</span>
+        </div>
+        <div class="age"></div>
+        <button class="btn small" onclick={() => (cleaning = true)}>Review cleanup</button>
+      </div>
+    </section>
+  </div>
+{/if}
+
+{#if cleaning}
+  <CleanDialog items={cleanable} onclose={() => (cleaning = false)} />
+{/if}
+
 <style>
   .page { padding: 0 32px 32px; display: flex; flex-direction: column; gap: 26px; }
   header { display: flex; justify-content: space-between; align-items: flex-end; padding-top: 28px; }
@@ -92,6 +117,8 @@
     text-align: left; color: var(--text);
   }
   .row.empty { display: block; background: transparent; border-style: dashed; }
+  .row.dashed { background: transparent; border-style: dashed; }
+  .housekeeping { padding-top: 0; }
   .row.link { cursor: pointer; }
   .row.link:hover { background: var(--raised); }
   .repo { font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-2); }

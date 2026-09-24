@@ -9,18 +9,33 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
-	"slices"
 	"sort"
 	"strings"
 
 	"golang.org/x/mod/modfile"
 )
 
+type Kind string
+
+const (
+	Go       Kind = "go"
+	Composer Kind = "composer"
+	NPM      Kind = "npm"
+)
+
+// Package is one identity in a manifest. Dir is the manifest's directory
+// relative to the repo root ("" for the root).
+type Package struct {
+	Name string
+	Kind Kind
+	Dir  string
+}
+
 // Manifest lists the package identities a repo publishes and consumes, across
 // go.mod, composer.json and package.json.
 type Manifest struct {
-	Provides []string
-	Requires []string
+	Provides []Package
+	Requires []Package
 }
 
 // ReadManifest scans dir and its immediate subdirectories, so monorepos laid
@@ -40,7 +55,11 @@ func ReadManifest(dir string) (Manifest, error) {
 	}
 	var errs []error
 	for _, d := range dirs {
-		errs = append(errs, m.readGo(d), m.readComposer(d), m.readNPM(d))
+		rel, _ := filepath.Rel(dir, d)
+		if rel == "." {
+			rel = ""
+		}
+		errs = append(errs, m.readGo(d, rel), m.readComposer(d, rel), m.readNPM(d, rel))
 	}
 	return m, errors.Join(errs...)
 }
@@ -53,7 +72,7 @@ func readOptional(path string) ([]byte, error) {
 	return data, err
 }
 
-func (m *Manifest) readGo(dir string) error {
+func (m *Manifest) readGo(dir, rel string) error {
 	path := filepath.Join(dir, "go.mod")
 	data, err := readOptional(path)
 	if err != nil || data == nil {
@@ -64,15 +83,15 @@ func (m *Manifest) readGo(dir string) error {
 		return err
 	}
 	if f.Module != nil {
-		m.Provides = append(m.Provides, f.Module.Mod.Path)
+		m.Provides = append(m.Provides, Package{f.Module.Mod.Path, Go, rel})
 	}
 	for _, r := range f.Require {
-		m.Requires = append(m.Requires, r.Mod.Path)
+		m.Requires = append(m.Requires, Package{r.Mod.Path, Go, rel})
 	}
 	return nil
 }
 
-func (m *Manifest) readComposer(dir string) error {
+func (m *Manifest) readComposer(dir, rel string) error {
 	path := filepath.Join(dir, "composer.json")
 	data, err := readOptional(path)
 	if err != nil || data == nil {
@@ -87,17 +106,17 @@ func (m *Manifest) readComposer(dir string) error {
 		return fmt.Errorf("%s: %w", path, err)
 	}
 	if c.Name != "" {
-		m.Provides = append(m.Provides, c.Name)
+		m.Provides = append(m.Provides, Package{c.Name, Composer, rel})
 	}
 	for _, deps := range []map[string]json.RawMessage{c.Require, c.RequireDev} {
 		for name := range deps {
-			m.Requires = append(m.Requires, name)
+			m.Requires = append(m.Requires, Package{name, Composer, rel})
 		}
 	}
 	return nil
 }
 
-func (m *Manifest) readNPM(dir string) error {
+func (m *Manifest) readNPM(dir, rel string) error {
 	path := filepath.Join(dir, "package.json")
 	data, err := readOptional(path)
 	if err != nil || data == nil {
@@ -113,11 +132,11 @@ func (m *Manifest) readNPM(dir string) error {
 		return fmt.Errorf("%s: %w", path, err)
 	}
 	if p.Name != "" {
-		m.Provides = append(m.Provides, p.Name)
+		m.Provides = append(m.Provides, Package{p.Name, NPM, rel})
 	}
 	for _, deps := range []map[string]string{p.Dependencies, p.DevDependencies, p.PeerDependencies} {
 		for name := range deps {
-			m.Requires = append(m.Requires, name)
+			m.Requires = append(m.Requires, Package{name, NPM, rel})
 		}
 	}
 	return nil
@@ -128,11 +147,14 @@ type Node struct {
 	Manifest Manifest
 }
 
-// Edge means From merges before To. Via is the package that links them, or
+// Edge means From merges before To. Via is the package that links them, Kind
+// its ecosystem and Dir the directory in To whose manifest requires it; all
 // empty for a declared edge.
 type Edge struct {
 	From, To string
 	Via      string
+	Kind     Kind
+	Dir      string
 }
 
 func Infer(nodes []Node) []Edge {
@@ -142,10 +164,13 @@ func Infer(nodes []Node) []Edge {
 			if a.Name == b.Name {
 				continue
 			}
+		provides:
 			for _, p := range a.Manifest.Provides {
-				if slices.Contains(b.Manifest.Requires, p) {
-					edges = append(edges, Edge{From: a.Name, To: b.Name, Via: p})
-					break
+				for _, r := range b.Manifest.Requires {
+					if r.Name == p.Name && r.Kind == p.Kind {
+						edges = append(edges, Edge{From: a.Name, To: b.Name, Via: p.Name, Kind: p.Kind, Dir: r.Dir})
+						break provides
+					}
 				}
 			}
 		}

@@ -2,6 +2,7 @@ package cli
 
 import (
 	"bytes"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -194,5 +195,110 @@ func TestEndToEnd(t *testing.T) {
 	t.Chdir(wtAPI)
 	if out := mustTD(t, "path", "proto"); strings.TrimSpace(out) != wtProto {
 		t.Errorf("path from inside a worktree = %q", out)
+	}
+}
+
+// trainGH extends the fake with merging: views substitute __HEAD__ with the
+// pushed commit, and pr merge flips the PR to MERGED at that commit.
+const trainGH = `#!/bin/sh
+repo=$(basename "$PWD")
+f="$FAKE_GH_DIR/$repo.json"
+case "$1 $2" in
+"pr view")
+  [ -f "$f" ] || { echo "no pull requests found for branch" >&2; exit 1; }
+  sed "s/__HEAD__/$(git rev-parse @{u})/" "$f" ;;
+"pr merge")
+  echo "$repo" >> "$FAKE_GH_DIR/merged"
+  sha=$(git rev-parse @{u})
+  sed -e 's/"state":"OPEN"/"state":"MERGED"/' -e "s/\"mergeCommit\":null/\"mergeCommit\":{\"oid\":\"$sha\"}/" "$f" > "$f.tmp" && mv "$f.tmp" "$f" ;;
+*) echo "unexpected gh $*" >&2; exit 1 ;;
+esac
+`
+
+func TestMergeAndCleanCLI(t *testing.T) {
+	base := t.TempDir()
+	root := filepath.Join(base, "code")
+	home := filepath.Join(root, ".tandem")
+	ghDir := filepath.Join(base, "gh")
+	bin := filepath.Join(base, "bin")
+	writeFile(t, filepath.Join(bin, "gh"), trainGH)
+	writeFile(t, filepath.Join(bin, "go"), "#!/bin/sh\n[ \"$1\" = get ] && echo \"// pinned $2\" >> go.mod\n")
+	for _, b := range []string{"gh", "go"} {
+		if err := os.Chmod(filepath.Join(bin, b), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.MkdirAll(ghDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
+	t.Setenv("FAKE_GH_DIR", ghDir)
+	t.Setenv("TANDEM_ROOT", root)
+	t.Setenv("TANDEM_HOME", home)
+	t.Setenv("GIT_CONFIG_GLOBAL", filepath.Join(base, "gitconfig"))
+	t.Setenv("GIT_CONFIG_NOSYSTEM", "1")
+	for _, k := range []string{"GIT_AUTHOR_NAME", "GIT_COMMITTER_NAME"} {
+		t.Setenv(k, "Test")
+	}
+	for _, k := range []string{"GIT_AUTHOR_EMAIL", "GIT_COMMITTER_EMAIL"} {
+		t.Setenv(k, "test@example.com")
+	}
+	t.Chdir(base)
+
+	newRepo(t, root, "proto", map[string]string{"go.mod": "module example.com/proto\n\ngo 1.26\n"})
+	newRepo(t, root, "api", map[string]string{"go.mod": "module example.com/api\n\ngo 1.26\n\nrequire example.com/proto v1.0.0\n"})
+	mustTD(t, "start", "DEV-7", "proto", "api", "--title", "Retries")
+	for _, leg := range []string{"proto", "api"} {
+		wt := filepath.Join(home, "DEV-7", leg)
+		writeFile(t, filepath.Join(wt, "work.txt"), leg)
+		git(t, wt, "add", ".")
+		git(t, wt, "commit", "--quiet", "-m", "work")
+		git(t, wt, "push", "--quiet", "-u", "origin", "DEV-7")
+	}
+	pr := func(repo string, n int, review, state string) {
+		writeFile(t, filepath.Join(ghDir, repo+".json"), fmt.Sprintf(
+			`{"number":%d,"url":"https://github.com/acme/%s/pull/%d","state":"%s","body":"","isDraft":false,"reviewDecision":"%s","headRefOid":"__HEAD__","statusCheckRollup":[{"name":"test","status":"COMPLETED","conclusion":"SUCCESS"}],"mergeCommit":null}`,
+			n, repo, n, state, review))
+	}
+
+	out := mustTD(t, "pin", "DEV-7")
+	if !regexp.MustCompile(`api ← example.com/proto\s+pinned to \w{12}, committed`).MatchString(out) {
+		t.Errorf("pin:\n%s", out)
+	}
+	git(t, filepath.Join(home, "DEV-7", "api"), "push", "--quiet")
+
+	pr("proto", 1, "CHANGES_REQUESTED", "OPEN")
+	if out, code := td(t, "merge", "DEV-7", "--yes"); code == 0 || !strings.Contains(out, "changes requested") || !strings.Contains(out, "2 of 2 legs blocked") {
+		t.Errorf("blocked train exited %d:\n%s", code, out)
+	}
+	pr("proto", 1, "APPROVED", "OPEN")
+	pr("api", 2, "APPROVED", "OPEN")
+	if out, code := td(t, "merge", "DEV-7"); code == 0 || !strings.Contains(out, "pass --yes") {
+		t.Errorf("merge without a terminal or --yes exited %d:\n%s", code, out)
+	}
+	if _, err := os.Stat(filepath.Join(ghDir, "merged")); err == nil {
+		t.Fatal("merged without confirmation")
+	}
+
+	// The train runs with its real 20s poll, so pins must not leave anything to wait on.
+	out = mustTD(t, "merge", "DEV-7", "--yes")
+	for _, want := range []string{"proto", "merging", "api", "pinned", "every leg merged"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("merge output missing %q:\n%s", want, out)
+		}
+	}
+	merged, _ := os.ReadFile(filepath.Join(ghDir, "merged"))
+	if string(merged) != "proto\napi\n" {
+		t.Errorf("merge order = %q", merged)
+	}
+
+	out = mustTD(t, "clean", "--yes")
+	for _, want := range []string{"remove worktree  " + filepath.Join(home, "DEV-7", "proto"), "delete branch    DEV-7", "DEV-7 cleaned"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("clean output missing %q:\n%s", want, out)
+		}
+	}
+	if _, err := os.Stat(filepath.Join(home, "DEV-7")); !os.IsNotExist(err) {
+		t.Errorf("change dir survived clean: %v", err)
 	}
 }
