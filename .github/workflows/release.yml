@@ -65,16 +65,8 @@ jobs:
 
       - run: go install github.com/wailsapp/wails/v2/cmd/wails@v2.16.0
 
-      - name: Build Tandem.app
-        working-directory: desktop
-        run: wails build -clean -platform darwin/universal -trimpath
-
-      # Without a re-seal the unzipped bundle can read as "damaged"; ad-hoc
-      # leaves the normal unidentified-developer prompt, which the cask clears.
-      - name: Ad-hoc sign
-        run: |
-          codesign --force --deep --sign - desktop/build/bin/Tandem.app
-          codesign --verify desktop/build/bin/Tandem.app
+      - name: Build Tandem.app with td inside
+        run: scripts/build-app.sh "${{ steps.tag.outputs.version }}"
 
       - name: Package
         id: pkg
@@ -83,7 +75,8 @@ jobs:
         run: |
           mkdir dist
           for p in darwin/arm64 darwin/amd64 linux/amd64 linux/arm64; do
-            GOOS=${p%/*} GOARCH=${p#*/} CGO_ENABLED=0 go build -trimpath -ldflags "-s -w" -o dist/td ./cmd/td
+            GOOS=${p%/*} GOARCH=${p#*/} CGO_ENABLED=0 go build -trimpath \
+              -ldflags "-s -w -X github.com/jonezzyboy/tandem/internal/cli.Version=$VERSION" -o dist/td ./cmd/td
             tar -czf "dist/td_v${VERSION}_${p%/*}_${p#*/}.tar.gz" -C dist td
           done
           rm dist/td
