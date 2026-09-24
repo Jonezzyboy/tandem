@@ -161,6 +161,24 @@ export namespace core {
 
 export namespace main {
 	
+	export class Account {
+	    login: string;
+	    name: string;
+	    avatarUrl: string;
+	    error: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new Account(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.login = source["login"];
+	        this.name = source["name"];
+	        this.avatarUrl = source["avatarUrl"];
+	        this.error = source["error"];
+	    }
+	}
 	export class ChangeSummary {
 	    id: string;
 	    title: string;
@@ -486,6 +504,26 @@ export namespace main {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.name = source["name"];
 	        this.path = source["path"];
+	    }
+	}
+	export class Settings {
+	    theme: string;
+	    keys: Record<string, string>;
+	    editor: string;
+	    mergeMethod: string;
+	    draftPRs: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new Settings(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.theme = source["theme"];
+	        this.keys = source["keys"];
+	        this.editor = source["editor"];
+	        this.mergeMethod = source["mergeMethod"];
+	        this.draftPRs = source["draftPRs"];
 	    }
 	}
 	export class StartItem {

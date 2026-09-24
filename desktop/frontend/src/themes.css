@@ -1,0 +1,179 @@
+/* Each theme is a full token set. [data-theme] is set on <html> for the app and
+   on theme previews in Settings. Keep backgrounds in sync with themes in
+   desktop/settings.go, which paints the window before the page loads. */
+
+:root,
+[data-theme='graphite'] {
+  color-scheme: dark;
+  --bg: #111216;
+  --nav: #0c0d10;
+  --panel: #16171c;
+  --raised: #1a1b21;
+  --hover: #22242c;
+  --selected: #1f2129;
+  --line: #25272e;
+  --line-2: #34363f;
+  --text: #eceae4;
+  --text-2: #c9c7c1;
+  --muted: #9c9ea8;
+  --accent: #2a4fd6;
+  --accent-hover: #3a5ee4;
+  --accent-bg: #1b2550;
+  --accent-text: #9db2ff;
+  --link-hover: #c4d1ff;
+  --on-accent: #ffffff;
+  --ok: #5cc98a;
+  --ok-text: #8fddb0;
+  --ok-bg: #12241a;
+  --ok-border: #2f6b4a;
+  --warn: #ff9e6b;
+  --warn-text: #ffb088;
+  --warn-bg: #2a1810;
+  --warn-row: #1a1410;
+  --warn-border: #8a4a2a;
+  --danger: #8a2f14;
+  --danger-hover: #a33a1a;
+  --log-bg: #08090b;
+  --scrim: rgba(5, 6, 8, 0.6);
+  --shadow: rgba(0, 0, 0, 0.5);
+}
+
+[data-theme='midnight'] {
+  color-scheme: dark;
+  --bg: #0e1320;
+  --nav: #0a0e18;
+  --panel: #131a2a;
+  --raised: #182033;
+  --hover: #1f2940;
+  --selected: #1d2740;
+  --line: #222c42;
+  --line-2: #2f3b57;
+  --text: #e6ebf5;
+  --text-2: #c3cbe0;
+  --muted: #929db6;
+  --accent: #3d5ce0;
+  --accent-hover: #3350cf;
+  --accent-bg: #1a2654;
+  --accent-text: #a5b8ff;
+  --link-hover: #c8d4ff;
+  --on-accent: #ffffff;
+  --ok: #5cc98a;
+  --ok-text: #8fddb0;
+  --ok-bg: #10261f;
+  --ok-border: #2d6a4f;
+  --warn: #ff9e6b;
+  --warn-text: #ffb088;
+  --warn-bg: #2b1a16;
+  --warn-row: #1a1519;
+  --warn-border: #8a4a2a;
+  --danger: #8a2f14;
+  --danger-hover: #a33a1a;
+  --log-bg: #080b13;
+  --scrim: rgba(4, 6, 12, 0.65);
+  --shadow: rgba(0, 0, 0, 0.55);
+}
+
+[data-theme='forest'] {
+  color-scheme: dark;
+  --bg: #101512;
+  --nav: #0b0f0d;
+  --panel: #151c18;
+  --raised: #19221d;
+  --hover: #202b25;
+  --selected: #1e2a23;
+  --line: #232e28;
+  --line-2: #334038;
+  --text: #e7ece6;
+  --text-2: #c5cec5;
+  --muted: #97a59c;
+  --accent: #2f7d57;
+  --accent-hover: #276d4b;
+  --accent-bg: #173325;
+  --accent-text: #8fdcb4;
+  --link-hover: #b5ecd0;
+  --on-accent: #ffffff;
+  --ok: #6fcf97;
+  --ok-text: #9be0b4;
+  --ok-bg: #13281c;
+  --ok-border: #2f6b4a;
+  --warn: #ffab70;
+  --warn-text: #ffbd8f;
+  --warn-bg: #2a1c12;
+  --warn-row: #1a1612;
+  --warn-border: #8a5530;
+  --danger: #8a2f14;
+  --danger-hover: #a33a1a;
+  --log-bg: #090c0a;
+  --scrim: rgba(5, 8, 6, 0.62);
+  --shadow: rgba(0, 0, 0, 0.5);
+}
+
+[data-theme='contrast'] {
+  color-scheme: dark;
+  --bg: #000000;
+  --nav: #000000;
+  --panel: #0d0d0d;
+  --raised: #141414;
+  --hover: #262626;
+  --selected: #1f1f1f;
+  --line: #4a4a4a;
+  --line-2: #737373;
+  --text: #ffffff;
+  --text-2: #f0f0f0;
+  --muted: #cfcfcf;
+  --accent: #3358f0;
+  --accent-hover: #2a4ee0;
+  --accent-bg: #0b1a4d;
+  --accent-text: #bccbff;
+  --link-hover: #dce4ff;
+  --on-accent: #ffffff;
+  --ok: #57e38c;
+  --ok-text: #8cf0b0;
+  --ok-bg: #0a2414;
+  --ok-border: #3fa86a;
+  --warn: #ffa060;
+  --warn-text: #ffc299;
+  --warn-bg: #2e1504;
+  --warn-row: #1a0d04;
+  --warn-border: #c26a2e;
+  --danger: #b3361a;
+  --danger-hover: #c9401f;
+  --log-bg: #000000;
+  --scrim: rgba(0, 0, 0, 0.75);
+  --shadow: rgba(0, 0, 0, 0.7);
+}
+
+[data-theme='paper'] {
+  color-scheme: light;
+  --bg: #f3f1ea;
+  --nav: #ebe8df;
+  --panel: #ffffff;
+  --raised: #ffffff;
+  --hover: #efece4;
+  --selected: #e2ded3;
+  --line: #dad6cb;
+  --line-2: #c4bfb2;
+  --text: #17181c;
+  --text-2: #3a3c44;
+  --muted: #5d5f69;
+  --accent: #2a4fd6;
+  --accent-hover: #1f3fb8;
+  --accent-bg: #dde5ff;
+  --accent-text: #1f3fb8;
+  --link-hover: #16308f;
+  --on-accent: #ffffff;
+  --ok: #1f7a4d;
+  --ok-text: #1a6b43;
+  --ok-bg: #e2f2e8;
+  --ok-border: #9fcfb2;
+  --warn: #b8440b;
+  --warn-text: #a03b09;
+  --warn-bg: #fbe9dd;
+  --warn-row: #fdf3ec;
+  --warn-border: #e3b394;
+  --danger: #b3361a;
+  --danger-hover: #9a2d15;
+  --log-bg: #f7f6f2;
+  --scrim: rgba(23, 24, 28, 0.35);
+  --shadow: rgba(23, 24, 28, 0.18);
+}

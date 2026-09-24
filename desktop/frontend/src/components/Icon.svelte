@@ -1,7 +1,7 @@
 <script lang="ts">
   type Name =
     | 'check' | 'x' | 'clock' | 'running' | 'alert' | 'refresh' | 'sync' | 'play'
-    | 'folder' | 'code' | 'external' | 'plus' | 'inbox' | 'branch' | 'send' | 'close'
+    | 'folder' | 'code' | 'external' | 'plus' | 'inbox' | 'branch' | 'send' | 'close' | 'settings'
 
   let { name, size = 16, color = 'currentColor', spin = false }: { name: Name; size?: number; color?: string; spin?: boolean } = $props()
 
@@ -42,6 +42,8 @@
     <circle cx="4.5" cy="3.5" r="1.5" /><circle cx="4.5" cy="12.5" r="1.5" /><circle cx="11.5" cy="5" r="1.5" /><path d="M4.5 5v6M11.5 6.5c0 3-7 2-7 4.5" />
   {:else if shown === 'send'}
     <path d="M14 2L7 9M14 2l-4.5 12L7 9 2 6.5z" />
+  {:else if shown === 'settings'}
+    <circle cx="8" cy="8" r="2.2" /><path d="M8 1.8v1.6M8 12.6v1.6M1.8 8h1.6M12.6 8h1.6M3.6 3.6l1.1 1.1M11.3 11.3l1.1 1.1M3.6 12.4l1.1-1.1M11.3 4.7l1.1-1.1" /><circle cx="8" cy="8" r="4.6" />
   {:else if shown === 'close'}
     <path d="M4 4l8 8M12 4l-8 8" />
   {/if}

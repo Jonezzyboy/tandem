@@ -8,7 +8,7 @@ VERSION="${1:-dev}"
 cd "$(dirname "$0")/.."
 ldflags="-s -w -X github.com/jonezzyboy/tandem/internal/cli.Version=$VERSION"
 
-(cd desktop && wails build -clean -platform darwin/universal -trimpath)
+(cd desktop && wails build -clean -platform darwin/universal -trimpath -ldflags "-X main.version=$VERSION")
 
 app=desktop/build/bin/Tandem.app
 tmp=$(mktemp -d)

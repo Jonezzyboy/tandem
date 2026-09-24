@@ -2,6 +2,8 @@
   import { app, navigate } from '@lib/state.svelte'
   import Icon from './Icon.svelte'
   import Kbd from './Kbd.svelte'
+  import Avatar from './Avatar.svelte'
+  import { keycaps, prefs, shortcutFor } from '@lib/settings.svelte'
 
   const reviewCount = $derived(app.inbox?.review?.length ?? 0)
 </script>
@@ -18,11 +20,11 @@
     <button class="item" class:active={app.route.name === 'new'} onclick={() => navigate({ name: 'new' })}>
       <Icon name="plus" />
       <span class="grow">New change</span>
-      <Kbd keys={['⌘', 'N']} />
+      <Kbd keys={keycaps(shortcutFor('newChange'))} />
     </button>
   </div>
 
-  <div class="group changes">
+  <div class="group changes grow-list">
     <div class="eyebrow label">My changes</div>
     {#each app.changes as c, i (c.id)}
       <button
@@ -41,6 +43,29 @@
       <p class="empty">No changes yet. Start one to put several repos on one branch.</p>
     {/each}
   </div>
+  <div class="account">
+    <button class="who" onclick={() => navigate({ name: 'settings' })} aria-label="Account and settings">
+      <Avatar account={prefs.account} size={28} />
+      <span class="who-text">
+        {#if prefs.account && !prefs.account.error}
+          <span class="who-name">{prefs.account.name || prefs.account.login}</span>
+          <span class="who-login mono">@{prefs.account.login}</span>
+        {:else}
+          <span class="who-name">Not signed in</span>
+          <span class="who-login warn">{prefs.account?.error ? 'run gh auth login' : 'checking gh…'}</span>
+        {/if}
+      </span>
+    </button>
+    <button
+      class="icon-btn gear"
+      class:active={app.route.name === 'settings'}
+      onclick={() => navigate({ name: 'settings' })}
+      aria-label="Settings"
+      title="Settings ({keycaps(shortcutFor('settings')).join('')})"
+    >
+      <Icon name="settings" />
+    </button>
+  </div>
 </nav>
 
 <style>
@@ -54,7 +79,7 @@
     flex-direction: column;
     gap: 20px;
     padding: 0 12px 16px;
-    overflow-y: auto;
+    overflow: hidden;
   }
   /* The inset titlebar's height: room for the traffic lights, and the drag handle. */
   .top { height: 52px; flex-shrink: 0; margin: 0 -12px; }
@@ -77,7 +102,7 @@
     font-family: var(--mono);
     font-size: 12px;
     background: var(--accent);
-    color: #fff;
+    color: var(--on-accent);
     border-radius: 10px;
     padding: 0 7px;
   }
@@ -89,4 +114,20 @@
   .headline.warn { color: var(--warn-text); }
   .headline.ok { color: var(--ok-text); }
   .empty { margin: 0; padding: 0 10px; font-size: 13px; color: var(--muted); line-height: 1.5; }
+  .grow-list { flex: 1; min-height: 0; overflow-y: auto; }
+  .account {
+    display: flex; align-items: center; gap: 4px; margin: 0 -12px -16px; padding: 10px 12px 12px;
+    border-top: 1px solid var(--line); background: var(--nav);
+  }
+  .who {
+    flex: 1; min-width: 0; display: flex; align-items: center; gap: 10px; padding: 6px 8px;
+    border: 0; border-radius: 8px; background: transparent; color: var(--text); text-align: left; cursor: pointer;
+  }
+  .who:hover { background: var(--panel); }
+  .who-text { display: flex; flex-direction: column; min-width: 0; line-height: 1.3; }
+  .who-name, .who-login { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .who-name { font-size: 13px; font-weight: 500; }
+  .who-login { font-size: 11.5px; color: var(--muted); }
+  .gear { width: 34px; height: 34px; }
+  .gear.active { background: var(--selected); color: var(--text); }
 </style>

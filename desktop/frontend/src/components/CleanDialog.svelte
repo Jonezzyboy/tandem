@@ -78,11 +78,11 @@
 </div>
 
 <style>
-  .scrim { position: fixed; inset: 0; background: rgba(5, 6, 8, 0.6); }
+  .scrim { position: fixed; inset: 0; background: var(--scrim); }
   .sheet {
     position: fixed; top: 80px; bottom: 64px; left: 50%; transform: translateX(-50%);
     width: min(860px, calc(100vw - 80px)); background: var(--bg); border: 1px solid var(--line-2);
-    border-radius: 16px; display: flex; flex-direction: column; box-shadow: 0 24px 60px rgba(0, 0, 0, 0.5);
+    border-radius: 16px; display: flex; flex-direction: column; box-shadow: 0 24px 60px var(--shadow);
   }
   .top { display: flex; justify-content: space-between; align-items: flex-start; padding: 22px 24px 0; }
   h2 { margin: 4px 0 0; font-family: var(--display); font-weight: 700; font-size: 24px; }
@@ -97,6 +97,6 @@
   .verb { color: var(--muted); }
   .result { display: flex; gap: 10px; align-items: center; padding: 10px 14px; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; font-size: 13px; }
   .foot { display: flex; justify-content: space-between; align-items: center; padding: 14px 24px 20px; border-top: 1px solid var(--line); }
-  .danger { background: #8a2f14; border-color: #8a2f14; color: #fff; }
-  .danger:hover:not(:disabled) { background: #a33a1a; }
+  .danger { background: var(--danger); border-color: var(--danger); color: var(--on-accent); }
+  .danger:hover:not(:disabled) { background: var(--danger-hover); }
 </style>

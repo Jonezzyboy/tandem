@@ -18,6 +18,8 @@ var assets embed.FS
 func main() {
 	adoptShellPath()
 	app := NewApp(change.Store{Home: workspace.Home()}, workspace.Roots())
+	app.settings = loadSettings()
+	bg, appearance := windowLook(app.settings)
 	err := wails.Run(&options.App{
 		Title:            "Tandem",
 		Width:            1320,
@@ -25,12 +27,12 @@ func main() {
 		MinWidth:         980,
 		MinHeight:        620,
 		AssetServer:      &assetserver.Options{Assets: assets},
-		BackgroundColour: &options.RGBA{R: 17, G: 18, B: 22, A: 255},
+		BackgroundColour: bg,
 		OnStartup:        app.startup,
 		Bind:             []any{app},
 		Mac: &mac.Options{
 			TitleBar:   mac.TitleBarHiddenInset(),
-			Appearance: mac.NSAppearanceNameDarkAqua,
+			Appearance: appearance,
 			About:      &mac.AboutInfo{Title: "Tandem", Message: "One change, many repos."},
 		},
 	})

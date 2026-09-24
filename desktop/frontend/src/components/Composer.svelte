@@ -2,6 +2,7 @@
   import { onMount, untrack } from 'svelte'
   import { api } from '@lib/api'
   import { fail, log } from '@lib/state.svelte'
+  import { prefs } from '@lib/settings.svelte'
   import type { ChangeView, PRPreview, PRRequest } from '@lib/types'
   import Icon from './Icon.svelte'
 
@@ -11,7 +12,7 @@
   let title = $state(untrack(() => view.title))
   let body = $state(untrack(() => view.body))
   let reviewers = $state(untrack(() => (view.reviewers ?? []).join(', ')))
-  let draft = $state(true)
+  let draft = $state(untrack(() => prefs.settings.draftPRs))
   let forceWithLease = $state(false)
   let preview = $state<PRPreview | null>(null)
   let planning = $state(false)
@@ -169,11 +170,11 @@
 </div>
 
 <style>
-  .scrim { position: fixed; inset: 0; background: rgba(5, 6, 8, 0.6); }
+  .scrim { position: fixed; inset: 0; background: var(--scrim); }
   .sheet {
     position: fixed; top: 48px; bottom: 32px; left: 50%; transform: translateX(-50%);
     width: min(1120px, calc(100vw - 80px)); background: var(--bg); border: 1px solid var(--line-2);
-    border-radius: 16px; display: flex; flex-direction: column; box-shadow: 0 24px 60px rgba(0, 0, 0, 0.5);
+    border-radius: 16px; display: flex; flex-direction: column; box-shadow: 0 24px 60px var(--shadow);
   }
   .top { display: flex; justify-content: space-between; align-items: flex-start; padding: 22px 24px 0; }
   h2 { margin: 4px 0 0; font-family: var(--display); font-weight: 700; font-size: 26px; }
