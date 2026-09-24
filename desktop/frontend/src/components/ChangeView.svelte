@@ -7,6 +7,8 @@
   import type { LegView } from '@lib/types'
   import Composer from './Composer.svelte'
   import TrainDialog from './TrainDialog.svelte'
+  import AddReposDialog from './AddReposDialog.svelte'
+  import EdgesDialog from './EdgesDialog.svelte'
   import Icon from './Icon.svelte'
 
   let { id }: { id: string } = $props()
@@ -38,6 +40,24 @@
       fail(e)
     } finally {
       switching = false
+    }
+  }
+
+  let addOpen = $state(false)
+  let edgesOpen = $state(false)
+  let confirmRemove = $state('')
+
+  async function removeLeg(name: string) {
+    if (confirmRemove !== name) {
+      confirmRemove = name
+      setTimeout(() => { if (confirmRemove === name) confirmRemove = '' }, 4000)
+      return
+    }
+    confirmRemove = ''
+    try {
+      log(id, await api.removeLeg(id, name), 'muted')
+    } catch (e) {
+      fail(e)
     }
   }
 
@@ -213,8 +233,11 @@
           {/each}
         </div>
       {/each}
+      <button class="btn small repin" onclick={() => (edgesOpen = true)} title="See why each repo is where it is, and declare or remove dependencies">
+        <Icon name="branch" size={14} />Edit order
+      </button>
       {#if goEdges > 0}
-        <button class="btn small repin" onclick={pin} disabled={pinning} title="Point downstream Go legs at their upstream leg's pushed commit, and commit go.mod/go.sum">
+        <button class="btn small" onclick={pin} disabled={pinning} title="Point downstream Go legs at their upstream leg's pushed commit, and commit go.mod/go.sum">
           <Icon name="sync" size={14} spin={pinning} />Re-pin
         </button>
       {/if}
@@ -229,7 +252,8 @@
 
     <section class="legs" aria-label="Legs">
       <div class="row head eyebrow">
-        <div>Leg</div><div>Branch · local</div><div>PR</div><div>Checks</div><div>Review</div><div></div>
+        <div>Leg</div><div>Branch · local</div><div>PR</div><div>Checks</div><div>Review</div>
+        <div class="head-tools"><button class="btn small add" onclick={() => (addOpen = true)}><Icon name="plus" size={14} />Add repos</button></div>
       </div>
       {#each view.legs as l (l.repo)}
         {@const local = localText(l)}
@@ -275,6 +299,13 @@
             <button class="icon-btn" aria-label="Show {l.name} in Finder" title="Show in Finder" onclick={() => api.openFolder(l.dir).catch(fail)}>
               <Icon name="folder" />
             </button>
+            {#if confirmRemove === l.name}
+              <button class="btn small danger-text" onclick={() => removeLeg(l.name)} aria-label="Confirm removing {l.name} from this change">Remove?</button>
+            {:else}
+              <button class="icon-btn" aria-label="Remove {l.name} from this change" title="Remove from this change (its branch stays in the repo)" onclick={() => removeLeg(l.name)}>
+                <Icon name="close" />
+              </button>
+            {/if}
           </div>
         </div>
       {/each}
@@ -321,6 +352,12 @@
   {#if app.composer}
     <Composer {view} onclose={() => (app.composer = false)} />
   {/if}
+  {#if addOpen}
+    <AddReposDialog {view} onclose={() => (addOpen = false)} onpublish={() => { addOpen = false; app.composer = true }} />
+  {/if}
+  {#if edgesOpen}
+    <EdgesDialog {view} onclose={() => (edgesOpen = false)} />
+  {/if}
   {#if app.trainOpen}
     <TrainDialog {view} onclose={() => (app.trainOpen = false)} />
   {/if}
@@ -356,11 +393,14 @@
   .chip.warn { border-color: var(--warn-border); background: var(--warn-bg); }
   .order-note { margin-left: auto; font-size: 12px; text-align: right; }
   .repin { margin-left: 8px; }
+  .head-tools { display: flex; justify-content: flex-end; }
+  .head-tools .add { text-transform: none; letter-spacing: normal; font-family: var(--sans); }
+  .danger-text { color: var(--warn-text); border-color: var(--warn-border); }
 
   .legs { border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
   .row {
     display: grid;
-    grid-template-columns: minmax(0, 2.2fr) minmax(0, 1.6fr) minmax(0, 0.8fr) minmax(0, 1.4fr) minmax(0, 1.3fr) 104px;
+    grid-template-columns: minmax(0, 2.2fr) minmax(0, 1.6fr) minmax(0, 0.8fr) minmax(0, 1.4fr) minmax(0, 1.3fr) 136px;
     gap: 14px; padding: 13px 16px; align-items: center; border-top: 1px solid var(--line);
   }
   .row.head { border-top: 0; background: var(--panel); padding: 10px 16px; }

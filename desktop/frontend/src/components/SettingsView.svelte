@@ -295,9 +295,7 @@
   .editor-row { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 16px; align-items: center; min-height: 48px; }
   .editor-label { display: flex; flex-direction: column; gap: 2px; font-size: 14px; }
   .editor-pick { display: flex; align-items: center; gap: 10px; }
-  .editor-pick select { width: 240px; appearance: none; padding-right: 30px; cursor: pointer;
-    background-image: linear-gradient(45deg, transparent 50%, var(--muted) 50%), linear-gradient(135deg, var(--muted) 50%, transparent 50%);
-    background-position: calc(100% - 16px) 16px, calc(100% - 11px) 16px; background-size: 5px 5px; background-repeat: no-repeat; }
+  .editor-pick select { width: 240px; }
   .editor-pick .input.mono { width: 220px; }
   fieldset.field { border: 0; margin: 0; padding: 0; }
   legend { font-size: 13px; color: var(--text-2); margin-bottom: 8px; }

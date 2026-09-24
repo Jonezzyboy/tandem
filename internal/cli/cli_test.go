@@ -342,3 +342,89 @@ func TestMergeAndCleanCLI(t *testing.T) {
 		}
 	}
 }
+
+// A change started without a repo it turns out to need: adding it gives it the
+// branch and slots it into the merge order.
+func TestAddRepoToChange(t *testing.T) {
+	base := t.TempDir()
+	root := filepath.Join(base, "code")
+	t.Setenv("TANDEM_ROOT", root)
+	t.Setenv("TANDEM_HOME", filepath.Join(root, ".tandem"))
+	t.Setenv("GIT_CONFIG_GLOBAL", filepath.Join(base, "gitconfig"))
+	t.Setenv("GIT_CONFIG_NOSYSTEM", "1")
+	for _, k := range []string{"GIT_AUTHOR_NAME", "GIT_COMMITTER_NAME"} {
+		t.Setenv(k, "Test")
+	}
+	for _, k := range []string{"GIT_AUTHOR_EMAIL", "GIT_COMMITTER_EMAIL"} {
+		t.Setenv(k, "test@example.com")
+	}
+	t.Chdir(base)
+
+	newRepo(t, root, "proto", map[string]string{"go.mod": "module example.com/proto\n\ngo 1.26\n"})
+	grpc := newRepo(t, root, "grpc", map[string]string{"go.mod": "module example.com/grpc\n\ngo 1.26\n"})
+	api := newRepo(t, root, "api", map[string]string{
+		"go.mod": "module example.com/api\n\ngo 1.26\n\nrequire (\n\texample.com/proto v1.0.0\n\texample.com/grpc v1.0.0\n)\n",
+	})
+	mustTD(t, "start", "DEV-9", "proto", "api", "--title", "Streaming")
+	levels := func() string {
+		t.Helper()
+		out := mustTD(t, "status", "DEV-9", "--offline")
+		var rows []string
+		for _, line := range strings.Split(out, "\n")[2:] {
+			if f := strings.Fields(line); len(f) >= 2 {
+				rows = append(rows, f[0]+" "+f[1])
+			}
+		}
+		return strings.Join(rows, ", ")
+	}
+	if got := levels(); got != "1 proto, 2 api" {
+		t.Fatalf("before: %s", got)
+	}
+
+	out := mustTD(t, "add", "DEV-9", "grpc")
+	for _, want := range []string{"acme/grpc", "branch DEV-9, checked out", "grpc → api", "td pr"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("add output missing %q:\n%s", want, out)
+		}
+	}
+	if got := git(t, grpc, "branch", "--show-current"); got != "DEV-9" {
+		t.Errorf("grpc on %q", got)
+	}
+	if got := levels(); got != "1 grpc, 1 proto, 2 api" {
+		t.Errorf("after add: %s", got)
+	}
+	if out := mustTD(t, "add", "DEV-9", "grpc"); !strings.Contains(out, "already in DEV-9") {
+		t.Errorf("adding twice:\n%s", out)
+	}
+
+	// A dependency no manifest shows yet is declared, and can be taken back.
+	mustTD(t, "link", "DEV-9", "grpc", "proto")
+	if got := levels(); got != "1 grpc, 2 proto, 3 api" {
+		t.Errorf("after link: %s", got)
+	}
+	mustTD(t, "unlink", "DEV-9", "grpc", "proto")
+	if got := levels(); got != "1 grpc, 1 proto, 2 api" {
+		t.Errorf("after unlink: %s", got)
+	}
+	if out, code := td(t, "unlink", "DEV-9", "grpc", "api"); code == 0 || !strings.Contains(out, "not a declared edge") {
+		t.Errorf("unlinking an inferred edge exited %d:\n%s", code, out)
+	}
+
+	// Inside the api repo the change is found without naming it.
+	t.Chdir(api)
+	mustTD(t, "link", "grpc", "proto")
+	out = mustTD(t, "remove", "grpc")
+	if !strings.Contains(out, "acme/grpc removed from DEV-9") || !strings.Contains(out, "branch DEV-9 is left in "+grpc) {
+		t.Errorf("remove:\n%s", out)
+	}
+	if got := levels(); got != "1 proto, 2 api" {
+		t.Errorf("after remove: %s", got)
+	}
+	data, _ := os.ReadFile(filepath.Join(root, ".tandem", "DEV-9", "change.json"))
+	if strings.Contains(string(data), "acme/grpc") {
+		t.Errorf("removed leg or its edge still recorded:\n%s", data)
+	}
+	if git(t, grpc, "branch", "--list", "DEV-9") == "" {
+		t.Error("remove deleted grpc's branch")
+	}
+}

@@ -45,11 +45,13 @@ Both need `git` and an authenticated `gh`.
 td start ABC-123 proto orchestrator acme/monolith --title "Add request retries"
 cd "$(td path ABC-123 orchestrator)"   # the repo's own clone; commit as usual
 td switch             # check out the change's branch in every repo (--base: back to main)
+td add grpc           # a repo the change turned out to need: branch, checkout, merge order
+td remove grpc        # take it out again (its branch stays in the repo)
 td status             # every leg in merge order: local state, PR, CI, review
 td check              # local checks per leg, legs in parallel
 td sync               # fetch all; rebase clean legs onto their base
 td pr --draft --body-file notes.md --reviewer alice,bob
-td link orchestrator monolith   # declare an edge manifests can't see
+td link orchestrator monolith   # declare an edge manifests can't see (td unlink removes it)
 td pin                # point downstream Go legs at their upstream's pushed commit
 td merge              # merge the PRs in dependency order (asks first)
 td clean              # switch landed changes' repos back to base and delete their branches (asks first)
@@ -58,6 +60,12 @@ td clean              # switch landed changes' repos back to base and delete the
 Inside one of a change's repos the ID can be left out (a repo in several
 changes picks the one it has checked out); elsewhere it can too when only one
 change exists.
+
+The merge order is worked out afresh every time from each repo's manifests plus
+any edges declared with `td link`, so adding a repo with `td add` (or Add repos
+in the app) puts it in place as soon as another repo requires its package. Run
+`td pr` afterwards to open its PR and rewrite the merge-order section of the
+PRs already open.
 
 `td start` cuts the branch from a freshly fetched base and checks it out. A repo
 with uncommitted work gets the branch but keeps its current checkout, with a

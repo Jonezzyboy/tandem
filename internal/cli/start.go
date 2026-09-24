@@ -26,25 +26,72 @@ func runStart(ctx context.Context, e *env, args []string) error {
 		return errReported
 	}
 	id := pos[0]
-	var repos []workspace.Repo
-	for _, a := range pos[1:] {
-		r, err := workspace.Resolve(e.roots, a)
-		if err != nil {
-			return err
-		}
-		repos = append(repos, r)
+	repos, err := resolveRepos(e, pos[1:])
+	if err != nil {
+		return err
 	}
 	c, results, err := core.Start(ctx, e.store, id, *title, repos)
 	if err != nil {
 		return err
 	}
+	return printStart(e, c, results)
+}
 
+// runAdd puts more repos into an existing change: each gets the change's
+// branch, and the merge order is recomputed with them in it.
+func runAdd(ctx context.Context, e *env, args []string) error {
+	flags := newFlags("add", "td add [ID] <repo>...")
+	pos, err := parseArgs(flags, args)
+	if err != nil {
+		return err
+	}
+	c, rest, err := e.changeFrom(pos)
+	if err != nil {
+		return err
+	}
+	if len(rest) == 0 {
+		flags.Usage()
+		return errReported
+	}
+	repos, err := resolveRepos(e, rest)
+	if err != nil {
+		return err
+	}
+	c, results, err := core.Start(ctx, e.store, c.ID, "", repos)
+	if err != nil {
+		return err
+	}
+	if err := printStart(e, c, results); err != nil {
+		return err
+	}
+	for _, r := range results {
+		if !r.Existing && r.Err == nil {
+			fmt.Fprintln(e.out, e.ui.Dim("  run td pr to open its PR and refresh the merge order in the others"))
+			break
+		}
+	}
+	return nil
+}
+
+func resolveRepos(e *env, names []string) ([]workspace.Repo, error) {
+	var repos []workspace.Repo
+	for _, a := range names {
+		r, err := workspace.Resolve(e.roots, a)
+		if err != nil {
+			return nil, err
+		}
+		repos = append(repos, r)
+	}
+	return repos, nil
+}
+
+func printStart(e *env, c *change.Change, results []core.AddResult) error {
 	failed := 0
 	rows := [][]ui.Cell{}
 	for _, res := range results {
 		switch {
 		case res.Existing:
-			rows = append(rows, []ui.Cell{{Text: "•", Color: e.ui.Dim}, ui.Plain(res.Repo.Name), {Text: "already in " + id, Color: e.ui.Dim}})
+			rows = append(rows, []ui.Cell{{Text: "•", Color: e.ui.Dim}, ui.Plain(res.Repo.Name), {Text: "already in " + c.ID, Color: e.ui.Dim}})
 		case res.Err != nil:
 			failed++
 			rows = append(rows, []ui.Cell{{Text: "✗", Color: e.ui.Orange}, ui.Plain(res.Repo.Name), {Text: res.Err.Error(), Color: e.ui.Orange}})
