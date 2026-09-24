@@ -1,14 +1,13 @@
 <script lang="ts">
   import { app, navigate } from '@lib/state.svelte'
   import Icon from './Icon.svelte'
+  import Kbd from './Kbd.svelte'
 
   const reviewCount = $derived(app.inbox?.review?.length ?? 0)
 </script>
 
 <nav>
-  <div class="top" style="--wails-draggable: drag">
-    <div class="brand">Tandem</div>
-  </div>
+  <div class="top" style="--wails-draggable: drag"></div>
 
   <div class="group">
     <button class="item" class:active={app.route.name === 'inbox'} onclick={() => navigate({ name: 'inbox' })}>
@@ -19,7 +18,7 @@
     <button class="item" class:active={app.route.name === 'new'} onclick={() => navigate({ name: 'new' })}>
       <Icon name="plus" />
       <span class="grow">New change</span>
-      <span class="kbd">⌘N</span>
+      <Kbd keys={['⌘', 'N']} />
     </button>
   </div>
 
@@ -33,7 +32,7 @@
       >
         <span class="row">
           <span class="mono id">{c.id}</span>
-          {#if i < 9}<span class="kbd">⌘{i + 1}</span>{/if}
+          {#if i < 9}<Kbd keys={['⌘', String(i + 1)]} />{/if}
         </span>
         <span class="title">{c.title || 'Untitled change'}</span>
         <span class="headline {c.tone}">{c.headline}</span>
@@ -57,10 +56,8 @@
     padding: 0 12px 16px;
     overflow-y: auto;
   }
-  /* 52px is the inset titlebar's height; the traffic lights sit centred in it and
-     end 78px from the window edge. */
-  .top { height: 52px; flex-shrink: 0; display: flex; align-items: center; margin: 0 -12px; padding-left: 92px; }
-  .brand { font-family: var(--display); font-weight: 700; font-size: 17px; line-height: 1; }
+  /* The inset titlebar's height: room for the traffic lights, and the drag handle. */
+  .top { height: 52px; flex-shrink: 0; margin: 0 -12px; }
   .group { display: flex; flex-direction: column; gap: 2px; }
   .label { padding: 0 10px 8px; }
   .item, .change {
@@ -84,9 +81,8 @@
     border-radius: 10px;
     padding: 0 7px;
   }
-  .kbd { font-family: var(--mono); font-size: 11px; color: var(--muted); }
   .change { flex-direction: column; gap: 2px; padding: 9px 10px; }
-  .row { display: flex; justify-content: space-between; align-items: baseline; }
+  .row { display: flex; justify-content: space-between; align-items: center; }
   .id { font-size: 12px; color: var(--accent-text); }
   .title { font-size: 14px; line-height: 1.3; }
   .headline { font-size: 12px; color: var(--muted); }
