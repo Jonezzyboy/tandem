@@ -14,9 +14,11 @@ brew install --cask Jonezzyboy/tandem/tandem
 Installs the desktop app and the `td` CLI together (`td` ships inside
 `Tandem.app` and the cask links it onto your PATH), so both are always the same
 version. Universal (Apple Silicon and Intel). The cask conflicts with
-homebrew-core's unrelated `td` formula, which installs the same command. `gh` comes along as a cask dependency, but you
-still need to be signed in (`gh auth login`); the app has no login of its own.
-`brew upgrade --cask tandem` picks up new releases.
+homebrew-core's unrelated `td` formula, which installs the same command.
+
+`gh` comes along as a cask dependency, but you still need to be signed in
+(`gh auth login`); the app has no login of its own. `brew upgrade --cask tandem`
+picks up new releases.
 
 The build is ad-hoc signed rather than notarised with an Apple Developer ID, so
 Gatekeeper would block the first launch. The cask clears the quarantine attribute in
