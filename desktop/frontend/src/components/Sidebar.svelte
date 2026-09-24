@@ -33,7 +33,10 @@
         onclick={() => navigate({ name: 'change', id: c.id })}
       >
         <span class="row">
-          <span class="mono id">{c.id}</span>
+          <span class="id-line">
+            <span class="mono id">{c.id}</span>
+            {#if c.checkedOut}<span class="live" title="Checked out in every repo" aria-label="checked out"></span>{/if}
+          </span>
           {#if i < 9}<Kbd keys={['⌘', String(i + 1)]} />{/if}
         </span>
         <span class="title">{c.title || 'Untitled change'}</span>
@@ -109,6 +112,8 @@
   .change { flex-direction: column; gap: 2px; padding: 9px 10px; }
   .row { display: flex; justify-content: space-between; align-items: center; }
   .id { font-size: 12px; color: var(--accent-text); }
+  .id-line { display: inline-flex; align-items: center; gap: 6px; }
+  .live { width: 6px; height: 6px; border-radius: 3px; background: var(--ok); }
   .title { font-size: 14px; line-height: 1.3; }
   .headline { font-size: 12px; color: var(--muted); }
   .headline.warn { color: var(--warn-text); }

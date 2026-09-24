@@ -231,15 +231,17 @@ func (a *App) persist(v core.ChangeView) {
 }
 
 type ChangeSummary struct {
-	ID       string    `json:"id"`
-	Title    string    `json:"title"`
-	Legs     int       `json:"legs"`
-	Blocked  int       `json:"blocked"`
-	Failing  int       `json:"failing"`
-	Remote   bool      `json:"remote"`
-	Headline string    `json:"headline"`
-	Tone     string    `json:"tone"`
-	Created  time.Time `json:"created"`
+	ID string `json:"id"`
+	// CheckedOut means every leg's repo has the change's branch checked out.
+	CheckedOut bool      `json:"checkedOut"`
+	Title      string    `json:"title"`
+	Legs       int       `json:"legs"`
+	Blocked    int       `json:"blocked"`
+	Failing    int       `json:"failing"`
+	Remote     bool      `json:"remote"`
+	Headline   string    `json:"headline"`
+	Tone       string    `json:"tone"`
+	Created    time.Time `json:"created"`
 }
 
 // Changes lists every change, newest first, summarised from the cached views.
@@ -252,6 +254,12 @@ func (a *App) Changes() []ChangeSummary {
 		s := ChangeSummary{ID: c.ID, Title: c.Title, Legs: len(c.Legs), Created: c.Created, Tone: "muted"}
 		legs := plural(s.Legs, "leg")
 		v, ok := a.views[c.ID]
+		if ok && len(v.Legs) > 0 {
+			s.CheckedOut = true
+			for _, l := range v.Legs {
+				s.CheckedOut = s.CheckedOut && l.OnBranch
+			}
+		}
 		switch {
 		case !ok:
 			s.Headline = legs + " · not checked yet"
@@ -385,7 +393,7 @@ func (a *App) Check(id, leg string) ([]CheckEvent, error) {
 	var wg sync.WaitGroup
 	for _, l := range legs {
 		wg.Go(func() {
-			_, err := core.RunChecks(a.ctx, l, func(r checks.Result, done bool) {
+			_, err := core.RunChecks(a.ctx, c, l, func(r checks.Result, done bool) {
 				ev := checkEvent(id, l.Name(), r, done)
 				a.emit("check", ev)
 				if done {
@@ -646,9 +654,15 @@ func (a *App) Start(req StartRequest) ([]StartItem, error) {
 		case r.Err != nil:
 			it.Message = core.FirstLine(r.Err.Error())
 		default:
-			it.Message = r.Leg.Worktree
+			it.Message = "branch " + id
+			if !r.Created {
+				it.Message += " (existing)"
+			}
+			if r.Switched {
+				it.Message += ", checked out"
+			}
 			if r.Warning != "" {
-				it.Message += " (" + r.Warning + ")"
+				it.Message += " · " + r.Warning
 			}
 		}
 		out[i] = it
@@ -693,17 +707,28 @@ func (a *App) OpenURL(url string) error {
 	return nil
 }
 
-// within keeps the frontend's open-folder/editor calls inside Tandem's home.
+// within keeps the frontend's open-folder/editor calls to a leg's repo or
+// Tandem's home.
 func (a *App) within(path string) (string, error) {
 	abs, err := filepath.Abs(path)
 	if err != nil {
 		return "", err
 	}
-	rel, err := filepath.Rel(a.store.Home, abs)
-	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
-		return "", fmt.Errorf("%s is outside %s", path, a.store.Home)
+	allowed := []string{a.store.Home}
+	if all, err := a.store.List(); err == nil {
+		for _, c := range all {
+			for _, l := range c.Legs {
+				allowed = append(allowed, l.Dir())
+			}
+		}
 	}
-	return abs, nil
+	for _, dir := range allowed {
+		rel, err := filepath.Rel(dir, abs)
+		if err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+			return abs, nil
+		}
+	}
+	return "", fmt.Errorf("%s is not a repo in any change", path)
 }
 
 func (a *App) OpenFolder(path string) error {

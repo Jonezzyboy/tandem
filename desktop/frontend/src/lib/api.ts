@@ -24,6 +24,7 @@ export const api = {
   openURL: (url: string) => App.OpenURL(url),
   openFolder: (path: string) => App.OpenFolder(path),
   openEditor: (path: string) => App.OpenEditor(path),
+  switchTo: (id: string, toBase = false) => App.Switch(id, toBase) as unknown as Promise<LegResult[]>,
   pin: (id: string) => App.Pin(id) as unknown as Promise<PinItem[]>,
   trainPlan: (id: string) => App.TrainPlan(id) as unknown as Promise<TrainPlan>,
   startTrain: (id: string, method: string) => App.StartTrain(id, method),

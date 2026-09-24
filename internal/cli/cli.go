@@ -9,9 +9,11 @@ import (
 	"io"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"strings"
 
 	"github.com/jonezzyboy/tandem/internal/change"
+	"github.com/jonezzyboy/tandem/internal/gitx"
 	"github.com/jonezzyboy/tandem/internal/ui"
 	"github.com/jonezzyboy/tandem/internal/workspace"
 )
@@ -33,7 +35,8 @@ var commands []command
 
 func init() {
 	commands = []command{
-		{"start", "td start <ID> <repo>... [--title T]", "create a change, or add repos to one, with a worktree per repo", runStart},
+		{"start", "td start <ID> <repo>... [--title T]", "create a change, or add repos to one: a branch per repo, checked out", runStart},
+		{"switch", "td switch [ID] [--base]", "check out the change's branch in every repo, or with --base their main branch", runSwitch},
 		{"status", "td status [ID]", "local and GitHub state of every leg, in merge order", runStatus},
 		{"sync", "td sync [ID]", "fetch every leg and rebase clean ones onto their base", runSync},
 		{"check", "td check [ID] [leg...]", "run each leg's local checks", runCheck},
@@ -42,7 +45,7 @@ func init() {
 		{"merge", "td merge [ID] [--method squash|merge|rebase] [--dry-run] [--yes]", "merge the PRs in dependency order, re-pinning as it goes", runMerge},
 		{"clean", "td clean [--yes]", "remove worktrees and branches of changes whose PRs have landed", runClean},
 		{"link", "td link [ID] <upstream> <downstream>", "declare that upstream merges before downstream", runLink},
-		{"path", "td path [ID] [leg]", "print a change's directory or a leg's worktree", runPath},
+		{"path", "td path [ID] [leg]", "print a change's directory or a leg's repo", runPath},
 		{"list", "td list", "list changes", runList},
 		{"version", "td version", "print the td version", runVersion},
 	}
@@ -64,7 +67,7 @@ func usage(w io.Writer) {
 	for _, c := range commands {
 		fmt.Fprintf(w, "  %-8s %s\n", c.name, c.summary)
 	}
-	fmt.Fprintln(w, "\nRun td <command> -h for flags. TANDEM_ROOT sets where clones live (default ~/code),\nTANDEM_HOME where changes and worktrees go (default ~/code/.tandem).")
+	fmt.Fprintln(w, "\nRun td <command> -h for flags. TANDEM_ROOT sets where clones live (default ~/code),\nTANDEM_HOME where changes are recorded (default ~/code/.tandem).")
 }
 
 func Main(args []string) int {
@@ -137,14 +140,52 @@ func parseArgs(fs *flag.FlagSet, args []string) ([]string, error) {
 }
 
 // changeFrom treats the first positional as a change ID when one by that name
-// exists, else infers the change from the working directory.
+// exists, else infers the change from the working directory: a leg's repo
+// (preferring the change whose branch it has checked out), the change's own
+// directory, or the only change there is.
 func (e *env) changeFrom(pos []string) (*change.Change, []string, error) {
 	if len(pos) > 0 && e.store.Exists(pos[0]) {
 		c, err := e.store.Load(pos[0])
 		return c, pos[1:], err
 	}
+	if c := e.changeForDir(); c != nil {
+		return c, pos, nil
+	}
 	c, err := e.store.Current(e.cwd)
 	return c, pos, err
+}
+
+func (e *env) changeForDir() *change.Change {
+	all, err := e.store.List()
+	if err != nil {
+		return nil
+	}
+	var matches []*change.Change
+	var repo string
+	for _, c := range all {
+		for _, l := range c.Legs {
+			if within(e.cwd, l.Dir()) {
+				matches = append(matches, c)
+				repo = l.Dir()
+				break
+			}
+		}
+	}
+	if len(matches) == 1 {
+		return matches[0]
+	}
+	current := gitx.CurrentBranch(context.Background(), repo)
+	for _, c := range matches {
+		if c.Branch == current {
+			return c
+		}
+	}
+	return nil
+}
+
+func within(path, dir string) bool {
+	rel, err := filepath.Rel(dir, path)
+	return err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
 }
 
 func splitList(s string) []string {

@@ -22,7 +22,7 @@ func Roots() []string {
 	return []string{filepath.Join(home, "code")}
 }
 
-// Home is where changes and their worktrees live: $TANDEM_HOME or ~/code/.tandem.
+// Home is where changes are recorded: $TANDEM_HOME or ~/code/.tandem.
 func Home() string {
 	if v := os.Getenv("TANDEM_HOME"); v != "" {
 		return v
@@ -58,7 +58,7 @@ func Resolve(roots []string, arg string) (Repo, error) {
 			continue
 		}
 		for _, v := range vendors {
-			// Dot dirs include the tandem home, whose worktrees would otherwise match.
+			// Dot dirs include the tandem home, whose legacy worktrees would otherwise match.
 			if !v.IsDir() || strings.HasPrefix(v.Name(), ".") {
 				continue
 			}
@@ -80,21 +80,16 @@ func Resolve(roots []string, arg string) (Repo, error) {
 	return Repo{}, fmt.Errorf("%s is ambiguous: %s", arg, strings.Join(names, ", "))
 }
 
-// AddWorktree checks out branch at dst, reusing a local or remote branch of
-// that name before cutting a new one from base. It reports false when dst is
-// already a worktree.
-func AddWorktree(ctx context.Context, src, dst, branch string, base gitx.Base) (bool, error) {
-	if isRepo(dst) {
+// CreateBranch makes branch in the clone at src, tracking origin's branch of
+// that name when one exists, else cut from base. It reports false when the
+// branch already existed.
+func CreateBranch(ctx context.Context, src, branch string, base gitx.Base) (bool, error) {
+	if gitx.RefExists(ctx, src, "refs/heads/"+branch) {
 		return false, nil
 	}
-	var args []string
-	switch {
-	case gitx.RefExists(ctx, src, "refs/heads/"+branch):
-		args = []string{"worktree", "add", "--quiet", dst, branch}
-	case gitx.RefExists(ctx, src, "refs/remotes/origin/"+branch):
-		args = []string{"worktree", "add", "--quiet", "--track", "-b", branch, dst, "origin/" + branch}
-	default:
-		args = []string{"worktree", "add", "--quiet", "--no-track", "-b", branch, dst, base.Ref}
+	args := []string{"branch", "--quiet", "--no-track", branch, base.Ref}
+	if gitx.RefExists(ctx, src, "refs/remotes/origin/"+branch) {
+		args = []string{"branch", "--quiet", "--track", branch, "origin/" + branch}
 	}
 	if _, err := gitx.Run(ctx, src, args...); err != nil {
 		return false, err

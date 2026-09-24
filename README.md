@@ -1,8 +1,9 @@
 # Tandem
 
 Work on one change across many repos. A **change** (e.g. `ABC-123`) has one
-**leg** per repo: a git worktree on a shared branch, its local checks and its
-PR. Tandem works out merge order from `go.mod`, `composer.json` and
+**leg** per repo: the change's branch in that repo's own clone, its local
+checks and its PR. Branches are checked out in place, so services running off a
+repo's current checkout run the change's code. Tandem works out merge order from `go.mod`, `composer.json` and
 `package.json`, and keeps a "Related PRs" block in every PR.
 
 ## Install
@@ -42,7 +43,8 @@ Both need `git` and an authenticated `gh`.
 
 ```sh
 td start ABC-123 proto orchestrator acme/monolith --title "Add request retries"
-cd "$(td path ABC-123 orchestrator)"   # commit in the worktrees as usual
+cd "$(td path ABC-123 orchestrator)"   # the repo's own clone; commit as usual
+td switch             # check out the change's branch in every repo (--base: back to main)
 td status             # every leg in merge order: local state, PR, CI, review
 td check              # local checks per leg, legs in parallel
 td sync               # fetch all; rebase clean legs onto their base
@@ -50,15 +52,25 @@ td pr --draft --body-file notes.md --reviewer alice,bob
 td link orchestrator monolith   # declare an edge manifests can't see
 td pin                # point downstream Go legs at their upstream's pushed commit
 td merge              # merge the PRs in dependency order (asks first)
-td clean              # remove worktrees and branches of changes that have landed (asks first)
+td clean              # switch landed changes' repos back to base and delete their branches (asks first)
 ```
 
-Inside a change's directory the ID can be left out; elsewhere it can too when
-only one change exists.
+Inside one of a change's repos the ID can be left out (a repo in several
+changes picks the one it has checked out); elsewhere it can too when only one
+change exists.
+
+`td start` cuts the branch from a freshly fetched base and checks it out. A repo
+with uncommitted work gets the branch but keeps its current checkout, with a
+warning, and `td switch` refuses it too, so work never follows you onto another
+branch. `td status` counts each branch's commits whether or not it is checked
+out and shows the branch a repo is actually on. `td check`, `td sync`, `td pin`
+and the train's re-pinning need the change's branch checked out and say so
+otherwise. `td pr` works either way.
 
 Repos are found as `<root>/<vendor>/<repo>` under `$TANDEM_ROOT` (default
-`~/code`). Changes and their worktrees live in `$TANDEM_HOME` (default
-`~/code/.tandem/<ID>/<repo>`), with state in `change.json`.
+`~/code`). Changes are recorded in `$TANDEM_HOME/<ID>/change.json` (default
+`~/code/.tandem`). Changes made before v0.5 kept a worktree per repo there;
+they still work, and `td clean` removes those worktrees.
 
 ### `td pr`
 
@@ -95,17 +107,16 @@ set as usual. `--no-commit` leaves the change for you to commit.
 
 ### `td clean`
 
-Lists every change whose PRs have all merged or closed, with each worktree,
-local branch and file it would remove, and deletes only after a yes. A change
-with uncommitted or unpushed work, or a PR still open, is kept and the reason
-shown. A branch whose PR closed unmerged is kept. Worktrees are removed with
-plain `git worktree remove`, which refuses a modified one.
+Lists every change whose PRs have all merged or closed, with each repo it
+would switch back to its base, each local branch and file it would delete, and
+acts only after a yes. A change with uncommitted or unpushed work, or a PR still
+open, is kept and the reason shown. A branch whose PR closed unmerged is kept.
 
 `td merge` and `td clean` need a terminal to confirm, or `--yes`.
 
 ### Checks
 
-Detected from the worktree root and its immediate subdirectories:
+Detected from the repo root and its immediate subdirectories:
 
 | Found | Runs |
 |---|---|
@@ -114,7 +125,7 @@ Detected from the worktree root and its immediate subdirectories:
 | `package.json` scripts `typecheck`, `lint`, `test` | `<npm\|pnpm\|yarn> run <script>` with `CI=true` |
 | `buf.yaml` | `buf lint` |
 
-A fresh worktree has no `vendor/` or `node_modules/`; those checks show as
+A repo without `vendor/` or `node_modules/` installed shows those checks as
 skipped until you install. A `.tandem.yml` at the repo root replaces
 detection:
 

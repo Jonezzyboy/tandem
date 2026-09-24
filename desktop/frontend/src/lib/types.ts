@@ -13,7 +13,9 @@ export interface PRView {
 export interface LegView {
   repo: string
   name: string
-  worktree: string
+  dir: string
+  current: string
+  onBranch: boolean
   base: string
   baseRef: string
   level: number
@@ -50,6 +52,7 @@ export interface ChangeView {
 
 export interface ChangeSummary {
   id: string
+  checkedOut: boolean
   title: string
   legs: number
   blocked: number
@@ -183,6 +186,7 @@ export interface CleanItem {
   title: string
   ready: boolean
   reason: string
+  switches: string[]
   worktrees: string[]
   branches: string[]
   kept: string[]

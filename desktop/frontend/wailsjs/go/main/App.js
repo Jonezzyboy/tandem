@@ -94,6 +94,10 @@ export function StartTrain(arg1, arg2) {
   return window['go']['main']['App']['StartTrain'](arg1, arg2);
 }
 
+export function Switch(arg1, arg2) {
+  return window['go']['main']['App']['Switch'](arg1, arg2);
+}
+
 export function Sync(arg1) {
   return window['go']['main']['App']['Sync'](arg1);
 }

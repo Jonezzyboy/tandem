@@ -9,7 +9,6 @@ import (
 
 	"github.com/jonezzyboy/tandem/internal/core"
 	"github.com/jonezzyboy/tandem/internal/gh"
-	"github.com/jonezzyboy/tandem/internal/gitx"
 	"github.com/jonezzyboy/tandem/internal/ui"
 )
 
@@ -58,7 +57,7 @@ func runStatus(ctx context.Context, e *env, args []string) error {
 		if n, ok := g.Levels[s.Leg.Repo]; ok {
 			level = strconv.Itoa(n)
 		}
-		row := []ui.Cell{ui.Plain(level), ui.Plain(s.Leg.Name()), localCell(e, s.Status, s.StatusErr)}
+		row := []ui.Cell{ui.Plain(level), ui.Plain(s.Leg.Name()), localCell(e, s, s.StatusErr)}
 		if !*offline {
 			row = append(row, prCells(e, s.PR, s.PRErr)...)
 		}
@@ -74,16 +73,24 @@ func runStatus(ctx context.Context, e *env, args []string) error {
 	return nil
 }
 
-func localCell(e *env, st gitx.Status, err error) ui.Cell {
+func localCell(e *env, s core.LegState, err error) ui.Cell {
 	if err != nil {
 		return ui.Cell{Text: "error: " + core.FirstLine(err.Error()), Color: e.ui.Orange}
 	}
+	st := s.Status
 	var parts []string
 	if st.Ahead > 0 {
 		parts = append(parts, fmt.Sprintf("↑%d", st.Ahead))
 	}
 	if st.Behind > 0 {
 		parts = append(parts, fmt.Sprintf("↓%d", st.Behind))
+	}
+	if !s.OnBranch() {
+		on := st.Current
+		if on == "" {
+			on = "detached HEAD"
+		}
+		return ui.Cell{Text: strings.Join(append(parts, "on "+on), " · "), Color: e.ui.Orange}
 	}
 	if st.Dirty > 0 {
 		parts = append(parts, fmt.Sprintf("%d dirty", st.Dirty))

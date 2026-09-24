@@ -52,7 +52,7 @@
 
 <div class="page">
   <header style="--wails-draggable: drag">
-    <div class="muted mono small">One branch, one worktree per repo</div>
+    <div class="muted mono small">One branch per repo, checked out in your clones</div>
     <h1>New change</h1>
   </header>
 
@@ -61,7 +61,7 @@
       <div class="field">
         <label for="nc-id">Ticket or change ID</label>
         <input id="nc-id" class="input mono" bind:value={id} placeholder="ABC-123" autocomplete="off" />
-        <span class="small muted">Also the branch name in every repo.</span>
+        <span class="small muted">The branch name in every repo. Clean repos switch to it; any with uncommitted work stay put.</span>
       </div>
       <div class="field">
         <label for="nc-title">Title</label>
@@ -79,7 +79,7 @@
       </div>
       <button class="btn primary start" disabled={!validId || selected.length === 0 || starting} onclick={start}>
         <Icon name="branch" spin={starting} />
-        Create {selected.length || ''} worktree{selected.length === 1 ? '' : 's'}
+        Create {selected.length || ''} branch{selected.length === 1 ? '' : 'es'}
       </button>
       {#if results}
         <div class="results">

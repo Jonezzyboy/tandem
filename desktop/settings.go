@@ -189,7 +189,7 @@ func (a *App) Version() string {
 	return version
 }
 
-// TandemHome is where changes and their worktrees live.
+// TandemHome is where changes are recorded.
 func (a *App) TandemHome() string {
 	return a.store.Home
 }

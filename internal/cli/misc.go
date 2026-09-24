@@ -61,7 +61,7 @@ func runPath(ctx context.Context, e *env, args []string) error {
 		if err != nil {
 			return err
 		}
-		fmt.Fprintln(e.out, l.Worktree)
+		fmt.Fprintln(e.out, l.Dir())
 	default:
 		flags.Usage()
 		return errReported
@@ -89,5 +89,33 @@ func runList(ctx context.Context, e *env, args []string) error {
 		})
 	}
 	e.ui.Table(e.out, "", rows)
+	return nil
+}
+
+func runSwitch(ctx context.Context, e *env, args []string) error {
+	flags := newFlags("switch", "td switch [ID] [--base]")
+	toBase := flags.Bool("base", false, "check out each repo's base branch instead")
+	pos, err := parseArgs(flags, args)
+	if err != nil {
+		return err
+	}
+	c, _, err := e.changeFrom(pos)
+	if err != nil {
+		return err
+	}
+	failed := false
+	rows := [][]ui.Cell{}
+	for _, r := range core.Switch(ctx, c, *toBase) {
+		if r.Err != nil {
+			failed = true
+			rows = append(rows, []ui.Cell{{Text: "✗", Color: e.ui.Orange}, ui.Plain(r.Leg.Name()), {Text: "stayed put: " + core.FirstLine(r.Err.Error()), Color: e.ui.Orange}})
+			continue
+		}
+		rows = append(rows, []ui.Cell{{Text: "✓", Color: e.ui.Green}, ui.Plain(r.Leg.Name()), ui.Plain("on " + r.To)})
+	}
+	e.ui.Table(e.out, "  ", rows)
+	if failed {
+		return errReported
+	}
 	return nil
 }

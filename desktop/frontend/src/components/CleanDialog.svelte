@@ -8,7 +8,7 @@
 
   let busy = $state(false)
   let results = $state<CleanResult[] | null>(null)
-  const count = $derived(items.reduce((n, it) => n + it.worktrees.length + it.branches.length + it.files.length, 0))
+  const count = $derived(items.reduce((n, it) => n + it.switches.length + it.worktrees.length + it.branches.length + it.files.length, 0))
 
   async function clean() {
     busy = true
@@ -34,7 +34,7 @@
   <div class="top">
     <div>
       <div class="mono muted small">housekeeping</div>
-      <h2 id="clean-title">{results ? 'Cleaned up' : `Delete ${count} items from ${items.length} landed change${items.length === 1 ? '' : 's'}`}</h2>
+      <h2 id="clean-title">{results ? 'Cleaned up' : `Clean up ${items.length} landed change${items.length === 1 ? '' : 's'}`}</h2>
     </div>
     <button class="icon-btn" aria-label="Close" disabled={busy} onclick={onclose}><Icon name="close" /></button>
   </div>
@@ -49,11 +49,12 @@
         </div>
       {/each}
     {:else}
-      <p class="muted small">Every path below is removed exactly as listed. A worktree git reports as modified is refused, and the change stays.</p>
+      <p class="muted small">Exactly what is listed happens. A repo still on the change’s branch moves to its base first; git refuses if that would lose work, and the change stays.</p>
       {#each items as it (it.id)}
         <section>
           <div class="head"><span class="mono accent">{it.id}</span><span>{it.title}</span></div>
           <ul class="mono selectable">
+            {#each it.switches as sw}<li><span class="verb">switch</span>{sw}</li>{/each}
             {#each it.worktrees as w}<li><span class="verb">worktree</span>{w}</li>{/each}
             {#each it.branches as b}<li><span class="verb">branch</span>{b}</li>{/each}
             {#each it.files as f}<li><span class="verb">file</span>{f}</li>{/each}
@@ -71,7 +72,7 @@
     {:else}
       <button class="btn" disabled={busy} onclick={onclose}>Cancel</button>
       <button class="btn danger" disabled={busy} onclick={clean}>
-        <Icon name="close" spin={busy} />Delete {count} items
+        <Icon name="close" spin={busy} />Clean up {count} items
       </button>
     {/if}
   </div>

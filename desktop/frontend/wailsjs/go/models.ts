@@ -49,7 +49,9 @@ export namespace core {
 	export class LegView {
 	    repo: string;
 	    name: string;
-	    worktree: string;
+	    dir: string;
+	    current: string;
+	    onBranch: boolean;
 	    base: string;
 	    baseRef: string;
 	    level: number;
@@ -69,7 +71,9 @@ export namespace core {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.repo = source["repo"];
 	        this.name = source["name"];
-	        this.worktree = source["worktree"];
+	        this.dir = source["dir"];
+	        this.current = source["current"];
+	        this.onBranch = source["onBranch"];
 	        this.base = source["base"];
 	        this.baseRef = source["baseRef"];
 	        this.level = source["level"];
@@ -181,6 +185,7 @@ export namespace main {
 	}
 	export class ChangeSummary {
 	    id: string;
+	    checkedOut: boolean;
 	    title: string;
 	    legs: number;
 	    blocked: number;
@@ -198,6 +203,7 @@ export namespace main {
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.id = source["id"];
+	        this.checkedOut = source["checkedOut"];
 	        this.title = source["title"];
 	        this.legs = source["legs"];
 	        this.blocked = source["blocked"];
@@ -253,6 +259,7 @@ export namespace main {
 	    title: string;
 	    ready: boolean;
 	    reason: string;
+	    switches: string[];
 	    worktrees: string[];
 	    branches: string[];
 	    kept: string[];
@@ -269,6 +276,7 @@ export namespace main {
 	        this.title = source["title"];
 	        this.ready = source["ready"];
 	        this.reason = source["reason"];
+	        this.switches = source["switches"];
 	        this.worktrees = source["worktrees"];
 	        this.branches = source["branches"];
 	        this.kept = source["kept"];

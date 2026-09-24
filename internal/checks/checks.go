@@ -21,7 +21,7 @@ type Check struct {
 	Name string
 	Dir  string
 	Args []string
-	// Skip, when set, is why the check cannot run in this worktree.
+	// Skip, when set, is why the check cannot run in this checkout.
 	Skip string
 }
 
@@ -119,7 +119,7 @@ func detectDir(dir string) []Check {
 	return out
 }
 
-// Worktrees start without vendor/ or node_modules/, so tools installed by the
+// A checkout may lack vendor/ or node_modules/, so tools installed by the
 // package manager are reported as skipped rather than silently dropped.
 func phpChecks(dir string) []Check {
 	var out []Check

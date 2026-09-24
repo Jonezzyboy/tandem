@@ -27,7 +27,7 @@ func BuildGraph(c *change.Change) (Graph, error) {
 	nodes := make([]graph.Node, 0, len(c.Legs))
 	names := make([]string, 0, len(c.Legs))
 	for _, l := range c.Legs {
-		m, err := graph.ReadManifest(l.Worktree)
+		m, err := graph.ReadManifest(l.Dir())
 		if err != nil {
 			g.Warnings = append(g.Warnings, err)
 		}
@@ -47,7 +47,9 @@ func BuildGraph(c *change.Change) (Graph, error) {
 }
 
 type LegState struct {
-	Leg       *change.Leg
+	Leg *change.Leg
+	// Branch is the change's branch; Status.Current is what the repo is on.
+	Branch    string
 	Status    gitx.Status
 	StatusErr error
 	PR        *gh.PR
@@ -62,9 +64,9 @@ func Snapshot(ctx context.Context, c *change.Change, withPR bool) []LegState {
 	var wg sync.WaitGroup
 	for i := range c.Legs {
 		l := &c.Legs[i]
-		out[i].Leg = l
+		out[i].Leg, out[i].Branch = l, c.Branch
 		wg.Go(func() {
-			out[i].Status, out[i].StatusErr = gitx.StatusOf(ctx, l.Worktree, l.BaseRef)
+			out[i].Status, out[i].StatusErr = gitx.StatusOf(ctx, l.Dir(), c.Branch, l.BaseRef)
 		})
 		if withPR {
 			wg.Go(func() {
@@ -86,7 +88,13 @@ func ViewPR(ctx context.Context, c *change.Change, l *change.Leg) (*gh.PR, error
 	if l.PR > 0 {
 		sel = strconv.Itoa(l.PR)
 	}
-	return gh.View(ctx, l.Worktree, sel)
+	return gh.View(ctx, l.Dir(), sel)
+}
+
+// OnBranch reports whether the repo has the change's branch checked out, which
+// anything reading or editing its files needs.
+func (s LegState) OnBranch() bool {
+	return s.Status.Current == s.Branch
 }
 
 // Blockers lists what stands between a leg and merging.
@@ -110,7 +118,7 @@ func (s LegState) Blockers() []string {
 	case "REVIEW_REQUIRED":
 		b = append(b, "awaiting review")
 	}
-	if s.Status.Dirty > 0 {
+	if s.Status.Dirty > 0 && s.OnBranch() {
 		b = append(b, "uncommitted changes")
 	}
 	return b

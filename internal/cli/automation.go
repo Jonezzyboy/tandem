@@ -186,6 +186,9 @@ func runClean(ctx context.Context, e *env, args []string) error {
 		}
 		ready = append(ready, cc)
 		fmt.Fprintf(e.out, "%s  %s\n", e.ui.Bold(cc.Change.ID), cc.Change.Title)
+		for _, s := range cc.Switches {
+			fmt.Fprintf(e.out, "  switch to %-6s %s\n", s.Base, s.Source)
+		}
 		for _, w := range cc.Worktrees {
 			fmt.Fprintf(e.out, "  remove worktree  %s\n", w.Path)
 		}

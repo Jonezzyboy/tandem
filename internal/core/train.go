@@ -95,6 +95,9 @@ func TrainPreflight(ctx context.Context, c *change.Change, g Graph) []TrainCheck
 			tc.Problems = append(tc.Problems, "PR closed without merging")
 		default:
 			tc.Problems = append(tc.Problems, readiness(s.PR, !repinned[s.Leg.Repo])...)
+			if repinned[s.Leg.Repo] && !s.OnBranch() {
+				tc.Problems = append(tc.Problems, "on "+orDetached(s.Status.Current)+", not "+c.Branch+": switch so it can be re-pinned")
+			}
 		}
 		out = append(out, tc)
 	}
@@ -165,7 +168,7 @@ func RunTrain(ctx context.Context, c *change.Change, g Graph, o TrainOptions) er
 			}
 			if pr.State != "MERGED" {
 				o.OnEvent(TrainEvent{Leg: l.Name(), Level: lvl, Phase: "merging", Detail: "#" + strconv.Itoa(pr.Number) + " --" + o.Method, URL: pr.URL})
-				if err := gh.Merge(ctx, l.Worktree, pr.Number, o.Method); err != nil {
+				if err := gh.Merge(ctx, l.Dir(), pr.Number, o.Method); err != nil {
 					return fmt.Errorf("%s: %w", l.Name(), err)
 				}
 				if pr, err = waitMerged(ctx, c, l, o); err != nil {
@@ -198,7 +201,7 @@ func pinLevel(ctx context.Context, c *change.Change, g Graph, lvl int, mergedSHA
 		if err != nil {
 			return err
 		}
-		changed, committed, err := PinTo(ctx, down, e.Dir, e.Via, sha, true, fmt.Sprintf("Pin %s to merged %s", e.Via, short(sha)))
+		changed, committed, err := PinTo(ctx, c, down, e.Dir, e.Via, sha, true, fmt.Sprintf("Pin %s to merged %s", e.Via, short(sha)))
 		if err != nil {
 			return err
 		}
@@ -207,10 +210,10 @@ func pinLevel(ctx context.Context, c *change.Change, g Graph, lvl int, mergedSHA
 			continue
 		}
 		if committed {
-			if _, err := gitx.Run(ctx, down.Worktree, "push", "--quiet", "origin", c.Branch); err != nil {
+			if _, err := gitx.Run(ctx, down.Dir(), "push", "--quiet", "origin", c.Branch); err != nil {
 				return fmt.Errorf("%s: pinned %s but the push failed: %w", down.Name(), e.Via, err)
 			}
-			head, err := gitx.Run(ctx, down.Worktree, "rev-parse", "HEAD")
+			head, err := gitx.Run(ctx, down.Dir(), "rev-parse", "refs/heads/"+c.Branch)
 			if err != nil {
 				return err
 			}

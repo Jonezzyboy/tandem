@@ -68,10 +68,16 @@ func DefaultBase(ctx context.Context, dir string) (Base, error) {
 }
 
 type Status struct {
-	Ahead, Behind, Dirty int
+	Ahead, Behind int
+	// Dirty counts uncommitted files in the checkout, whatever branch it is on.
+	Dirty int
+	// Current is the checked-out branch, "" when HEAD is detached.
+	Current string
 }
 
-func StatusOf(ctx context.Context, dir, baseRef string) (Status, error) {
+// StatusOf compares branch (not HEAD) with baseRef, so it stays right while
+// the checkout is on another branch.
+func StatusOf(ctx context.Context, dir, branch, baseRef string) (Status, error) {
 	var s Status
 	out, err := Run(ctx, dir, "status", "--porcelain")
 	if err != nil {
@@ -80,7 +86,12 @@ func StatusOf(ctx context.Context, dir, baseRef string) (Status, error) {
 	if out != "" {
 		s.Dirty = strings.Count(out, "\n") + 1
 	}
-	counts, err := Run(ctx, dir, "rev-list", "--left-right", "--count", baseRef+"...HEAD")
+	s.Current = CurrentBranch(ctx, dir)
+	ref := "refs/heads/" + branch
+	if !RefExists(ctx, dir, ref) {
+		ref = "HEAD"
+	}
+	counts, err := Run(ctx, dir, "rev-list", "--left-right", "--count", baseRef+"..."+ref)
 	if err != nil {
 		return s, err
 	}
@@ -88,4 +99,29 @@ func StatusOf(ctx context.Context, dir, baseRef string) (Status, error) {
 		return s, fmt.Errorf("parse rev-list counts %q: %w", counts, err)
 	}
 	return s, nil
+}
+
+func CurrentBranch(ctx context.Context, dir string) string {
+	out, err := Run(ctx, dir, "symbolic-ref", "--quiet", "--short", "HEAD")
+	if err != nil {
+		return ""
+	}
+	return out
+}
+
+// Switch checks out branch, refusing a checkout with uncommitted files so
+// work never silently follows a switch to another branch.
+func Switch(ctx context.Context, dir, branch string) error {
+	if CurrentBranch(ctx, dir) == branch {
+		return nil
+	}
+	out, err := Run(ctx, dir, "status", "--porcelain")
+	if err != nil {
+		return err
+	}
+	if out != "" {
+		return fmt.Errorf("%d uncommitted files: commit or stash them first", strings.Count(out, "\n")+1)
+	}
+	_, err = Run(ctx, dir, "switch", "--quiet", branch)
+	return err
 }

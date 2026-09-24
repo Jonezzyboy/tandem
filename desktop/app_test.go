@@ -16,7 +16,15 @@ func TestWithin(t *testing.T) {
 	home := t.TempDir()
 	a := NewApp(change.Store{Home: home}, nil)
 	if _, err := a.within(filepath.Join(home, "ABC-1", "api")); err != nil {
-		t.Errorf("worktree rejected: %v", err)
+		t.Errorf("path under the tandem home rejected: %v", err)
+	}
+	repo := t.TempDir()
+	c := &change.Change{ID: "ABC-2", Branch: "ABC-2", Legs: []change.Leg{{Repo: "acme/api", Source: repo}}}
+	if err := a.store.Save(c); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := a.within(filepath.Join(repo, "cmd")); err != nil {
+		t.Errorf("a leg's repo rejected: %v", err)
 	}
 	for _, p := range []string{filepath.Dir(home), filepath.Join(home, "..", "x"), "/etc"} {
 		if _, err := a.within(p); err == nil {
@@ -50,7 +58,7 @@ func TestMergeLocalKeepsGitHubState(t *testing.T) {
 	prev := core.ChangeView{Remote: true, RemoteAt: remoteAt, Blocked: 1, Legs: []core.LegView{{
 		Repo: "acme/api", PR: &core.PRView{Number: 7, State: "OPEN"}, Blockers: []string{"awaiting review"},
 	}}}
-	next := core.ChangeView{Legs: []core.LegView{{Repo: "acme/api", Dirty: 2, Blockers: []string{}}}}
+	next := core.ChangeView{Legs: []core.LegView{{Repo: "acme/api", Dirty: 2, OnBranch: true, Blockers: []string{}}}}
 	got := core.MergeLocal(prev, next)
 	l := got.Legs[0]
 	if !got.Remote || !got.RemoteAt.Equal(remoteAt) || l.PR == nil || l.PR.Number != 7 {

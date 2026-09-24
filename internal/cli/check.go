@@ -43,7 +43,7 @@ func runCheck(ctx context.Context, e *env, args []string) error {
 	for _, l := range legs {
 		wg.Go(func() {
 			var b strings.Builder
-			ok := checkLeg(ctx, e, l, &b)
+			ok := checkLeg(ctx, e, c, l, &b)
 			mu.Lock()
 			defer mu.Unlock()
 			fmt.Fprint(e.out, b.String())
@@ -59,9 +59,9 @@ func runCheck(ctx context.Context, e *env, args []string) error {
 	return nil
 }
 
-func checkLeg(ctx context.Context, e *env, l *change.Leg, b *strings.Builder) bool {
+func checkLeg(ctx context.Context, e *env, c *change.Change, l *change.Leg, b *strings.Builder) bool {
 	fmt.Fprintln(b, e.ui.Bold(l.Name()))
-	results, err := core.RunChecks(ctx, l, nil)
+	results, err := core.RunChecks(ctx, c, l, nil)
 	if err != nil {
 		fmt.Fprintf(b, "  %s %v\n", e.ui.Orange("✗"), err)
 		return false
