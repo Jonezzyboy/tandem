@@ -171,6 +171,19 @@
           {#if view.worktrees}
             <span>·</span>
             <span title="Each repo has its own worktree under the change, so the clones stay on their branches">worktrees</span>
+          {:else if view.legs.length}
+            <span>·</span>
+            {#if offBranch.length === 0}
+              <span class="ok">checked out</span>
+              <span>·</span>
+              <button class="link" disabled={switching} onclick={() => switchTo(true)} style="--wails-draggable: no-drag"
+                title="Switch every repo to {view.legs[0].base}">{switching ? 'switching…' : `→ ${view.legs[0].base}`}</button>
+            {:else}
+              <span class="warn">not checked out</span>
+              <span>·</span>
+              <button class="link" disabled={switching} onclick={() => switchTo(false)} style="--wails-draggable: no-drag"
+                title="Check out {view.branch} in every repo (⌘⇧O)">{switching ? 'switching…' : 'check out'}</button>
+            {/if}
           {/if}
         </div>
         <h1 title={view.title}>{view.title || 'Untitled change'}</h1>
@@ -179,19 +192,6 @@
         <button class="icon-btn" aria-label="Refresh from GitHub" title="Refresh (⌘R)" onclick={() => api.refresh(id)}>
           <Icon name="refresh" />
         </button>
-        {#if !view.worktrees && view.legs.length}
-          {#if offBranch.length === 0}
-            <button class="btn checkout on-branch" onclick={() => switchTo(true)} disabled={switching}
-              aria-label="Checked out: switch every repo back to {view.legs[0].base}" title="Switch every repo back to {view.legs[0].base}">
-              <Icon name={switching ? 'branch' : 'check'} spin={switching} />
-              <span class="idle">Checked out</span><span class="hover">→ {view.legs[0].base}</span>
-            </button>
-          {:else}
-            <button class="btn checkout" onclick={() => switchTo(false)} disabled={switching} title="Check out {view.branch} in every repo">
-              <Icon name="branch" spin={switching} />Check out
-            </button>
-          {/if}
-        {/if}
         <button class="btn" onclick={sync} disabled={syncing}>
           <Icon name="sync" spin={syncing} />Sync all
         </button>
@@ -394,13 +394,9 @@
   .order-note { margin-left: auto; font-size: 12px; text-align: right; }
   .repin { margin-left: 8px; }
   .head-tools { display: flex; justify-content: flex-end; }
-  .btn.on-branch { color: var(--ok-text); border-color: var(--ok-border); background: var(--ok-bg); }
-  /* Fixed width so the label swap on hover doesn't shift the other buttons. */
-  .btn.checkout { min-width: 132px; justify-content: center; }
-  .btn.on-branch .hover { display: none; }
-  .btn.on-branch:hover:not(:disabled) .idle, .btn.on-branch:focus-visible .idle { display: none; }
-  .btn.on-branch:hover:not(:disabled) .hover, .btn.on-branch:focus-visible .hover { display: inline; }
-  .btn.on-branch:hover:not(:disabled) { color: var(--text); border-color: var(--line-2); background: var(--hover); }
+  .link { border: 0; background: none; padding: 0; color: var(--accent-text); font: inherit; cursor: pointer; }
+  .link:hover:not(:disabled) { color: var(--link-hover); text-decoration: underline; }
+  .link:disabled { color: var(--muted); cursor: default; }
   .head-tools .add { text-transform: none; letter-spacing: normal; font-family: var(--sans); }
   .danger-text { color: var(--warn-text); border-color: var(--warn-border); }
 
