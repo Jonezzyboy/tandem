@@ -1,40 +1,20 @@
 <script lang="ts">
-  import { onMount } from 'svelte'
   import { api } from '@lib/api'
   import { fail, navigate } from '@lib/state.svelte'
-  import type { RepoInfo, StartItem } from '@lib/types'
+  import type { StartItem } from '@lib/types'
   import Icon from './Icon.svelte'
+  import RepoPicker from './RepoPicker.svelte'
 
-  const shown = 150
-
-  let repos = $state<RepoInfo[]>([])
   let id = $state('')
   let title = $state('')
-  let filter = $state('')
   let selected = $state<string[]>([])
   let starting = $state(false)
   let results = $state<StartItem[] | null>(null)
 
-  const matches = $derived.by(() => {
-    const terms = filter.toLowerCase().split(/\s+/).filter(Boolean)
-    return repos.filter((r) => terms.every((t) => r.name.toLowerCase().includes(t)))
-  })
   const validId = $derived(/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(id) && !id.includes('..'))
 
-  onMount(() => {
-    api.repos().then((r) => (repos = r)).catch(fail)
-  })
-
-  function toggle(name: string) {
-    selected = selected.includes(name) ? selected.filter((s) => s !== name) : [...selected, name]
-  }
-
-  function onFilterKey(e: KeyboardEvent) {
-    if (e.key === 'Enter' && matches.length > 0) {
-      e.preventDefault()
-      toggle(matches[0].name)
-      filter = ''
-    }
+  function unpick(name: string) {
+    selected = selected.filter((s) => s !== name)
   }
 
   async function start() {
@@ -71,7 +51,7 @@
         <span class="label">Repos · {selected.length} selected</span>
         <div class="chips">
           {#each selected as s (s)}
-            <button class="chip mono" onclick={() => toggle(s)} aria-label="Remove {s}">{s} <Icon name="close" size={12} /></button>
+            <button class="chip mono" onclick={() => unpick(s)} aria-label="Remove {s}">{s} <Icon name="close" size={12} /></button>
           {:else}
             <span class="small muted">Pick repos from the list →</span>
           {/each}
@@ -97,18 +77,7 @@
       {/if}
     </div>
 
-    <div class="picker">
-      <input class="input" bind:value={filter} onkeydown={onFilterKey} placeholder="Filter {repos.length} repos · Enter adds the first match" aria-label="Filter repos" />
-      <div class="list" role="listbox" aria-multiselectable="true" aria-label="Repos">
-        {#each matches.slice(0, shown) as r (r.name)}
-          <label class="repo" class:on={selected.includes(r.name)}>
-            <input type="checkbox" checked={selected.includes(r.name)} onchange={() => toggle(r.name)} />
-            <span class="mono">{r.name}</span>
-          </label>
-        {/each}
-        {#if matches.length > shown}<div class="small muted more">{matches.length - shown} more · keep typing to narrow</div>{/if}
-      </div>
-    </div>
+    <RepoPicker bind:selected />
   </div>
 </div>
 
@@ -126,11 +95,4 @@
   .results { display: flex; flex-direction: column; gap: 8px; }
   .result { display: grid; grid-template-columns: 16px auto; gap: 4px 10px; align-items: center; font-size: 13px; }
   .result span:last-child { grid-column: 2; word-break: break-all; }
-  .picker { display: flex; flex-direction: column; gap: 10px; min-height: 0; }
-  .list { flex: 1; overflow: auto; border: 1px solid var(--line); border-radius: 12px; padding: 6px; }
-  .repo { display: flex; gap: 10px; align-items: center; padding: 7px 10px; border-radius: 7px; font-size: 13px; cursor: pointer; }
-  .repo:hover { background: var(--panel); }
-  .repo.on { background: var(--selected); }
-  .repo input { accent-color: var(--accent); }
-  .more { padding: 8px 10px; }
 </style>

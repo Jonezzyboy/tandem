@@ -6,6 +6,10 @@ export function Account() {
   return window['go']['main']['App']['Account']();
 }
 
+export function AddRepos(arg1, arg2) {
+  return window['go']['main']['App']['AddRepos'](arg1, arg2);
+}
+
 export function CancelTrain(arg1) {
   return window['go']['main']['App']['CancelTrain'](arg1);
 }
@@ -74,6 +78,10 @@ export function Refresh(arg1) {
   return window['go']['main']['App']['Refresh'](arg1);
 }
 
+export function RemoveLeg(arg1, arg2) {
+  return window['go']['main']['App']['RemoveLeg'](arg1, arg2);
+}
+
 export function Repos() {
   return window['go']['main']['App']['Repos']();
 }
@@ -116,6 +124,10 @@ export function TandemHome() {
 
 export function TrainPlan(arg1) {
   return window['go']['main']['App']['TrainPlan'](arg1);
+}
+
+export function Unlink(arg1, arg2, arg3) {
+  return window['go']['main']['App']['Unlink'](arg1, arg2, arg3);
 }
 
 export function Version() {

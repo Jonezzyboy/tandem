@@ -119,3 +119,66 @@ func runSwitch(ctx context.Context, e *env, args []string) error {
 	}
 	return nil
 }
+
+func runRemove(ctx context.Context, e *env, args []string) error {
+	flags := newFlags("remove", "td remove [ID] <leg>...")
+	pos, err := parseArgs(flags, args)
+	if err != nil {
+		return err
+	}
+	c, rest, err := e.changeFrom(pos)
+	if err != nil {
+		return err
+	}
+	if len(rest) == 0 {
+		flags.Usage()
+		return errReported
+	}
+	for _, name := range rest {
+		l, err := c.RemoveLeg(name)
+		if err != nil {
+			return err
+		}
+		fmt.Fprintf(e.out, "  %s %s removed from %s %s\n", e.ui.Green("✓"), l.Repo, c.ID,
+			e.ui.Dim("(branch "+c.Branch+" is left in "+l.Dir()+")"))
+	}
+	if err := e.store.Save(c); err != nil {
+		return err
+	}
+	if len(c.Legs) > 0 {
+		printEdges(e, c)
+	}
+	return nil
+}
+
+func runUnlink(ctx context.Context, e *env, args []string) error {
+	flags := newFlags("unlink", "td unlink [ID] <upstream> <downstream>")
+	pos, err := parseArgs(flags, args)
+	if err != nil {
+		return err
+	}
+	c, rest, err := e.changeFrom(pos)
+	if err != nil {
+		return err
+	}
+	if len(rest) != 2 {
+		flags.Usage()
+		return errReported
+	}
+	up, err := c.Leg(rest[0])
+	if err != nil {
+		return err
+	}
+	down, err := c.Leg(rest[1])
+	if err != nil {
+		return err
+	}
+	if !c.RemoveDeclared(change.Edge{From: up.Repo, To: down.Repo}) {
+		return fmt.Errorf("%s → %s is not a declared edge: inferred ones come from manifests and go when the dependency does", up.Name(), down.Name())
+	}
+	if err := e.store.Save(c); err != nil {
+		return err
+	}
+	printEdges(e, c)
+	return nil
+}

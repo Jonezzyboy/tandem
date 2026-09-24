@@ -5,6 +5,8 @@ import {core} from '../models';
 
 export function Account():Promise<main.Account>;
 
+export function AddRepos(arg1:string,arg2:Array<string>):Promise<Array<main.StartItem>>;
+
 export function CancelTrain(arg1:string):Promise<void>;
 
 export function Change(arg1:string):Promise<core.ChangeView>;
@@ -39,6 +41,8 @@ export function PublishPRs(arg1:string,arg2:main.PRRequest):Promise<main.PRPrevi
 
 export function Refresh(arg1:string):Promise<void>;
 
+export function RemoveLeg(arg1:string,arg2:string):Promise<string>;
+
 export function Repos():Promise<Array<main.RepoInfo>>;
 
 export function SaveSettings(arg1:main.Settings):Promise<main.Settings>;
@@ -60,5 +64,7 @@ export function SystemDark():Promise<boolean>;
 export function TandemHome():Promise<string>;
 
 export function TrainPlan(arg1:string):Promise<main.TrainPlan>;
+
+export function Unlink(arg1:string,arg2:string,arg3:string):Promise<void>;
 
 export function Version():Promise<string>;

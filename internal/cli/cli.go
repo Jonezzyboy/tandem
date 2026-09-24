@@ -36,6 +36,8 @@ var commands []command
 func init() {
 	commands = []command{
 		{"start", "td start <ID> <repo>... [--title T]", "create a change, or add repos to one: a branch per repo, checked out", runStart},
+		{"add", "td add [ID] <repo>...", "add repos to a change: each gets its branch, and the merge order updates", runAdd},
+		{"remove", "td remove [ID] <leg>...", "take repos out of a change (their branches stay)", runRemove},
 		{"switch", "td switch [ID] [--base]", "check out the change's branch in every repo, or with --base their main branch", runSwitch},
 		{"status", "td status [ID]", "local and GitHub state of every leg, in merge order", runStatus},
 		{"sync", "td sync [ID]", "fetch every leg and rebase clean ones onto their base", runSync},
@@ -43,8 +45,9 @@ func init() {
 		{"pr", "td pr [ID] [--title T] [--body B | --body-file F] [--draft] [--reviewer a,b] [--dry-run]", "push legs and open or update their PRs, cross-linked", runPR},
 		{"pin", "td pin [ID] [--no-commit]", "point downstream Go legs at their upstream leg's pushed commit", runPin},
 		{"merge", "td merge [ID] [--method squash|merge|rebase] [--dry-run] [--yes]", "merge the PRs in dependency order, re-pinning as it goes", runMerge},
-		{"clean", "td clean [--yes]", "remove worktrees and branches of changes whose PRs have landed", runClean},
+		{"clean", "td clean [--yes]", "switch landed changes' repos back to base and delete their branches", runClean},
 		{"link", "td link [ID] <upstream> <downstream>", "declare that upstream merges before downstream", runLink},
+		{"unlink", "td unlink [ID] <upstream> <downstream>", "remove a declared merge-order edge", runUnlink},
 		{"path", "td path [ID] [leg]", "print a change's directory or a leg's repo", runPath},
 		{"list", "td list", "list changes", runList},
 		{"version", "td version", "print the td version", runVersion},

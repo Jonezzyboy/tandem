@@ -73,6 +73,29 @@ func (c *Change) AddDeclared(e Edge) {
 	}
 }
 
+// RemoveDeclared drops a declared edge, reporting whether it was there.
+func (c *Change) RemoveDeclared(e Edge) bool {
+	i := slices.Index(c.Declared, e)
+	if i < 0 {
+		return false
+	}
+	c.Declared = slices.Delete(c.Declared, i, i+1)
+	return true
+}
+
+// RemoveLeg drops a leg and any declared edge naming it. The leg's branch and
+// commits stay in its repo.
+func (c *Change) RemoveLeg(name string) (Leg, error) {
+	l, err := c.Leg(name)
+	if err != nil {
+		return Leg{}, err
+	}
+	removed := *l
+	c.Legs = slices.DeleteFunc(c.Legs, func(x Leg) bool { return x.Repo == removed.Repo })
+	c.Declared = slices.DeleteFunc(c.Declared, func(e Edge) bool { return e.From == removed.Repo || e.To == removed.Repo })
+	return removed, nil
+}
+
 var idPattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]*$`)
 
 // ValidateID keeps IDs usable as both a directory name and a git branch.

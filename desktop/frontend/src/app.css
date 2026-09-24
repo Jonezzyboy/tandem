@@ -85,6 +85,16 @@ svg.icon { display: block; flex-shrink: 0; }
 }
 .input:focus, textarea.input:focus { outline: 2px solid var(--accent); outline-offset: -1px; border-color: transparent; }
 textarea.input { padding: 10px 12px; resize: none; line-height: 1.55; }
+select.input {
+  appearance: none;
+  padding-right: 30px;
+  cursor: pointer;
+  background-color: var(--nav);
+  background-image: linear-gradient(45deg, transparent 50%, var(--muted) 50%), linear-gradient(135deg, var(--muted) 50%, transparent 50%);
+  background-position: calc(100% - 16px) 50%, calc(100% - 11px) 50%;
+  background-size: 5px 5px;
+  background-repeat: no-repeat;
+}
 
 .selectable { user-select: text; -webkit-user-select: text; }
 

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"strings"
 
+	"github.com/jonezzyboy/tandem/internal/change"
 	"github.com/jonezzyboy/tandem/internal/core"
 )
 
@@ -261,4 +262,61 @@ func (a *App) Switch(id string, toBase bool) ([]LegResult, error) {
 	}
 	go a.refreshAll()
 	return out, nil
+}
+
+// AddRepos puts more repos into an existing change, each on its branch.
+func (a *App) AddRepos(id string, repos []string) ([]StartItem, error) {
+	c, err := a.store.Load(id)
+	if err != nil {
+		return nil, err
+	}
+	return a.Start(StartRequest{ID: c.ID, Repos: repos})
+}
+
+// RemoveLeg takes a repo out of a change, leaving its branch in the repo.
+func (a *App) RemoveLeg(id, leg string) (string, error) {
+	lock := a.opLock(id)
+	lock.Lock()
+	defer lock.Unlock()
+	c, err := a.store.Load(id)
+	if err != nil {
+		return "", err
+	}
+	l, err := c.RemoveLeg(leg)
+	if err != nil {
+		return "", err
+	}
+	if err := a.store.Save(c); err != nil {
+		return "", err
+	}
+	a.emit("changes", a.Changes())
+	go a.refresh(id, true)
+	return l.Repo + " removed; branch " + c.Branch + " is left in " + l.Dir(), nil
+}
+
+// Unlink drops a declared merge-order edge.
+func (a *App) Unlink(id, upstream, downstream string) error {
+	lock := a.opLock(id)
+	lock.Lock()
+	defer lock.Unlock()
+	c, err := a.store.Load(id)
+	if err != nil {
+		return err
+	}
+	up, err := c.Leg(upstream)
+	if err != nil {
+		return err
+	}
+	down, err := c.Leg(downstream)
+	if err != nil {
+		return err
+	}
+	if !c.RemoveDeclared(change.Edge{From: up.Repo, To: down.Repo}) {
+		return errors.New(up.Name() + " → " + down.Name() + " comes from a manifest, not a declaration")
+	}
+	if err := a.store.Save(c); err != nil {
+		return err
+	}
+	go a.refresh(id, false)
+	return nil
 }
