@@ -63,8 +63,29 @@ checks:
     run: vendor/bin/phpunit --testsuite unit
 ```
 
+## Desktop app
+
+`desktop/` is a Wails (Go + system WebView) app over the same core: changes
+sidebar, Change view (merge order, per-leg git/PR/CI/review, streamed local
+checks), a PR composer that previews then publishes, a review Inbox, and a
+New change picker. Views are served from a cache (persisted as
+`.view.json` beside each change) and refreshed in the background — local git
+state every 4s for the change on screen, GitHub every minute.
+
+```sh
+go install github.com/wailsapp/wails/v2/cmd/wails@v2.16.0
+cd desktop && wails build        # → build/bin/Tandem.app
+wails dev                        # hot reload; also served at http://localhost:34115
+```
+
+`go test ./...` in `desktop/` needs `frontend/dist` to exist (it is embedded), so
+run `wails build` or `npm run build` in `frontend/` first.
+
+Shortcuts: ⌘N new change, ⌘R refresh, ⌘0 inbox, ⌘1–9 jump to a change.
+`TANDEM_EDITOR` (default `code`) is what "Open in editor" runs.
+
 ## Layout
 
-`internal/core` computes a change's state (graph, per-leg git + GitHub
-snapshot) and is shared by the CLI and the planned Wails desktop app.
-`cmd/td` → `internal/cli` renders it.
+`internal/core` computes a change's state and runs its operations (start,
+sync, checks, PR plan/publish); `cmd/td` → `internal/cli` and `desktop/` both
+render it. `desktop/` is its own Go module so the CLI never links Wails.

@@ -1,0 +1,17 @@
+{
+  "$schema": "https://wails.io/schemas/config.v2.json",
+  "name": "Tandem",
+  "outputfilename": "Tandem",
+  "frontend:install": "npm install",
+  "frontend:build": "npm run build",
+  "frontend:dev:watcher": "npm run dev",
+  "frontend:dev:serverUrl": "auto",
+  "author": {
+    "name": "Alan Jones"
+  },
+  "info": {
+    "productName": "Tandem",
+    "productVersion": "0.2.0",
+    "comments": "One change, many repos."
+  }
+}

@@ -101,3 +101,29 @@ func AddWorktree(ctx context.Context, src, dst, branch string, base gitx.Base) (
 	}
 	return true, nil
 }
+
+// List returns every <root>/<vendor>/<repo> clone, skipping dot dirs.
+func List(roots []string) []Repo {
+	var out []Repo
+	for _, root := range roots {
+		vendors, err := os.ReadDir(root)
+		if err != nil {
+			continue
+		}
+		for _, v := range vendors {
+			if !v.IsDir() || strings.HasPrefix(v.Name(), ".") {
+				continue
+			}
+			repos, err := os.ReadDir(filepath.Join(root, v.Name()))
+			if err != nil {
+				continue
+			}
+			for _, r := range repos {
+				if p := filepath.Join(root, v.Name(), r.Name()); r.IsDir() && isRepo(p) {
+					out = append(out, Repo{Name: v.Name() + "/" + r.Name(), Path: p})
+				}
+			}
+		}
+	}
+	return out
+}

@@ -26,7 +26,7 @@ func runCheck(ctx context.Context, e *env, args []string) error {
 	var legs []*change.Leg
 	if len(rest) == 0 {
 		g, _ := core.BuildGraph(c)
-		legs = orderedLegs(c, g.Levels)
+		legs = core.OrderedLegs(c, g.Levels)
 	}
 	for _, name := range rest {
 		l, err := c.Leg(name)
@@ -61,24 +61,24 @@ func runCheck(ctx context.Context, e *env, args []string) error {
 
 func checkLeg(ctx context.Context, e *env, l *change.Leg, b *strings.Builder) bool {
 	fmt.Fprintln(b, e.ui.Bold(l.Name()))
-	list, err := checks.Detect(l.Worktree)
+	results, err := core.RunChecks(ctx, l, nil)
 	if err != nil {
 		fmt.Fprintf(b, "  %s %v\n", e.ui.Orange("✗"), err)
 		return false
 	}
-	if len(list) == 0 {
+	if len(results) == 0 {
 		fmt.Fprintln(b, e.ui.Dim("  no checks found: add them to .tandem.yml"))
 		return true
 	}
 	ok := true
 	rows := [][]ui.Cell{}
 	var failures []checks.Result
-	for _, c := range list {
+	for _, r := range results {
+		c := r.Check
 		if c.Skip != "" {
 			rows = append(rows, []ui.Cell{{Text: "–", Color: e.ui.Dim}, ui.Plain(c.Name), {Text: "skipped: " + c.Skip, Color: e.ui.Dim}})
 			continue
 		}
-		r := checks.Run(ctx, c)
 		dur := r.Duration.Round(100 * time.Millisecond).String()
 		if r.Err != nil {
 			ok = false

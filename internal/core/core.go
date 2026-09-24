@@ -1,10 +1,12 @@
-// Package core computes a change's state from git, GitHub and manifests. The
-// CLI renders it; the desktop app is meant to render the same values.
+// Package core computes a change's state from git, GitHub and manifests, and
+// carries out its operations. The CLI and the desktop app both render it.
 package core
 
 import (
 	"context"
+	"sort"
 	"strconv"
+	"strings"
 	"sync"
 
 	"github.com/jonezzyboy/tandem/internal/change"
@@ -52,8 +54,9 @@ type LegState struct {
 	PRErr     error
 }
 
-// Snapshot reads every leg's local and GitHub state concurrently. A leg whose
-// PR number was unknown gets it filled in, so callers should save c after.
+// Snapshot reads every leg's local and, with withPR, GitHub state
+// concurrently. A leg whose PR number was unknown gets it filled in, so
+// callers should save c after.
 func Snapshot(ctx context.Context, c *change.Change, withPR bool) []LegState {
 	out := make([]LegState, len(c.Legs))
 	var wg sync.WaitGroup
@@ -65,11 +68,7 @@ func Snapshot(ctx context.Context, c *change.Change, withPR bool) []LegState {
 		})
 		if withPR {
 			wg.Go(func() {
-				sel := c.Branch
-				if l.PR > 0 {
-					sel = strconv.Itoa(l.PR)
-				}
-				out[i].PR, out[i].PRErr = gh.View(ctx, l.Worktree, sel)
+				out[i].PR, out[i].PRErr = ViewPR(ctx, c, l)
 			})
 		}
 	}
@@ -82,7 +81,15 @@ func Snapshot(ctx context.Context, c *change.Change, withPR bool) []LegState {
 	return out
 }
 
-// Blockers counts what stands between a leg and merging.
+func ViewPR(ctx context.Context, c *change.Change, l *change.Leg) (*gh.PR, error) {
+	sel := c.Branch
+	if l.PR > 0 {
+		sel = strconv.Itoa(l.PR)
+	}
+	return gh.View(ctx, l.Worktree, sel)
+}
+
+// Blockers lists what stands between a leg and merging.
 func (s LegState) Blockers() []string {
 	var b []string
 	if s.PR == nil {
@@ -107,4 +114,31 @@ func (s LegState) Blockers() []string {
 		b = append(b, "uncommitted changes")
 	}
 	return b
+}
+
+func SortByLevel(states []LegState, levels map[string]int) {
+	sort.SliceStable(states, func(i, j int) bool {
+		return legLess(states[i].Leg, states[j].Leg, levels)
+	})
+}
+
+func OrderedLegs(c *change.Change, levels map[string]int) []*change.Leg {
+	legs := make([]*change.Leg, len(c.Legs))
+	for i := range c.Legs {
+		legs[i] = &c.Legs[i]
+	}
+	sort.SliceStable(legs, func(i, j int) bool { return legLess(legs[i], legs[j], levels) })
+	return legs
+}
+
+func legLess(a, b *change.Leg, levels map[string]int) bool {
+	if la, lb := levels[a.Repo], levels[b.Repo]; la != lb {
+		return la < lb
+	}
+	return a.Repo < b.Repo
+}
+
+func FirstLine(s string) string {
+	s, _, _ = strings.Cut(s, "\n")
+	return s
 }
