@@ -7,12 +7,29 @@ PR. Tandem works out merge order from `go.mod`, `composer.json` and
 
 ## Install
 
+The desktop app:
+
 ```sh
-go install github.com/jonezzyboy/tandem/cmd/td@latest   # or: go build -o ~/bin/td ./cmd/td
+brew install --cask Jonezzyboy/tandem/tandem
 ```
 
-Needs `git` and an authenticated `gh`. The repo is private, so `go install` needs
-`GOPRIVATE=github.com/jonezzyboy/*`.
+Universal (Apple Silicon and Intel). `gh` comes along as a cask dependency, but you
+still need to be signed in (`gh auth login`); the app has no login of its own.
+`brew upgrade --cask tandem` picks up new releases.
+
+The build is ad-hoc signed rather than notarised with an Apple Developer ID, so
+Gatekeeper would block the first launch. The cask clears the quarantine attribute in
+`postflight_steps` so the install just works. That trades away Gatekeeper's check on
+this app; the real fix is a Developer ID signature and notarisation in the release
+workflow, after which the `postflight_steps` block in `packaging/cask.rb.tmpl` goes.
+
+The CLI:
+
+```sh
+go install github.com/jonezzyboy/tandem/cmd/td@latest   # or a td_* archive from the release
+```
+
+Both need `git` and an authenticated `gh`.
 
 ## Use
 
@@ -83,6 +100,25 @@ run `wails build` or `npm run build` in `frontend/` first.
 
 Shortcuts: ⌘N new change, ⌘R refresh, ⌘0 inbox, ⌘1–9 jump to a change.
 `TANDEM_EDITOR` (default `code`) is what "Open in editor" runs.
+
+## Releasing
+
+A published GitHub release is the single trigger: `.github/workflows/release.yml`
+builds the `td` archives and the universal `Tandem.app` zip, attaches them to that
+release, and rewrites the cask in
+[Jonezzyboy/homebrew-tandem](https://github.com/Jonezzyboy/homebrew-tandem) with the
+new version and checksum. What is tagged on GitHub is what `brew` serves.
+
+```sh
+scripts/set-version.sh 0.3.0
+git commit -am "Release 0.3.0" && git push
+gh release create v0.3.0 --generate-notes
+```
+
+The tag has to read `v<version>`. The version lives in `desktop/wails.json` and
+`desktop/frontend/package.json`; the workflow refuses to build when either disagrees
+with the tag. It needs a `TAP_TOKEN` repo secret, a PAT with write access to the tap
+repo, since the default workflow token cannot push across repositories.
 
 ## Layout
 
