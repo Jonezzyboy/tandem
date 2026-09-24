@@ -8,8 +8,11 @@ PR. Tandem works out merge order from `go.mod`, `composer.json` and
 ## Install
 
 ```sh
-brew install --cask Jonezzyboy/tandem/tandem
+brew install --cask Jonezzyboy/tandem/tandem-repos
 ```
+
+The cask is `tandem-repos`, not `tandem`: homebrew-cask's own `tandem` is an
+unrelated app (a virtual office), and any unqualified `brew … tandem` gets that one.
 
 Installs the desktop app and the `td` CLI together (`td` ships inside
 `Tandem.app` and the cask links it onto your PATH), so both are always the same
@@ -18,7 +21,7 @@ formula (a to-do list) installs the same command; uninstall it first, since brew
 will not link over it.
 
 `gh` comes along as a cask dependency, but you still need to be signed in
-(`gh auth login`); the app has no login of its own. `brew upgrade --cask tandem`
+(`gh auth login`); the app has no login of its own. `brew upgrade --cask tandem-repos`
 picks up new releases.
 
 The build is ad-hoc signed rather than notarised with an Apple Developer ID, so
@@ -109,7 +112,7 @@ Shortcuts: ⌘N new change, ⌘R refresh, ⌘0 inbox, ⌘1–9 jump to a change.
 
 A published GitHub release is the single trigger: `.github/workflows/release.yml`
 builds the `td` archives and the universal `Tandem.app` zip, attaches them to that
-release, and rewrites the cask in
+release, and rewrites `Casks/tandem-repos.rb` in
 [Jonezzyboy/homebrew-tandem](https://github.com/Jonezzyboy/homebrew-tandem) with the
 new version and checksum. What is tagged on GitHub is what `brew` serves.
 
