@@ -100,3 +100,22 @@ func TestInferMatchesKind(t *testing.T) {
 		t.Errorf("composer package matched an npm requirement: %v", got)
 	}
 }
+
+func TestLanguage(t *testing.T) {
+	root := t.TempDir()
+	cases := map[string][]string{
+		"go":  {"go.mod", "web/package.json"},
+		"php": {"backend/composer.json", "frontend/package.json"},
+		"js":  {"package.json", "node_modules/x/go.mod"},
+		"":    {"README.md"},
+	}
+	for want, files := range cases {
+		dir := filepath.Join(root, "repo-"+want)
+		for _, f := range files {
+			write(t, filepath.Join(dir, f), "{}")
+		}
+		if got := Language(dir); got != want {
+			t.Errorf("Language(%v) = %q, want %q", files, got, want)
+		}
+	}
+}

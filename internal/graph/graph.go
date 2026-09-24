@@ -229,3 +229,32 @@ func Levels(names []string, edges []Edge) (map[string]int, error) {
 	}
 	return level, nil
 }
+
+// Language names a repo's main ecosystem for choosing an editor: "go", "php",
+// "js", or "" when there is no manifest. Root manifests win over those in
+// immediate subdirectories, and Go over PHP over JS at each depth, so a PHP
+// backend with a JS frontend beside it is "php".
+func Language(dir string) string {
+	order := []struct{ file, lang string }{{"go.mod", "go"}, {"composer.json", "php"}, {"package.json", "js"}}
+	for _, o := range order {
+		if _, err := os.Stat(filepath.Join(dir, o.file)); err == nil {
+			return o.lang
+		}
+	}
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return ""
+	}
+	for _, o := range order {
+		for _, e := range entries {
+			n := e.Name()
+			if !e.IsDir() || strings.HasPrefix(n, ".") || n == "vendor" || n == "node_modules" {
+				continue
+			}
+			if _, err := os.Stat(filepath.Join(dir, n, o.file)); err == nil {
+				return o.lang
+			}
+		}
+	}
+	return ""
+}

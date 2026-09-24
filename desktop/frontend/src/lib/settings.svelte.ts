@@ -6,10 +6,25 @@ export type ThemeId = 'system' | 'graphite' | 'paper' | 'midnight' | 'forest' | 
 export interface Settings {
   theme: ThemeId
   keys: Record<string, string>
-  editor: string
+  // Per language ("go", "php", "js", "other"): an app id, or "cmd:<command>".
+  editors: Record<string, string>
   mergeMethod: 'squash' | 'merge' | 'rebase'
   draftPRs: boolean
 }
+
+export interface EditorApp {
+  id: string
+  name: string
+  path: string
+  installed: boolean
+}
+
+export const languages = [
+  { id: 'go', label: 'Go' },
+  { id: 'php', label: 'PHP' },
+  { id: 'js', label: 'JavaScript & TypeScript' },
+  { id: 'other', label: 'Everything else, and a fallback when an app is missing' },
+] as const
 
 export interface Account {
   login: string
@@ -60,9 +75,10 @@ const modifierKeys = new Set(['meta', 'control', 'alt', 'shift', 'capslock', 'fn
 
 export const prefs = $state({
   settings: {
-    theme: 'graphite', keys: {}, editor: '', mergeMethod: 'squash', draftPRs: true,
+    theme: 'graphite', keys: {}, editors: {}, mergeMethod: 'squash', draftPRs: true,
   } as Settings,
   account: null as Account | null,
+  editorApps: [] as EditorApp[],
   systemDark: true,
   version: '',
   path: '',
@@ -146,7 +162,21 @@ export async function initSettings() {
   applyTheme()
   App.Account().then((a) => { prefs.account = a as unknown as Account })
   App.Version().then((v) => { prefs.version = v })
+  App.Editors().then((e) => { prefs.editorApps = e as unknown as EditorApp[] })
   App.SettingsPath().then((p) => { prefs.path = p })
   App.TandemHome().then((h) => { prefs.home = h })
   window.addEventListener('focus', refreshSystemAppearance)
+}
+
+// editorLabel names what "Open in editor" will use for a repo of lang,
+// following the backend: the language's choice, then "other" if that app is
+// missing.
+export function editorLabel(lang: string): string {
+  for (const key of [lang || 'other', 'other']) {
+    const choice = prefs.settings.editors[key] ?? ''
+    if (choice.startsWith('cmd:')) return choice.slice(4).trim().split(/\s+/)[0] || 'code'
+    const app = prefs.editorApps.find((a) => a.id === choice)
+    if (app?.installed) return app.name
+  }
+  return 'editor'
 }

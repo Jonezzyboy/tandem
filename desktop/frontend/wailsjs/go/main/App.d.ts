@@ -17,6 +17,8 @@ export function Clean(arg1:Array<string>):Promise<Array<main.CleanResult>>;
 
 export function CleanPlan():Promise<Array<main.CleanItem>>;
 
+export function Editors():Promise<Array<main.EditorApp>>;
+
 export function Focus(arg1:string):Promise<void>;
 
 export function Inbox(arg1:boolean):Promise<main.Inbox>;

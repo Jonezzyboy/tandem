@@ -739,15 +739,15 @@ func (a *App) OpenFolder(path string) error {
 	return exec.Command("open", p).Start()
 }
 
-// OpenEditor opens path with the editor from Settings.
+// OpenEditor opens path with the editor Settings picks for its language.
 func (a *App) OpenEditor(path string) error {
 	p, err := a.within(path)
 	if err != nil {
 		return err
 	}
-	cmd, err := a.editorCommand()
+	cmd, err := a.editorCommand(p)
 	if err != nil {
 		return err
 	}
-	return exec.Command(cmd[0], append(cmd[1:], p)...).Start()
+	return exec.Command(cmd[0], cmd[1:]...).Start()
 }

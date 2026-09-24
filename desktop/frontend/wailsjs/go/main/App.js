@@ -30,6 +30,10 @@ export function CleanPlan() {
   return window['go']['main']['App']['CleanPlan']();
 }
 
+export function Editors() {
+  return window['go']['main']['App']['Editors']();
+}
+
 export function Focus(arg1) {
   return window['go']['main']['App']['Focus'](arg1);
 }

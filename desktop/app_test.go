@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -81,14 +82,14 @@ func TestSettingsRoundTripAndNormalize(t *testing.T) {
 		t.Fatalf("defaults = %+v", got)
 	}
 	a := NewApp(change.Store{Home: t.TempDir()}, nil)
-	saved, err := a.SaveSettings(Settings{Theme: "nope", MergeMethod: "yolo", Editor: "  zed  ", Keys: map[string]string{"syncAll": "meta+shift+y"}})
+	saved, err := a.SaveSettings(Settings{Theme: "nope", MergeMethod: "yolo", Editors: map[string]string{"other": "cmd:zed"}, Keys: map[string]string{"syncAll": "meta+shift+y"}})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if saved.Theme != "graphite" || saved.MergeMethod != "squash" || saved.Editor != "zed" {
+	if saved.Theme != "graphite" || saved.MergeMethod != "squash" || saved.Editors["other"] != "cmd:zed" {
 		t.Errorf("normalize = %+v", saved)
 	}
-	if got := loadSettings(); got.Keys["syncAll"] != "meta+shift+y" || got.Editor != "zed" {
+	if got := loadSettings(); got.Keys["syncAll"] != "meta+shift+y" || got.Editors["other"] != "cmd:zed" {
 		t.Errorf("reloaded = %+v", got)
 	}
 	path, _ := settingsPath()
@@ -114,20 +115,64 @@ func TestWindowLook(t *testing.T) {
 }
 
 func TestEditorCommand(t *testing.T) {
+	apps := map[string]string{"com.jetbrains.goland": "/Apps/GoLand.app", "com.jetbrains.PhpStorm": "/Apps/PhpStorm.app"}
+	editorsOnce = sync.Once{}
+	findApp = func(bundle, _ string) string { return apps[bundle] }
+	t.Cleanup(func() { editorsOnce = sync.Once{} })
+
 	bin := t.TempDir()
 	if err := os.WriteFile(filepath.Join(bin, "fake-editor"), []byte("#!/bin/sh\n"), 0o755); err != nil {
 		t.Fatal(err)
 	}
 	t.Setenv("PATH", bin)
 	t.Setenv("TANDEM_EDITOR", "")
-	a := NewApp(change.Store{Home: t.TempDir()}, nil)
-	a.settings.Editor = "fake-editor --wait"
-	cmd, err := a.editorCommand()
-	if err != nil || cmd[0] != filepath.Join(bin, "fake-editor") || cmd[1] != "--wait" {
-		t.Errorf("editorCommand = %v, %v", cmd, err)
+
+	repo := func(files ...string) string {
+		dir := t.TempDir()
+		for _, f := range files {
+			if err := os.MkdirAll(filepath.Dir(filepath.Join(dir, f)), 0o755); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(filepath.Join(dir, f), []byte("{}"), 0o644); err != nil {
+				t.Fatal(err)
+			}
+		}
+		return dir
 	}
-	a.settings.Editor = ""
-	if _, err := a.editorCommand(); err == nil || !strings.Contains(err.Error(), `"code" not found`) {
-		t.Errorf("missing default editor: %v", err)
+	goRepo, phpRepo, jsRepo, plain := repo("go.mod"), repo("backend/composer.json", "frontend/package.json"), repo("package.json"), repo("README.md")
+
+	a := NewApp(change.Store{Home: t.TempDir()}, nil)
+	a.settings = normalize(Settings{Editors: map[string]string{"other": "cmd:fake-editor --wait"}})
+	check := func(dir string, want ...string) {
+		t.Helper()
+		got, err := a.editorCommand(dir)
+		if err != nil || strings.Join(got, " ") != strings.Join(want, " ") {
+			t.Errorf("editorCommand(%s) = %v, %v; want %v", filepath.Base(dir), got, err, want)
+		}
+	}
+	check(goRepo, "open", "-a", "/Apps/GoLand.app", goRepo)
+	check(phpRepo, "open", "-a", "/Apps/PhpStorm.app", phpRepo)
+	// WebStorm is not installed, so JS falls back to the "other" command.
+	check(jsRepo, filepath.Join(bin, "fake-editor"), "--wait", jsRepo)
+	check(plain, filepath.Join(bin, "fake-editor"), "--wait", plain)
+
+	a.settings.Editors["other"] = "webstorm"
+	if _, err := a.editorCommand(jsRepo); err == nil || !strings.Contains(err.Error(), "WebStorm isn't installed") {
+		t.Errorf("missing app everywhere: %v", err)
+	}
+}
+
+func TestEditorSettingsDefaultsAndMigration(t *testing.T) {
+	d := defaultSettings()
+	if d.Editors["go"] != "goland" || d.Editors["php"] != "phpstorm" || d.Editors["js"] != "webstorm" || d.Editors["other"] != "cmd:" {
+		t.Errorf("defaults = %v", d.Editors)
+	}
+	old := normalize(Settings{Editor: "  zed  "})
+	if old.Editors["other"] != "cmd:zed" || old.Editor != "" || old.Editors["go"] != "goland" {
+		t.Errorf("migration = %+v", old)
+	}
+	kept := normalize(Settings{Editors: map[string]string{"go": "vscode"}})
+	if kept.Editors["go"] != "vscode" || kept.Editors["php"] != "phpstorm" {
+		t.Errorf("partial editors = %v", kept.Editors)
 	}
 }

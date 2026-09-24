@@ -14,6 +14,7 @@ export interface LegView {
   repo: string
   name: string
   dir: string
+  lang: string
   current: string
   onBranch: boolean
   base: string

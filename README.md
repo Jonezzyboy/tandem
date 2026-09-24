@@ -156,8 +156,12 @@ run `scripts/build-app.sh` or `npm run build` in `frontend/` first.
 
 Settings (⌘, or the gear by your account in the sidebar) holds the theme
 (Graphite, Paper, Midnight, Forest, High contrast, or System to follow macOS),
-keyboard shortcuts, which can be re-recorded, the editor "Open in editor" runs,
-and defaults for the merge train and draft PRs. They are saved to
+keyboard shortcuts, which can be re-recorded, which editor opens each language,
+and defaults for the merge train and draft PRs. "Open in editor" picks by the
+repo's manifest (`go.mod` Go, `composer.json` PHP, `package.json` JS/TS, root
+before subfolders): GoLand, PhpStorm and WebStorm by default, any installed
+editor or a custom command per language, and an Other choice for the rest and
+as the fallback when a chosen app is missing. They are saved to
 `~/Library/Application Support/com.alanjones.tandem/settings.json`
 (`TANDEM_CONFIG_DIR` overrides the folder). ⌘1–9 always jump to a change.
 
