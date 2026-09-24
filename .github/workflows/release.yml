@@ -16,7 +16,9 @@ permissions:
 
 jobs:
   bundle:
-    runs-on: macos-15
+    # Apps linked against an SDK older than the running macOS get that release's
+    # compatibility window chrome (smaller corners, old traffic lights).
+    runs-on: macos-26
     steps:
       - name: Resolve tag
         id: tag
@@ -67,6 +69,15 @@ jobs:
 
       - name: Build Tandem.app with td inside
         run: scripts/build-app.sh "${{ steps.tag.outputs.version }}"
+
+      - name: Check the app links against the macOS 26 SDK
+        run: |
+          sdk=$(otool -arch arm64 -l desktop/build/bin/Tandem.app/Contents/MacOS/Tandem | awk '/LC_BUILD_VERSION/{f=1} f&&/ sdk /{print $2; exit}')
+          echo "Linked against SDK $sdk"
+          if [ "${sdk%%.*}" -lt 26 ]; then
+            echo "::error::Tandem.app links against SDK $sdk; macOS 26 would show it with legacy window chrome."
+            exit 1
+          fi
 
       - name: Package
         id: pkg
