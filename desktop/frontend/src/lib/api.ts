@@ -1,5 +1,5 @@
-import * as App from '../../wailsjs/go/main/App'
-import { EventsOn } from '../../wailsjs/runtime/runtime'
+import * as App from '@wailsjs/go/main/App'
+import { EventsOn } from '@wailsjs/runtime/runtime'
 import type {
   ChangeSummary, ChangeView, CheckEvent, Inbox, LegResult, PRPreview, PRRequest, RepoInfo, StartItem,
 } from './types'

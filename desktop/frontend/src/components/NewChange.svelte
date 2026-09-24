@@ -1,8 +1,8 @@
 <script lang="ts">
   import { onMount } from 'svelte'
-  import { api } from '../lib/api'
-  import { fail, navigate } from '../lib/state.svelte'
-  import type { RepoInfo, StartItem } from '../lib/types'
+  import { api } from '@lib/api'
+  import { fail, navigate } from '@lib/state.svelte'
+  import type { RepoInfo, StartItem } from '@lib/types'
   import Icon from './Icon.svelte'
 
   const shown = 150
