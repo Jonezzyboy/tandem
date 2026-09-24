@@ -106,6 +106,10 @@ func runSwitch(ctx context.Context, e *env, args []string) error {
 	failed := false
 	rows := [][]ui.Cell{}
 	for _, r := range core.Switch(ctx, c, *toBase) {
+		if r.Skipped {
+			rows = append(rows, []ui.Cell{{Text: "•", Color: e.ui.Dim}, ui.Plain(r.Leg.Name()), {Text: "worktree, always on " + r.To, Color: e.ui.Dim}})
+			continue
+		}
 		if r.Err != nil {
 			failed = true
 			rows = append(rows, []ui.Cell{{Text: "✗", Color: e.ui.Orange}, ui.Plain(r.Leg.Name()), {Text: "stayed put: " + core.FirstLine(r.Err.Error()), Color: e.ui.Orange}})

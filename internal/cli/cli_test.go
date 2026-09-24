@@ -428,3 +428,45 @@ func TestAddRepoToChange(t *testing.T) {
 		t.Error("remove deleted grpc's branch")
 	}
 }
+
+func TestStartWithWorktrees(t *testing.T) {
+	base := t.TempDir()
+	root := filepath.Join(base, "code")
+	home := filepath.Join(root, ".tandem")
+	t.Setenv("TANDEM_ROOT", root)
+	t.Setenv("TANDEM_HOME", home)
+	t.Setenv("GIT_CONFIG_GLOBAL", filepath.Join(base, "gitconfig"))
+	t.Setenv("GIT_CONFIG_NOSYSTEM", "1")
+	for _, k := range []string{"GIT_AUTHOR_NAME", "GIT_COMMITTER_NAME"} {
+		t.Setenv(k, "Test")
+	}
+	for _, k := range []string{"GIT_AUTHOR_EMAIL", "GIT_COMMITTER_EMAIL"} {
+		t.Setenv(k, "test@example.com")
+	}
+	t.Chdir(base)
+	proto := newRepo(t, root, "proto", map[string]string{"go.mod": "module example.com/proto\n\ngo 1.26\n"})
+	newRepo(t, root, "api", map[string]string{"go.mod": "module example.com/api\n\ngo 1.26\n"})
+
+	wt := filepath.Join(home, "DEV-W", "proto")
+	out := mustTD(t, "start", "DEV-W", "proto", "--worktree")
+	if !strings.Contains(out, "worktree "+wt) {
+		t.Errorf("start --worktree:\n%s", out)
+	}
+	if got := git(t, proto, "branch", "--show-current"); got != "main" {
+		t.Errorf("clone switched to %q", got)
+	}
+	if got := strings.TrimSpace(mustTD(t, "path", "DEV-W", "proto")); got != wt {
+		t.Errorf("path = %q", got)
+	}
+	if out := mustTD(t, "add", "DEV-W", "api"); !strings.Contains(out, "worktree "+filepath.Join(home, "DEV-W", "api")) {
+		t.Errorf("add to a worktree change:\n%s", out)
+	}
+	if out := mustTD(t, "switch", "DEV-W", "--base"); !strings.Contains(out, "worktree, always on DEV-W") {
+		t.Errorf("switch on a worktree change:\n%s", out)
+	}
+
+	mustTD(t, "start", "DEV-B", "proto")
+	if out := mustTD(t, "start", "DEV-B", "api", "--worktree"); !strings.Contains(out, "--worktree only applies when a change is created") {
+		t.Errorf("--worktree on a branch change:\n%s", out)
+	}
+}

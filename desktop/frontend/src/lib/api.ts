@@ -18,8 +18,8 @@ export const api = {
   publishPRs: (id: string, req: PRRequest) => App.PublishPRs(id, req as never) as unknown as Promise<PRPreview>,
   inbox: (force = false) => App.Inbox(force) as unknown as Promise<Inbox>,
   repos: () => App.Repos() as unknown as Promise<RepoInfo[]>,
-  start: (id: string, title: string, repos: string[]) =>
-    App.Start({ id, title, repos } as never) as unknown as Promise<StartItem[]>,
+  start: (id: string, title: string, repos: string[], worktrees = false) =>
+    App.Start({ id, title, repos, worktrees } as never) as unknown as Promise<StartItem[]>,
   link: (id: string, up: string, down: string) => App.Link(id, up, down),
   openURL: (url: string) => App.OpenURL(url),
   openFolder: (path: string) => App.OpenFolder(path),

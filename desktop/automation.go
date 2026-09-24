@@ -255,6 +255,9 @@ func (a *App) Switch(id string, toBase bool) ([]LegResult, error) {
 	out := []LegResult{}
 	for _, r := range core.Switch(a.ctx, c, toBase) {
 		lr := LegResult{Leg: r.Leg.Name(), OK: r.Err == nil, Message: "on " + r.To}
+		if r.Skipped {
+			lr.Message = "worktree, always on " + r.To
+		}
 		if r.Err != nil {
 			lr.Message = "stayed put: " + core.FirstLine(r.Err.Error())
 		}

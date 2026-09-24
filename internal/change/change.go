@@ -19,8 +19,8 @@ import (
 type Leg struct {
 	Repo   string `json:"repo"`
 	Source string `json:"source"`
-	// Worktree is set only for legs made before changes used branches in the
-	// clone itself; Dir is where a leg's files are either way.
+	// Worktree is set for legs of a change made with worktrees (and legs from
+	// before branches were the default); Dir is where a leg's files are either way.
 	Worktree string `json:"worktree,omitempty"`
 	Base     string `json:"base"`
 	BaseRef  string `json:"baseRef"`
@@ -53,8 +53,26 @@ type Change struct {
 	Body      string    `json:"body,omitempty"`
 	Reviewers []string  `json:"reviewers,omitempty"`
 	Created   time.Time `json:"created"`
-	Legs      []Leg     `json:"legs"`
-	Declared  []Edge    `json:"declared,omitempty"`
+	// Worktrees makes each leg a worktree under the change's directory instead
+	// of the branch checked out in the repo's clone. Set when the change is
+	// created; legs added later follow it.
+	Worktrees bool   `json:"worktrees,omitempty"`
+	Legs      []Leg  `json:"legs"`
+	Declared  []Edge `json:"declared,omitempty"`
+}
+
+// UsesWorktrees reports whether the change's legs are worktrees: set at
+// creation, or true of every leg of a change from before that setting.
+func (c *Change) UsesWorktrees() bool {
+	if c.Worktrees {
+		return true
+	}
+	for _, l := range c.Legs {
+		if l.Worktree == "" {
+			return false
+		}
+	}
+	return len(c.Legs) > 0
 }
 
 // Leg finds a leg by "vendor/repo" or bare repo name.

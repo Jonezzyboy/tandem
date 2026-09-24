@@ -62,6 +62,7 @@ export const actions: Action[] = [
   { id: 'runChecks', label: 'Run checks', scope: 'change', default: 'meta+shift+k' },
   { id: 'publishPRs', label: 'Open or publish PRs', scope: 'change', default: 'meta+shift+p' },
   { id: 'mergeTrain', label: 'Open the merge train', scope: 'change', default: 'meta+shift+m' },
+  { id: 'checkOut', label: 'Check out the change in every repo', scope: 'change', default: 'meta+shift+o' },
 ]
 
 // Owned by macOS or the app's jump-to-change keys; never assignable.

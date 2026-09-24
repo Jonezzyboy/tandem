@@ -46,6 +46,7 @@ export interface ChangeView {
   edges: EdgeView[]
   graphError?: string
   blocked: number
+  worktrees: boolean
   remote: boolean
   remoteAt: string
   checkedAt: string
@@ -54,6 +55,7 @@ export interface ChangeView {
 export interface ChangeSummary {
   id: string
   checkedOut: boolean
+  worktrees: boolean
   title: string
   legs: number
   blocked: number

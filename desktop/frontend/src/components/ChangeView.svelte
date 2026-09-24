@@ -2,7 +2,7 @@
   import { onDestroy, onMount } from 'svelte'
   import { api } from '@lib/api'
   import { ago, reviewLabel } from '@lib/format'
-  import { app, fail, log } from '@lib/state.svelte'
+  import { app, checkOut, fail, log, switching as switchingIds } from '@lib/state.svelte'
   import { editorLabel } from '@lib/settings.svelte'
   import type { LegView } from '@lib/types'
   import Composer from './Composer.svelte'
@@ -28,20 +28,8 @@
   const trainRunning = $derived(app.trains[id]?.running ?? false)
 
   const offBranch = $derived((view?.legs ?? []).filter((l) => !l.onBranch))
-  let switching = $state(false)
-
-  async function switchTo(toBase: boolean) {
-    switching = true
-    try {
-      const results = await api.switchTo(id, toBase)
-      for (const r of results) log(id, `${r.leg}: ${r.message}`, r.ok ? 'muted' : 'warn')
-      await api.focus(id)
-    } catch (e) {
-      fail(e)
-    } finally {
-      switching = false
-    }
-  }
+  const switching = $derived(switchingIds[id] ?? false)
+  const switchTo = (toBase: boolean) => checkOut(id, toBase)
 
   let addOpen = $state(false)
   let edgesOpen = $state(false)
@@ -83,6 +71,9 @@
         break
       case 'mergeTrain':
         if (view.legs.some((l) => l.pr)) app.trainOpen = true
+        break
+      case 'checkOut':
+        if (!view.worktrees && !switching) switchTo(false)
         break
     }
   }
@@ -177,20 +168,30 @@
           <span title="Local git state is watched every few seconds; GitHub is read every minute">
             {view.remote ? `GitHub ${ago(view.remoteAt, now)} ago` : 'GitHub not read yet'}
           </span>
-          {#if offBranch.length === 0 && view.legs.length > 0}
+          {#if view.worktrees}
             <span>·</span>
-            <span class="ok">checked out</span>
-            <span>·</span>
-            <button class="link" disabled={switching} onclick={() => switchTo(true)} style="--wails-draggable: no-drag"
-              title="Switch every repo to {view.legs[0].base}" aria-label="Switch every repo to {view.legs[0].base}">→ {view.legs[0].base}</button>
+            <span title="Each repo has its own worktree under the change, so the clones stay on their branches">worktrees</span>
           {/if}
         </div>
-        <h1>{view.title || 'Untitled change'}</h1>
+        <h1 title={view.title}>{view.title || 'Untitled change'}</h1>
       </div>
       <div class="actions" style="--wails-draggable: no-drag">
         <button class="icon-btn" aria-label="Refresh from GitHub" title="Refresh (⌘R)" onclick={() => api.refresh(id)}>
           <Icon name="refresh" />
         </button>
+        {#if !view.worktrees && view.legs.length}
+          {#if offBranch.length === 0}
+            <button class="btn checkout on-branch" onclick={() => switchTo(true)} disabled={switching}
+              aria-label="Checked out: switch every repo back to {view.legs[0].base}" title="Switch every repo back to {view.legs[0].base}">
+              <Icon name={switching ? 'branch' : 'check'} spin={switching} />
+              <span class="idle">Checked out</span><span class="hover">→ {view.legs[0].base}</span>
+            </button>
+          {:else}
+            <button class="btn checkout" onclick={() => switchTo(false)} disabled={switching} title="Check out {view.branch} in every repo">
+              <Icon name="branch" spin={switching} />Check out
+            </button>
+          {/if}
+        {/if}
         <button class="btn" onclick={sync} disabled={syncing}>
           <Icon name="sync" spin={syncing} />Sync all
         </button>
@@ -366,20 +367,19 @@
 <style>
   .loading { padding: 80px 40px; }
   .page { padding: 0 32px 28px; display: flex; flex-direction: column; gap: 20px; min-height: 100%; }
-  header { display: flex; justify-content: space-between; align-items: flex-end; gap: 24px; padding-top: 28px; }
-  .heading { display: flex; flex-direction: column; gap: 6px; min-width: 0; flex: 1; }
+  /* Actions drop below the title when both don't fit, rather than squeezing it. */
+  header { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-end; gap: 14px 24px; padding-top: 28px; }
+  .heading { display: flex; flex-direction: column; gap: 6px; min-width: min(360px, 100%); flex: 1 1 360px; }
   .meta { display: flex; gap: 8px; font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; }
   .meta > :last-child { overflow: hidden; text-overflow: ellipsis; }
   .accent { color: var(--accent-text); }
-  h1 { margin: 0; font-family: var(--display); font-weight: 700; font-size: 30px; letter-spacing: -0.01em; line-height: 1.15; }
-  .actions { display: flex; gap: 8px; align-items: center; flex-shrink: 0; }
+  h1 { margin: 0; font-family: var(--display); font-weight: 700; font-size: 30px; letter-spacing: -0.01em; line-height: 1.15; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .actions { display: flex; gap: 8px; align-items: center; flex-shrink: 0; margin-left: auto; }
   .switch-banner {
     display: flex; align-items: center; gap: 12px; padding: 10px 12px 10px 14px; border-radius: 10px;
     background: var(--warn-row); border: 1px solid var(--warn-border); color: var(--warn-text); font-size: 13px;
   }
   .grow-text { flex: 1; line-height: 1.45; }
-  .link { border: 0; background: none; padding: 0; color: var(--accent-text); font: inherit; cursor: pointer; }
-  .link:hover:not(:disabled) { color: var(--link-hover); text-decoration: underline; }
   .banner { padding: 10px 14px; border-radius: 10px; background: var(--warn-bg); border: 1px solid var(--warn-border); font-size: 13px; }
 
   .order {
@@ -394,6 +394,13 @@
   .order-note { margin-left: auto; font-size: 12px; text-align: right; }
   .repin { margin-left: 8px; }
   .head-tools { display: flex; justify-content: flex-end; }
+  .btn.on-branch { color: var(--ok-text); border-color: var(--ok-border); background: var(--ok-bg); }
+  /* Fixed width so the label swap on hover doesn't shift the other buttons. */
+  .btn.checkout { min-width: 132px; justify-content: center; }
+  .btn.on-branch .hover { display: none; }
+  .btn.on-branch:hover:not(:disabled) .idle, .btn.on-branch:focus-visible .idle { display: none; }
+  .btn.on-branch:hover:not(:disabled) .hover, .btn.on-branch:focus-visible .hover { display: inline; }
+  .btn.on-branch:hover:not(:disabled) { color: var(--text); border-color: var(--line-2); background: var(--hover); }
   .head-tools .add { text-transform: none; letter-spacing: normal; font-family: var(--sans); }
   .danger-text { color: var(--warn-text); border-color: var(--warn-border); }
 

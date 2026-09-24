@@ -1,6 +1,7 @@
 <script lang="ts">
   import { api } from '@lib/api'
   import { fail, navigate } from '@lib/state.svelte'
+  import { prefs } from '@lib/settings.svelte'
   import type { StartItem } from '@lib/types'
   import Icon from './Icon.svelte'
   import RepoPicker from './RepoPicker.svelte'
@@ -8,6 +9,7 @@
   let id = $state('')
   let title = $state('')
   let selected = $state<string[]>([])
+  let worktrees = $state(false)
   let starting = $state(false)
   let results = $state<StartItem[] | null>(null)
 
@@ -20,7 +22,7 @@
   async function start() {
     starting = true
     try {
-      results = await api.start(id, title, selected)
+      results = await api.start(id, title, selected, worktrees)
       if (results.every((r) => r.ok)) navigate({ name: 'change', id })
     } catch (e) {
       fail(e)
@@ -32,7 +34,7 @@
 
 <div class="page">
   <header style="--wails-draggable: drag">
-    <div class="muted mono small">One branch per repo, checked out in your clones</div>
+    <div class="muted mono small">{worktrees ? 'One worktree per repo, beside your clones' : 'One branch per repo, checked out in your clones'}</div>
     <h1>New change</h1>
   </header>
 
@@ -41,7 +43,7 @@
       <div class="field">
         <label for="nc-id">Ticket or change ID</label>
         <input id="nc-id" class="input mono" bind:value={id} placeholder="ABC-123" autocomplete="off" />
-        <span class="small muted">The branch name in every repo. Clean repos switch to it; any with uncommitted work stay put.</span>
+        <span class="small muted">{worktrees ? 'The branch name in every repo’s worktree.' : 'The branch name in every repo. Clean repos switch to it; any with uncommitted work stay put.'}</span>
       </div>
       <div class="field">
         <label for="nc-title">Title</label>
@@ -57,9 +59,16 @@
           {/each}
         </div>
       </div>
+      <label class="mode">
+        <input type="checkbox" bind:checked={worktrees} />
+        <span class="stack">
+          <span>Use worktrees instead</span>
+          <span class="small muted">A worktree per repo under <span class="mono">{prefs.home || '~/code/.tandem'}/{id || 'ID'}</span>, so your clones and anything running from them stay on their current branches. Repos added later follow this.</span>
+        </span>
+      </label>
       <button class="btn primary start" disabled={!validId || selected.length === 0 || starting} onclick={start}>
         <Icon name="branch" spin={starting} />
-        Create {selected.length || ''} branch{selected.length === 1 ? '' : 'es'}
+        Create {selected.length || ''} {worktrees ? `worktree${selected.length === 1 ? '' : 's'}` : `branch${selected.length === 1 ? '' : 'es'}`}
       </button>
       {#if results}
         <div class="results">
@@ -92,6 +101,10 @@
   .chips { display: flex; flex-wrap: wrap; gap: 6px; }
   .chip { display: inline-flex; align-items: center; gap: 6px; padding: 5px 9px; border-radius: 7px; border: 1px solid var(--line-2); background: var(--raised); font-size: 12.5px; cursor: pointer; }
   .start { justify-content: center; min-height: 42px; }
+  .mode { display: flex; gap: 10px; align-items: flex-start; cursor: pointer; font-size: 14px; }
+  .mode input { width: 16px; height: 16px; margin-top: 2px; accent-color: var(--accent); }
+  .mode .stack { display: flex; flex-direction: column; gap: 3px; line-height: 1.4; }
+  .mode .mono { white-space: nowrap; }
   .results { display: flex; flex-direction: column; gap: 8px; }
   .result { display: grid; grid-template-columns: 16px auto; gap: 4px 10px; align-items: center; font-size: 13px; }
   .result span:last-child { grid-column: 2; word-break: break-all; }
