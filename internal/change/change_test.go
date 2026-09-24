@@ -27,3 +27,20 @@ func TestRemoveLegDropsItsDeclaredEdges(t *testing.T) {
 		t.Error("removed an edge twice")
 	}
 }
+
+func TestUsesWorktrees(t *testing.T) {
+	cases := []struct {
+		c    Change
+		want bool
+	}{
+		{Change{Worktrees: true}, true},
+		{Change{Legs: []Leg{{Worktree: "/w/a"}, {Worktree: "/w/b"}}}, true},
+		{Change{Legs: []Leg{{Worktree: "/w/a"}, {Source: "/r/b"}}}, false},
+		{Change{}, false},
+	}
+	for i, tc := range cases {
+		if got := tc.c.UsesWorktrees(); got != tc.want {
+			t.Errorf("case %d: UsesWorktrees = %v, want %v", i, got, tc.want)
+		}
+	}
+}

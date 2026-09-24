@@ -108,7 +108,7 @@ func (f *fixture) repo(name, gomod string) workspace.Repo {
 func (f *fixture) change() *change.Change {
 	proto := f.repo("proto", "module example.com/proto\n\ngo 1.26\n")
 	api := f.repo("api", "module example.com/api\n\ngo 1.26\n\nrequire example.com/proto v1.0.0\n")
-	c, results, err := Start(context.Background(), f.store, "DEV-1", "Retries", []workspace.Repo{proto, api})
+	c, results, err := Start(context.Background(), f.store, "DEV-1", "Retries", []workspace.Repo{proto, api}, StartOptions{})
 	if err != nil {
 		f.t.Fatal(err)
 	}
@@ -315,7 +315,7 @@ func TestStartLeavesDirtyRepoOnItsBranch(t *testing.T) {
 	api := f.repo("api", "module example.com/api\n\ngo 1.26\n")
 	write(t, filepath.Join(api.Path, "wip.txt"), "wip", 0o644)
 
-	c, results, err := Start(context.Background(), f.store, "DEV-2", "", []workspace.Repo{proto, api})
+	c, results, err := Start(context.Background(), f.store, "DEV-2", "", []workspace.Repo{proto, api}, StartOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -372,5 +372,55 @@ func TestOffBranchLegsAreRefused(t *testing.T) {
 	}
 	if !found {
 		t.Error("train should refuse to start when a leg it must re-pin is off its branch")
+	}
+}
+
+func TestWorktreeChange(t *testing.T) {
+	f := newFixture(t)
+	proto := f.repo("proto", "module example.com/proto\n\ngo 1.26\n")
+	api := f.repo("api", "module example.com/api\n\ngo 1.26\n\nrequire example.com/proto v1.0.0\n")
+	write(t, filepath.Join(api.Path, "wip.txt"), "wip", 0o644)
+
+	c, results, err := Start(context.Background(), f.store, "DEV-3", "", []workspace.Repo{proto}, StartOptions{Worktrees: true})
+	if err != nil || results[0].Err != nil {
+		t.Fatalf("start: %v %+v", err, results)
+	}
+	if !c.Worktrees {
+		t.Fatal("change not marked as using worktrees")
+	}
+	// Adding to a worktree change follows its mode, dirty clone or not.
+	c, results, err = Start(context.Background(), f.store, "DEV-3", "", []workspace.Repo{api}, StartOptions{})
+	if err != nil || results[0].Err != nil {
+		t.Fatalf("add: %v %+v", err, results)
+	}
+	for _, l := range c.Legs {
+		want := filepath.Join(f.store.Dir("DEV-3"), l.Name())
+		if l.Worktree != want || l.Dir() != want {
+			t.Errorf("%s worktree = %q, want %q", l.Name(), l.Worktree, want)
+		}
+		if got := run(t, l.Dir(), "git", "branch", "--show-current"); got != "DEV-3" {
+			t.Errorf("%s worktree on %q", l.Name(), got)
+		}
+		if got := run(t, l.Source, "git", "branch", "--show-current"); got != "main" {
+			t.Errorf("%s clone switched to %q", l.Name(), got)
+		}
+	}
+	if _, err := os.Stat(filepath.Join(api.Path, "wip.txt")); err != nil {
+		t.Error("the clone's uncommitted work was touched")
+	}
+	for _, r := range Switch(context.Background(), c, true) {
+		if !r.Skipped || r.Err != nil {
+			t.Errorf("switch should skip worktree leg %s: %+v", r.Leg.Name(), r)
+		}
+	}
+	g, _ := BuildGraph(c)
+	if g.Levels["acme/proto"] != 1 || g.Levels["acme/api"] != 2 {
+		t.Errorf("levels = %v", g.Levels)
+	}
+
+	// Branch mode stays the default for new changes.
+	c2, _, err := Start(context.Background(), f.store, "DEV-4", "", []workspace.Repo{proto}, StartOptions{})
+	if err != nil || c2.Worktrees || c2.Legs[0].Worktree != "" {
+		t.Errorf("default mode: %+v %v", c2, err)
 	}
 }

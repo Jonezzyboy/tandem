@@ -35,7 +35,7 @@ var commands []command
 
 func init() {
 	commands = []command{
-		{"start", "td start <ID> <repo>... [--title T]", "create a change, or add repos to one: a branch per repo, checked out", runStart},
+		{"start", "td start <ID> <repo>... [--title T] [--worktree]", "create a change: a branch per repo, checked out (or a worktree each)", runStart},
 		{"add", "td add [ID] <repo>...", "add repos to a change: each gets its branch, and the merge order updates", runAdd},
 		{"remove", "td remove [ID] <leg>...", "take repos out of a change (their branches stay)", runRemove},
 		{"switch", "td switch [ID] [--base]", "check out the change's branch in every repo, or with --base their main branch", runSwitch},

@@ -234,6 +234,7 @@ type ChangeSummary struct {
 	ID string `json:"id"`
 	// CheckedOut means every leg's repo has the change's branch checked out.
 	CheckedOut bool      `json:"checkedOut"`
+	Worktrees  bool      `json:"worktrees"`
 	Title      string    `json:"title"`
 	Legs       int       `json:"legs"`
 	Blocked    int       `json:"blocked"`
@@ -251,7 +252,7 @@ func (a *App) Changes() []ChangeSummary {
 	defer a.mu.Unlock()
 	out := make([]ChangeSummary, 0, len(all))
 	for _, c := range all {
-		s := ChangeSummary{ID: c.ID, Title: c.Title, Legs: len(c.Legs), Created: c.Created, Tone: "muted"}
+		s := ChangeSummary{ID: c.ID, Title: c.Title, Legs: len(c.Legs), Created: c.Created, Tone: "muted", Worktrees: c.UsesWorktrees()}
 		legs := plural(s.Legs, "leg")
 		v, ok := a.views[c.ID]
 		if ok && len(v.Legs) > 0 {
@@ -616,6 +617,8 @@ type StartRequest struct {
 	ID    string   `json:"id"`
 	Title string   `json:"title"`
 	Repos []string `json:"repos"`
+	// Worktrees makes a new change use a worktree per repo.
+	Worktrees bool `json:"worktrees"`
 }
 
 type StartItem struct {
@@ -641,7 +644,7 @@ func (a *App) Start(req StartRequest) ([]StartItem, error) {
 		}
 		repos = append(repos, r)
 	}
-	_, results, err := core.Start(a.ctx, a.store, id, strings.TrimSpace(req.Title), repos)
+	_, results, err := core.Start(a.ctx, a.store, id, strings.TrimSpace(req.Title), repos, core.StartOptions{Worktrees: req.Worktrees})
 	if err != nil {
 		return nil, err
 	}
@@ -658,7 +661,10 @@ func (a *App) Start(req StartRequest) ([]StartItem, error) {
 			if !r.Created {
 				it.Message += " (existing)"
 			}
-			if r.Switched {
+			switch {
+			case r.Leg.Worktree != "":
+				it.Message += ", worktree " + r.Leg.Worktree
+			case r.Switched:
 				it.Message += ", checked out"
 			}
 			if r.Warning != "" {

@@ -20,6 +20,8 @@ type ChangeView struct {
 	Edges      []EdgeView `json:"edges"`
 	GraphError string     `json:"graphError,omitempty"`
 	Blocked    int        `json:"blocked"`
+	// Worktrees is the change's mode: a worktree per leg, not the clone's checkout.
+	Worktrees bool `json:"worktrees"`
 	// Remote is false until GitHub state has been read at least once.
 	Remote    bool      `json:"remote"`
 	RemoteAt  time.Time `json:"remoteAt"`
@@ -80,7 +82,7 @@ func NewPRView(pr *gh.PR) *PRView {
 func BuildView(c *change.Change, g Graph, graphErr error, states []LegState, remote bool) ChangeView {
 	SortByLevel(states, g.Levels)
 	v := ChangeView{
-		ID: c.ID, Title: c.Title, Branch: c.Branch, Body: c.Body, Reviewers: c.Reviewers,
+		ID: c.ID, Title: c.Title, Branch: c.Branch, Body: c.Body, Reviewers: c.Reviewers, Worktrees: c.UsesWorktrees(),
 		Legs: make([]LegView, 0, len(states)), Edges: []EdgeView{}, Remote: remote, CheckedAt: time.Now(),
 	}
 	if remote {

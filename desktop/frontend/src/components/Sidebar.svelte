@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { app, navigate } from '@lib/state.svelte'
+  import { app, checkOut, navigate, switching } from '@lib/state.svelte'
   import Icon from './Icon.svelte'
   import Kbd from './Kbd.svelte'
   import Avatar from './Avatar.svelte'
@@ -27,21 +27,29 @@
   <div class="group changes grow-list">
     <div class="eyebrow label">My changes</div>
     {#each app.changes as c, i (c.id)}
-      <button
-        class="change"
-        class:active={app.route.name === 'change' && app.route.id === c.id}
-        onclick={() => navigate({ name: 'change', id: c.id })}
-      >
-        <span class="row">
-          <span class="id-line">
-            <span class="mono id">{c.id}</span>
-            {#if c.checkedOut}<span class="live" title="Checked out in every repo" aria-label="checked out"></span>{/if}
+      <div class="change-wrap">
+        <button
+          class="change"
+          class:active={app.route.name === 'change' && app.route.id === c.id}
+          onclick={() => navigate({ name: 'change', id: c.id })}
+        >
+          <span class="row">
+            <span class="id-line">
+              <span class="mono id">{c.id}</span>
+              {#if c.checkedOut}<span class="live" title="Checked out in every repo" aria-label="checked out"></span>{/if}
+            </span>
+            {#if i < 9}<Kbd keys={['⌘', String(i + 1)]} />{/if}
           </span>
-          {#if i < 9}<Kbd keys={['⌘', String(i + 1)]} />{/if}
-        </span>
-        <span class="title">{c.title || 'Untitled change'}</span>
-        <span class="headline {c.tone}">{c.headline}</span>
-      </button>
+          <span class="title">{c.title || 'Untitled change'}</span>
+          <span class="headline {c.tone}">{c.headline}</span>
+        </button>
+        {#if !c.worktrees && !c.checkedOut && c.legs > 0}
+          <button class="icon-btn quick-switch" class:busy={switching[c.id]} onclick={() => checkOut(c.id)}
+            aria-label="Check out {c.id} in every repo" title="Check out {c.id} in every repo" disabled={switching[c.id]}>
+            <Icon name="branch" size={14} spin={switching[c.id]} />
+          </button>
+        {/if}
+      </div>
     {:else}
       <p class="empty">No changes yet. Start one to put several repos on one branch.</p>
     {/each}
@@ -109,7 +117,13 @@
     border-radius: 10px;
     padding: 0 7px;
   }
-  .change { flex-direction: column; gap: 2px; padding: 9px 10px; }
+  .change { flex-direction: column; gap: 2px; padding: 9px 10px; width: 100%; }
+  .change-wrap { position: relative; }
+  .quick-switch {
+    position: absolute; right: 6px; bottom: 7px; width: 26px; height: 26px;
+    background: var(--raised); border: 1px solid var(--line-2); opacity: 0; transition: opacity 0.12s;
+  }
+  .change-wrap:hover .quick-switch, .quick-switch:focus-visible, .quick-switch.busy { opacity: 1; }
   .row { display: flex; justify-content: space-between; align-items: center; }
   .id { font-size: 12px; color: var(--accent-text); }
   .id-line { display: inline-flex; align-items: center; gap: 6px; }

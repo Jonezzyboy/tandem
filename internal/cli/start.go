@@ -15,8 +15,9 @@ import (
 )
 
 func runStart(ctx context.Context, e *env, args []string) error {
-	flags := newFlags("start", "td start <ID> <repo>... [--title T]")
+	flags := newFlags("start", "td start <ID> <repo>... [--title T] [--worktree]")
 	title := flags.String("title", "", "change title, used for PR titles")
+	worktree := flags.Bool("worktree", false, "give each repo a worktree under the change instead of checking the branch out in its clone")
 	pos, err := parseArgs(flags, args)
 	if err != nil {
 		return err
@@ -30,9 +31,12 @@ func runStart(ctx context.Context, e *env, args []string) error {
 	if err != nil {
 		return err
 	}
-	c, results, err := core.Start(ctx, e.store, id, *title, repos)
+	c, results, err := core.Start(ctx, e.store, id, *title, repos, core.StartOptions{Worktrees: *worktree})
 	if err != nil {
 		return err
+	}
+	if *worktree && !c.Worktrees {
+		fmt.Fprintln(e.out, e.ui.Orange("  "+c.ID+" already uses branches in the clones; --worktree only applies when a change is created"))
 	}
 	return printStart(e, c, results)
 }
@@ -57,7 +61,7 @@ func runAdd(ctx context.Context, e *env, args []string) error {
 	if err != nil {
 		return err
 	}
-	c, results, err := core.Start(ctx, e.store, c.ID, "", repos)
+	c, results, err := core.Start(ctx, e.store, c.ID, "", repos, core.StartOptions{})
 	if err != nil {
 		return err
 	}
@@ -100,7 +104,10 @@ func printStart(e *env, c *change.Change, results []core.AddResult) error {
 			if !res.Created {
 				note += " (existing)"
 			}
-			if res.Switched {
+			switch {
+			case res.Leg.Worktree != "":
+				note += ", worktree " + res.Leg.Worktree
+			case res.Switched:
 				note += ", checked out"
 			}
 			cells := []ui.Cell{{Text: "✓", Color: e.ui.Green}, ui.Plain(res.Leg.Repo), ui.Plain(note)}

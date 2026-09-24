@@ -97,6 +97,29 @@ func CreateBranch(ctx context.Context, src, branch string, base gitx.Base) (bool
 	return true, nil
 }
 
+// AddWorktree checks out branch at dst, reusing a local or remote branch of
+// that name before cutting a new one from base. It reports whether the branch
+// was created; dst already being a worktree is not an error.
+func AddWorktree(ctx context.Context, src, dst, branch string, base gitx.Base) (bool, error) {
+	if isRepo(dst) {
+		return false, nil
+	}
+	var args []string
+	created := true
+	switch {
+	case gitx.RefExists(ctx, src, "refs/heads/"+branch):
+		args, created = []string{"worktree", "add", "--quiet", dst, branch}, false
+	case gitx.RefExists(ctx, src, "refs/remotes/origin/"+branch):
+		args = []string{"worktree", "add", "--quiet", "--track", "-b", branch, dst, "origin/" + branch}
+	default:
+		args = []string{"worktree", "add", "--quiet", "--no-track", "-b", branch, dst, base.Ref}
+	}
+	if _, err := gitx.Run(ctx, src, args...); err != nil {
+		return false, err
+	}
+	return created, nil
+}
+
 // List returns every <root>/<vendor>/<repo> clone, skipping dot dirs.
 func List(roots []string) []Repo {
 	var out []Repo

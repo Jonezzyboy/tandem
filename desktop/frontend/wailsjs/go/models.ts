@@ -116,6 +116,7 @@ export namespace core {
 	    edges: EdgeView[];
 	    graphError?: string;
 	    blocked: number;
+	    worktrees: boolean;
 	    remote: boolean;
 	    // Go type: time
 	    remoteAt: any;
@@ -137,6 +138,7 @@ export namespace core {
 	        this.edges = this.convertValues(source["edges"], EdgeView);
 	        this.graphError = source["graphError"];
 	        this.blocked = source["blocked"];
+	        this.worktrees = source["worktrees"];
 	        this.remote = source["remote"];
 	        this.remoteAt = this.convertValues(source["remoteAt"], null);
 	        this.checkedAt = this.convertValues(source["checkedAt"], null);
@@ -188,6 +190,7 @@ export namespace main {
 	export class ChangeSummary {
 	    id: string;
 	    checkedOut: boolean;
+	    worktrees: boolean;
 	    title: string;
 	    legs: number;
 	    blocked: number;
@@ -206,6 +209,7 @@ export namespace main {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.id = source["id"];
 	        this.checkedOut = source["checkedOut"];
+	        this.worktrees = source["worktrees"];
 	        this.title = source["title"];
 	        this.legs = source["legs"];
 	        this.blocked = source["blocked"];
@@ -578,6 +582,7 @@ export namespace main {
 	    id: string;
 	    title: string;
 	    repos: string[];
+	    worktrees: boolean;
 	
 	    static createFrom(source: any = {}) {
 	        return new StartRequest(source);
@@ -588,6 +593,7 @@ export namespace main {
 	        this.id = source["id"];
 	        this.title = source["title"];
 	        this.repos = source["repos"];
+	        this.worktrees = source["worktrees"];
 	    }
 	}
 	export class TrainLeg {

@@ -36,6 +36,26 @@ export function navigate(route: Route) {
   }
 }
 
+// Change ids with a switch in flight, so every button for them shows it.
+export const switching = $state<Record<string, boolean>>({})
+
+// checkOut puts every repo of a branch-based change onto its branch (toBase:
+// back onto each repo's base), logging each repo's outcome.
+export async function checkOut(id: string, toBase = false) {
+  switching[id] = true
+  try {
+    const results = await api.switchTo(id, toBase)
+    for (const r of results) log(id, `${r.leg}: ${r.message}`, r.ok ? 'muted' : 'warn')
+    const stuck = results.filter((r) => !r.ok)
+    if (stuck.length) fail(`${stuck.map((r) => r.leg).join(', ')} stayed put: ${stuck[0].message.replace(/^stayed put: /, '')}`)
+    await api.focus(currentId())
+  } catch (e) {
+    fail(e)
+  } finally {
+    switching[id] = false
+  }
+}
+
 export function loadCleanPlan() {
   app.cleanLoading = true
   api.cleanPlan()

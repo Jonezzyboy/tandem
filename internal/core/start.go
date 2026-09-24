@@ -27,18 +27,25 @@ type AddResult struct {
 	Err      error
 }
 
+type StartOptions struct {
+	// Worktrees applies when the change is created: each leg becomes a worktree
+	// under the change's directory, leaving the clones' checkouts alone.
+	Worktrees bool
+}
+
 // Start loads or creates change id and, per repo concurrently, creates the
-// change's branch in the clone and checks it out. A repo with uncommitted
-// work keeps its current branch, with a warning. It saves the change when any
-// leg exists. Repos sharing a bare name are rejected before anything changes.
-func Start(ctx context.Context, store change.Store, id, title string, repos []workspace.Repo) (*change.Change, []AddResult, error) {
+// change's branch. By default it is checked out in the repo's clone, and a
+// repo with uncommitted work keeps its current branch, with a warning; a
+// worktree change instead gets a worktree per repo. It saves the change when
+// any leg exists. Repos sharing a bare name are rejected before anything changes.
+func Start(ctx context.Context, store change.Store, id, title string, repos []workspace.Repo, o StartOptions) (*change.Change, []AddResult, error) {
 	if err := change.ValidateID(id); err != nil {
 		return nil, nil, err
 	}
 	c, err := store.Load(id)
 	switch {
 	case errors.Is(err, fs.ErrNotExist):
-		c = &change.Change{ID: id, Branch: id, Created: time.Now().UTC()}
+		c = &change.Change{ID: id, Branch: id, Created: time.Now().UTC(), Worktrees: o.Worktrees}
 	case err != nil:
 		return nil, nil, err
 	}
@@ -69,7 +76,13 @@ func Start(ctx context.Context, store change.Store, id, title string, repos []wo
 		if results[i].Existing {
 			continue
 		}
-		wg.Go(func() { addLeg(ctx, c.Branch, &results[i]) })
+		wg.Go(func() {
+			if c.Worktrees {
+				addWorktreeLeg(ctx, store.Dir(c.ID), c.Branch, &results[i])
+			} else {
+				addLeg(ctx, c.Branch, &results[i])
+			}
+		})
 	}
 	wg.Wait()
 	for _, r := range results {
@@ -108,6 +121,26 @@ func addLeg(ctx context.Context, branch string, res *AddResult) {
 	res.Switched = true
 }
 
+func addWorktreeLeg(ctx context.Context, dir, branch string, res *AddResult) {
+	r := res.Repo
+	if gitx.HasRemote(ctx, r.Path, "origin") {
+		if err := gitx.Fetch(ctx, r.Path); err != nil {
+			res.Warning = "fetch failed, used local refs"
+		}
+	}
+	base, err := gitx.DefaultBase(ctx, r.Path)
+	if err != nil {
+		res.Err = err
+		return
+	}
+	dst := filepath.Join(dir, filepath.Base(r.Name))
+	if res.Created, res.Err = workspace.AddWorktree(ctx, r.Path, dst, branch, base); res.Err != nil {
+		return
+	}
+	res.Leg = change.Leg{Repo: r.Name, Source: r.Path, Worktree: dst, Base: base.Branch, BaseRef: base.Ref}
+	res.Switched = true
+}
+
 func join(a, b string) string {
 	if a == "" {
 		return b
@@ -127,10 +160,13 @@ type SwitchResult struct {
 	// To is the branch the repo was asked onto; Err says why it stayed put.
 	To  string
 	Err error
+	// Skipped is set for worktree legs, which always have the change's branch.
+	Skipped bool
 }
 
 // Switch checks out the change's branch in every leg, or with toBase each
-// leg's base branch. Legs with uncommitted work are left as they are.
+// leg's base branch. Legs with uncommitted work are left as they are, and
+// worktree legs are skipped.
 func Switch(ctx context.Context, c *change.Change, toBase bool) []SwitchResult {
 	out := make([]SwitchResult, len(c.Legs))
 	var wg sync.WaitGroup
@@ -141,6 +177,10 @@ func Switch(ctx context.Context, c *change.Change, toBase bool) []SwitchResult {
 			to = l.Base
 		}
 		out[i] = SwitchResult{Leg: l, To: to}
+		if l.Worktree != "" {
+			out[i].To, out[i].Skipped = c.Branch, true
+			continue
+		}
 		wg.Go(func() { out[i].Err = gitx.Switch(ctx, l.Dir(), to) })
 	}
 	wg.Wait()
