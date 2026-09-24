@@ -129,8 +129,9 @@ and a title, pick the repos, and create it. Commit in your repos as usual. Then:
 - **Publish PRs** opens every PR, cross-linked.
 - **Run checks** runs local checks everywhere.
 - **Merge train** merges in dependency order when they're approved.
-- **Check out** puts every repo back on this change's branch after you've been
-  elsewhere.
+- **check out**, next to the change's ID above its title, puts every repo back on
+  its branch after you've been elsewhere. It reads **checked out · → main** once
+  they're all there.
 
 **From the terminal:**
 
@@ -167,7 +168,7 @@ changes picks the one it has checked out.
 - **Branches or worktrees:**
   - **Branches (the default):** the branch is checked out in the repo's own clone,
     so services running from it pick the change up. A repo with uncommitted work
-    gets the branch but stays where it is. `td switch` (or **Check out**) moves
+    gets the branch but stays where it is. `td switch` (or **check out** in the app) moves
     every repo onto the change, and `td switch --base` moves them back to `main`.
   - **Worktrees (`td start --worktree`, or the toggle on New change):** each repo
     gets a worktree under the change's folder instead, and your clones don't move.
