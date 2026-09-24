@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <!-- macOS icon grid: 824px body inset 100px; shadow units are the body's 100-unit grid (1 = 8.24px). -->
+  <defs>
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="125%">
+      <feDropShadow dx="0" dy="1.2" stdDeviation="1.5" flood-color="#000" flood-opacity="0.4"/>
+    </filter>
+  </defs>
+  <svg x="100" y="100" width="824" height="824" viewBox="0 0 100 100" overflow="visible">
+    <rect x="0.4" y="0.4" width="99.2" height="99.2" rx="22.4" fill="#17181E" stroke="#2C2E38" stroke-width="0.8" filter="url(#shadow)"/>
+    <line x1="43" y1="50" x2="57" y2="50" stroke="#5B7BFF" stroke-width="7" stroke-linecap="round"/>
+    <circle cx="31" cy="50" r="12" fill="#ECEAE4"/>
+    <circle cx="69" cy="50" r="9" fill="none" stroke="#ECEAE4" stroke-width="6"/>
+  </svg>
+</svg>
