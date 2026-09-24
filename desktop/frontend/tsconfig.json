@@ -8,7 +8,20 @@
     "allowJs": true,
     "checkJs": false,
     "skipLibCheck": true,
-    "verbatimModuleSyntax": true
+    "verbatimModuleSyntax": true,
+    "paths": {
+      "@lib/*": [
+        "./src/lib/*"
+      ],
+      "@wailsjs/*": [
+        "./wailsjs/*"
+      ]
+    }
   },
-  "include": ["src/**/*.ts", "src/**/*.svelte", "wailsjs/**/*.ts", "wailsjs/**/*.d.ts"]
+  "include": [
+    "src/**/*.ts",
+    "src/**/*.svelte",
+    "wailsjs/**/*.ts",
+    "wailsjs/**/*.d.ts"
+  ]
 }

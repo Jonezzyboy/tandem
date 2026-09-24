@@ -1,9 +1,9 @@
 <script lang="ts">
   import { onDestroy } from 'svelte'
-  import { api } from '../lib/api'
-  import { ago, reviewLabel } from '../lib/format'
-  import { app, fail, log } from '../lib/state.svelte'
-  import type { LegView } from '../lib/types'
+  import { api } from '@lib/api'
+  import { ago, reviewLabel } from '@lib/format'
+  import { app, fail, log } from '@lib/state.svelte'
+  import type { LegView } from '@lib/types'
   import Composer from './Composer.svelte'
   import Icon from './Icon.svelte'
 

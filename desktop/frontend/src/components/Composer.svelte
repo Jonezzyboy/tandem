@@ -1,8 +1,8 @@
 <script lang="ts">
   import { onMount, untrack } from 'svelte'
-  import { api } from '../lib/api'
-  import { fail, log } from '../lib/state.svelte'
-  import type { ChangeView, PRPreview, PRRequest } from '../lib/types'
+  import { api } from '@lib/api'
+  import { fail, log } from '@lib/state.svelte'
+  import type { ChangeView, PRPreview, PRRequest } from '@lib/types'
   import Icon from './Icon.svelte'
 
   let { view, onclose }: { view: ChangeView; onclose: () => void } = $props()

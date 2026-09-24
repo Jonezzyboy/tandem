@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { app, navigate } from '../lib/state.svelte'
+  import { app, navigate } from '@lib/state.svelte'
   import Icon from './Icon.svelte'
 
   const reviewCount = $derived(app.inbox?.review?.length ?? 0)

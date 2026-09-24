@@ -13,8 +13,9 @@ brew install --cask Jonezzyboy/tandem/tandem
 
 Installs the desktop app and the `td` CLI together (`td` ships inside
 `Tandem.app` and the cask links it onto your PATH), so both are always the same
-version. Universal (Apple Silicon and Intel). The cask conflicts with
-homebrew-core's unrelated `td` formula, which installs the same command.
+version. Universal (Apple Silicon and Intel). homebrew-core's unrelated `td`
+formula (a to-do list) installs the same command; uninstall it first, since brew
+will not link over it.
 
 `gh` comes along as a cask dependency, but you still need to be signed in
 (`gh auth login`); the app has no login of its own. `brew upgrade --cask tandem`

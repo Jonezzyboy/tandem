@@ -7,12 +7,12 @@ cask "tandem" do
   desc "Worktrees, merge order and linked PRs for one change across many repos"
   homepage "https://github.com/Jonezzyboy/tandem"
 
-  # homebrew-core's td (a to-do list) installs the same command name.
-  conflicts_with formula: "td"
   depends_on formula: "gh"
   depends_on :macos
 
   app "Tandem.app"
+  # homebrew-core's td (a to-do list) installs the same command; brew refuses to
+  # link over it, and casks can no longer declare a conflict with a formula.
   binary "#{appdir}/Tandem.app/Contents/MacOS/td"
 
   # Ad-hoc signed rather than notarised, so Gatekeeper blocks first launch

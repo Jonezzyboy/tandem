@@ -1,8 +1,8 @@
 <script lang="ts">
-  import { api } from '../lib/api'
-  import { ago } from '../lib/format'
-  import { app, loadInbox, navigate } from '../lib/state.svelte'
-  import type { InboxItem } from '../lib/types'
+  import { api } from '@lib/api'
+  import { ago } from '@lib/format'
+  import { app, loadInbox, navigate } from '@lib/state.svelte'
+  import type { InboxItem } from '@lib/types'
   import Icon from './Icon.svelte'
 
   const review = $derived(app.inbox?.review ?? [])
