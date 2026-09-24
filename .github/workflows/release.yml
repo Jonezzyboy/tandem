@@ -105,14 +105,14 @@ jobs:
             "https://x-access-token:$TAP_TOKEN@github.com/Jonezzyboy/homebrew-tandem.git" tap
           mkdir -p tap/Casks
           sed -e "s/@VERSION@/$VERSION/g" -e "s/@SHA256@/$SHA256/g" \
-            packaging/cask.rb.tmpl > tap/Casks/tandem.rb
+            packaging/cask.rb.tmpl > tap/Casks/tandem-repos.rb
           cd tap
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add Casks/tandem.rb
+          git add Casks/tandem-repos.rb
           if git diff --cached --quiet; then
             echo "Cask already at $VERSION."
           else
-            git commit -m "tandem $VERSION"
+            git commit -m "tandem-repos $VERSION"
             git push
           fi
