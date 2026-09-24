@@ -41,7 +41,16 @@ func init() {
 		{"link", "td link [ID] <upstream> <downstream>", "declare that upstream merges before downstream", runLink},
 		{"path", "td path [ID] [leg]", "print a change's directory or a leg's worktree", runPath},
 		{"list", "td list", "list changes", runList},
+		{"version", "td version", "print the td version", runVersion},
 	}
+}
+
+// Version is set at release build time with -ldflags "-X .../internal/cli.Version=...".
+var Version = "dev"
+
+func runVersion(ctx context.Context, e *env, args []string) error {
+	fmt.Fprintln(e.out, "td "+Version)
+	return nil
 }
 
 // errReported means the command already printed why it failed.
@@ -60,6 +69,9 @@ func Main(args []string) int {
 }
 
 func Run(args []string, stdout, stderr io.Writer) int {
+	if len(args) > 0 && args[0] == "--version" {
+		args = []string{"version"}
+	}
 	if len(args) == 0 || args[0] == "-h" || args[0] == "--help" || args[0] == "help" {
 		usage(stdout)
 		return 0

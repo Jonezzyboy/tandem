@@ -7,13 +7,14 @@ PR. Tandem works out merge order from `go.mod`, `composer.json` and
 
 ## Install
 
-The desktop app:
-
 ```sh
 brew install --cask Jonezzyboy/tandem/tandem
 ```
 
-Universal (Apple Silicon and Intel). `gh` comes along as a cask dependency, but you
+Installs the desktop app and the `td` CLI together (`td` ships inside
+`Tandem.app` and the cask links it onto your PATH), so both are always the same
+version. Universal (Apple Silicon and Intel). The cask conflicts with
+homebrew-core's unrelated `td` formula, which installs the same command. `gh` comes along as a cask dependency, but you
 still need to be signed in (`gh auth login`); the app has no login of its own.
 `brew upgrade --cask tandem` picks up new releases.
 
@@ -23,7 +24,7 @@ Gatekeeper would block the first launch. The cask clears the quarantine attribut
 this app; the real fix is a Developer ID signature and notarisation in the release
 workflow, after which the `postflight_steps` block in `packaging/cask.rb.tmpl` goes.
 
-The CLI:
+The CLI alone, or on Linux:
 
 ```sh
 go install github.com/jonezzyboy/tandem/cmd/td@latest   # or a td_* archive from the release
@@ -91,12 +92,12 @@ state every 4s for the change on screen, GitHub every minute.
 
 ```sh
 go install github.com/wailsapp/wails/v2/cmd/wails@v2.16.0
-cd desktop && wails build        # → build/bin/Tandem.app
-wails dev                        # hot reload; also served at http://localhost:34115
+scripts/build-app.sh             # → desktop/build/bin/Tandem.app, with td inside
+cd desktop && wails dev          # hot reload; also served at http://localhost:34115
 ```
 
 `go test ./...` in `desktop/` needs `frontend/dist` to exist (it is embedded), so
-run `wails build` or `npm run build` in `frontend/` first.
+run `scripts/build-app.sh` or `npm run build` in `frontend/` first.
 
 Shortcuts: ⌘N new change, ⌘R refresh, ⌘0 inbox, ⌘1–9 jump to a change.
 `TANDEM_EDITOR` (default `code`) is what "Open in editor" runs.
