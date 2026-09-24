@@ -1,7 +1,8 @@
 import * as App from '@wailsjs/go/main/App'
 import { EventsOn } from '@wailsjs/runtime/runtime'
 import type {
-  ChangeSummary, ChangeView, CheckEvent, Inbox, LegResult, PRPreview, PRRequest, RepoInfo, StartItem,
+  ChangeSummary, ChangeView, CheckEvent, CleanItem, CleanResult, Inbox, LegResult, PinItem, PRPreview, PRRequest,
+  RepoInfo, StartItem, TrainPlan,
 } from './types'
 
 // The generated bindings type results as model classes; the JSON is plain
@@ -23,6 +24,12 @@ export const api = {
   openURL: (url: string) => App.OpenURL(url),
   openFolder: (path: string) => App.OpenFolder(path),
   openEditor: (path: string) => App.OpenEditor(path),
+  pin: (id: string) => App.Pin(id) as unknown as Promise<PinItem[]>,
+  trainPlan: (id: string) => App.TrainPlan(id) as unknown as Promise<TrainPlan>,
+  startTrain: (id: string, method: string) => App.StartTrain(id, method),
+  cancelTrain: (id: string) => App.CancelTrain(id),
+  cleanPlan: () => App.CleanPlan() as unknown as Promise<CleanItem[]>,
+  clean: (ids: string[]) => App.Clean(ids) as unknown as Promise<CleanResult[]>,
 }
 
 export function on<T>(event: string, fn: (data: T) => void): () => void {

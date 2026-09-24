@@ -66,13 +66,17 @@ func TestReadManifestAndInfer(t *testing.T) {
 		}
 		nodes = append(nodes, Node{Name: filepath.Base(d), Manifest: m})
 	}
-	if p := nodes[2].Manifest.Provides; !slices.Contains(p, "acme/backend") || !slices.Contains(p, "@acme/web") || slices.Contains(p, "ignored") {
-		t.Errorf("mono provides %v", p)
+	var provided []string
+	for _, p := range nodes[2].Manifest.Provides {
+		provided = append(provided, p.Name)
+	}
+	if !slices.Contains(provided, "acme/backend") || !slices.Contains(provided, "@acme/web") || slices.Contains(provided, "ignored") {
+		t.Errorf("mono provides %v", provided)
 	}
 	got := Infer(nodes)
 	want := []Edge{
-		{From: "proto", To: "orchestrator", Via: "github.com/acme/proto"},
-		{From: "ui", To: "mono", Via: "@acme/ui"},
+		{From: "proto", To: "orchestrator", Via: "github.com/acme/proto", Kind: Go},
+		{From: "ui", To: "mono", Via: "@acme/ui", Kind: NPM, Dir: "frontend"},
 	}
 	if !slices.Equal(got, want) {
 		t.Errorf("edges = %v, want %v", got, want)
@@ -84,5 +88,15 @@ func TestReadManifestMalformed(t *testing.T) {
 	write(t, filepath.Join(dir, "package.json"), `{`)
 	if _, err := ReadManifest(dir); err == nil {
 		t.Fatal("want error for malformed package.json")
+	}
+}
+
+func TestInferMatchesKind(t *testing.T) {
+	nodes := []Node{
+		{Name: "a", Manifest: Manifest{Provides: []Package{{Name: "acme/x", Kind: Composer}}}},
+		{Name: "b", Manifest: Manifest{Requires: []Package{{Name: "acme/x", Kind: NPM}}}},
+	}
+	if got := Infer(nodes); len(got) != 0 {
+		t.Errorf("composer package matched an npm requirement: %v", got)
 	}
 }

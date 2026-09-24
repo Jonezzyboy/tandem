@@ -30,6 +30,7 @@ export interface EdgeView {
   from: string
   to: string
   via?: string
+  kind?: 'go' | 'composer' | 'npm'
 }
 
 export interface ChangeView {
@@ -136,3 +137,61 @@ export interface Activity {
 }
 
 export type Route = { name: 'inbox' } | { name: 'change'; id: string } | { name: 'new' }
+
+export interface PinItem {
+  leg: string
+  module: string
+  rev: string
+  status: 'pinned' | 'already' | 'skipped' | 'failed'
+  message: string
+}
+
+export interface TrainLeg {
+  repo: string
+  name: string
+  level: number
+  pr: number
+  url: string
+  merged: boolean
+  problems: string[]
+}
+
+export interface TrainPlan {
+  legs: TrainLeg[]
+  toMerge: number
+  blocked: number
+  running: boolean
+}
+
+export interface TrainEvent {
+  change: string
+  leg: string
+  level: number
+  phase: 'waiting' | 'merging' | 'merged' | 'pinned' | 'skipped' | 'done'
+  detail: string
+  url: string
+}
+
+export interface TrainRun {
+  running: boolean
+  events: TrainEvent[]
+  error: string
+}
+
+export interface CleanItem {
+  id: string
+  title: string
+  ready: boolean
+  reason: string
+  worktrees: string[]
+  branches: string[]
+  kept: string[]
+  files: string[]
+  dir: string
+}
+
+export interface CleanResult {
+  id: string
+  ok: boolean
+  message: string
+}

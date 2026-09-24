@@ -29,6 +29,7 @@ type EdgeView struct {
 	From string `json:"from"`
 	To   string `json:"to"`
 	Via  string `json:"via,omitempty"`
+	Kind string `json:"kind,omitempty"`
 }
 
 type LegView struct {
@@ -85,7 +86,7 @@ func BuildView(c *change.Change, g Graph, graphErr error, states []LegState, rem
 		v.GraphError = graphErr.Error()
 	}
 	for _, e := range g.Edges {
-		v.Edges = append(v.Edges, EdgeView{From: e.From, To: e.To, Via: e.Via})
+		v.Edges = append(v.Edges, EdgeView{From: e.From, To: e.To, Via: e.Via, Kind: string(e.Kind)})
 	}
 	for _, s := range states {
 		lv := LegView{

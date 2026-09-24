@@ -3,11 +3,17 @@
 import {core} from '../models';
 import {main} from '../models';
 
+export function CancelTrain(arg1:string):Promise<void>;
+
 export function Change(arg1:string):Promise<core.ChangeView>;
 
 export function Changes():Promise<Array<main.ChangeSummary>>;
 
 export function Check(arg1:string,arg2:string):Promise<Array<main.CheckEvent>>;
+
+export function Clean(arg1:Array<string>):Promise<Array<main.CleanResult>>;
+
+export function CleanPlan():Promise<Array<main.CleanItem>>;
 
 export function Focus(arg1:string):Promise<void>;
 
@@ -21,6 +27,8 @@ export function OpenFolder(arg1:string):Promise<void>;
 
 export function OpenURL(arg1:string):Promise<void>;
 
+export function Pin(arg1:string):Promise<Array<main.PinItem>>;
+
 export function PlanPRs(arg1:string,arg2:main.PRRequest):Promise<main.PRPreview>;
 
 export function PublishPRs(arg1:string,arg2:main.PRRequest):Promise<main.PRPreview>;
@@ -31,4 +39,8 @@ export function Repos():Promise<Array<main.RepoInfo>>;
 
 export function Start(arg1:main.StartRequest):Promise<Array<main.StartItem>>;
 
+export function StartTrain(arg1:string,arg2:string):Promise<void>;
+
 export function Sync(arg1:string):Promise<Array<main.LegResult>>;
+
+export function TrainPlan(arg1:string):Promise<main.TrainPlan>;

@@ -48,6 +48,9 @@ td check              # local checks per leg, legs in parallel
 td sync               # fetch all; rebase clean legs onto their base
 td pr --draft --body-file notes.md --reviewer alice,bob
 td link orchestrator monolith   # declare an edge manifests can't see
+td pin                # point downstream Go legs at their upstream's pushed commit
+td merge              # merge the PRs in dependency order (asks first)
+td clean              # remove worktrees and branches of changes that have landed (asks first)
 ```
 
 Inside a change's directory the ID can be left out; elsewhere it can too when
@@ -64,6 +67,41 @@ Pushes each leg that has commits (never force-pushing unless you pass
 Related PRs block in all of them. The block sits between
 `<!-- tandem:related -->` markers; the rest of the description is left alone.
 `--dry-run` prints the plan only.
+
+### `td merge`
+
+A merge train. It first checks every PR: drafts, missing approvals and failing
+checks stop it before anything merges. Failing CI is tolerated on a leg the
+train will re-pin, since the pin is often the fix. It shows the plan and asks.
+Then, level by level:
+
+1. Wait for the leg's CI to finish green, then merge it (`--method squash`, the
+   default, or `merge` / `rebase`), and wait for GitHub to report it merged.
+2. For each Go leg that requires a module just merged, `go get` it at the merge
+   commit, commit `go.mod`/`go.sum`, and push. That leg only merges once CI has
+   run and passed on the pushed commit.
+
+Stopping part-way (Ctrl-C, a red check, a timeout) is safe: merged legs stay
+merged, and running `td merge` again skips them and carries on. Composer and npm
+edges order the train but are not re-pinned.
+
+### `td pin`
+
+For every Go module one leg provides and another requires, runs
+`go get <module>@<upstream HEAD>` in the downstream leg and commits only
+`go.mod`/`go.sum`. The upstream must be pushed first (`td pr` pushes), because
+`go get` fetches the commit from its origin, so private modules need `GOPRIVATE`
+set as usual. `--no-commit` leaves the change for you to commit.
+
+### `td clean`
+
+Lists every change whose PRs have all merged or closed, with each worktree,
+local branch and file it would remove, and deletes only after a yes. A change
+with uncommitted or unpushed work, or a PR still open, is kept and the reason
+shown. A branch whose PR closed unmerged is kept. Worktrees are removed with
+plain `git worktree remove`, which refuses a modified one.
+
+`td merge` and `td clean` need a terminal to confirm, or `--yes`.
 
 ### Checks
 

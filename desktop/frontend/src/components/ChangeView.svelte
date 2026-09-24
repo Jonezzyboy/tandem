@@ -5,6 +5,7 @@
   import { app, fail, log } from '@lib/state.svelte'
   import type { LegView } from '@lib/types'
   import Composer from './Composer.svelte'
+  import TrainDialog from './TrainDialog.svelte'
   import Icon from './Icon.svelte'
 
   let { id }: { id: string } = $props()
@@ -20,7 +21,11 @@
   const failingChecks = $derived(checks.filter((c) => c.state === 'fail'))
   const checkLegs = $derived([...new Set(checks.map((c) => c.leg))])
 
+  const goEdges = $derived((view?.edges ?? []).filter((e) => e.kind === 'go').length)
+  const trainRunning = $derived(app.trains[id]?.running ?? false)
+
   let syncing = $state(false)
+  let pinning = $state(false)
   let checking = $state<string | null>(null)
   let now = $state(Date.now())
   const tick = setInterval(() => (now = Date.now()), 1000)
@@ -51,6 +56,18 @@
       fail(e)
     } finally {
       syncing = false
+    }
+  }
+
+  async function pin() {
+    pinning = true
+    try {
+      const results = await api.pin(id)
+      for (const r of results) log(id, `Pin ${r.leg} ← ${r.module}: ${r.message}`, r.status === 'pinned' ? 'ok' : r.status === 'already' ? 'muted' : 'warn')
+    } catch (e) {
+      fail(e)
+    } finally {
+      pinning = false
     }
   }
 
@@ -94,7 +111,8 @@
     <header style="--wails-draggable: drag">
       <div class="heading">
         <div class="meta mono">
-          <span class="accent">{view.id}</span><span>·</span><span>branch {view.branch}</span><span>·</span>
+          <span class="accent">{view.id}</span><span>·</span>
+          {#if view.branch !== view.id}<span>branch {view.branch}</span><span>·</span>{/if}
           <span title="Local git state is watched every few seconds; GitHub is read every minute">
             {view.remote ? `GitHub read ${ago(view.remoteAt, now)} ago` : 'GitHub not read yet'}
           </span>
@@ -106,10 +124,13 @@
           <Icon name="refresh" />
         </button>
         <button class="btn" onclick={sync} disabled={syncing}>
-          <span class:spin={syncing}><Icon name="sync" /></span>Sync all
+          <Icon name="sync" spin={syncing} />Sync all
         </button>
         <button class="btn" onclick={() => runChecks()} disabled={checking !== null}>
-          <span class:spin={checking === '*'}><Icon name="play" /></span>Run checks
+          <Icon name="play" spin={checking === '*'} />Run checks
+        </button>
+        <button class="btn" onclick={() => (app.trainOpen = true)} disabled={!view.legs.some((l) => l.pr)}>
+          <Icon name="branch" spin={trainRunning} />{trainRunning ? 'Train running' : 'Merge train'}
         </button>
         <button class="btn primary" onclick={() => (app.composer = true)}>
           <Icon name="send" />{view.legs.some((l) => l.pr) ? 'Publish PRs' : 'Open PRs'}
@@ -131,6 +152,11 @@
           {/each}
         </div>
       {/each}
+      {#if goEdges > 0}
+        <button class="btn small repin" onclick={pin} disabled={pinning} title="Point downstream Go legs at their upstream leg's pushed commit, and commit go.mod/go.sum">
+          <Icon name="sync" size={14} spin={pinning} />Re-pin
+        </button>
+      {/if}
       <div class="order-note muted">
         {#if view.edges.length === 0}
           No dependencies found: legs can merge in any order
@@ -179,7 +205,7 @@
           </div>
           <div class="tools">
             <button class="icon-btn" aria-label="Run checks on {l.name}" title="Run checks" disabled={checking !== null} onclick={() => runChecks(l.name)}>
-              <span class:spin={checking === l.name}><Icon name="play" /></span>
+              <Icon name="play" spin={checking === l.name} />
             </button>
             <button class="icon-btn" aria-label="Open {l.name} in editor" title="Open in editor" onclick={() => api.openEditor(l.worktree).catch(fail)}>
               <Icon name="code" />
@@ -206,7 +232,7 @@
               <div class="check-leg mono">{leg}</div>
               {#each checks.filter((c) => c.leg === leg) as c (c.name)}
                 <div class="check">
-                  {#if c.state === 'running'}<span class="spin"><Icon name="running" /></span>
+                  {#if c.state === 'running'}<Icon name="running" spin />
                   {:else if c.state === 'pass'}<Icon name="check" color="var(--ok)" />
                   {:else if c.state === 'fail'}<Icon name="x" color="var(--warn)" />
                   {:else}<Icon name="clock" color="var(--muted)" />{/if}
@@ -233,17 +259,21 @@
   {#if app.composer}
     <Composer {view} onclose={() => (app.composer = false)} />
   {/if}
+  {#if app.trainOpen}
+    <TrainDialog {view} onclose={() => (app.trainOpen = false)} />
+  {/if}
 {/if}
 
 <style>
   .loading { padding: 80px 40px; }
   .page { padding: 0 32px 28px; display: flex; flex-direction: column; gap: 20px; min-height: 100%; }
   header { display: flex; justify-content: space-between; align-items: flex-end; gap: 24px; padding-top: 28px; }
-  .heading { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
-  .meta { display: flex; gap: 8px; font-size: 12px; color: var(--muted); flex-wrap: wrap; }
+  .heading { display: flex; flex-direction: column; gap: 6px; min-width: 0; flex: 1; }
+  .meta { display: flex; gap: 8px; font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; }
+  .meta > :last-child { overflow: hidden; text-overflow: ellipsis; }
   .accent { color: var(--accent-text); }
   h1 { margin: 0; font-family: var(--display); font-weight: 700; font-size: 30px; letter-spacing: -0.01em; line-height: 1.15; }
-  .actions { display: flex; gap: 8px; align-items: center; }
+  .actions { display: flex; gap: 8px; align-items: center; flex-shrink: 0; }
   .banner { padding: 10px 14px; border-radius: 10px; background: var(--warn-bg); border: 1px solid #8a4a2a; font-size: 13px; }
 
   .order {
@@ -256,6 +286,7 @@
   .chip.ok { border-color: #2f6b4a; background: var(--ok-bg); }
   .chip.warn { border-color: #8a4a2a; background: var(--warn-bg); }
   .order-note { margin-left: auto; font-size: 12px; text-align: right; }
+  .repin { margin-left: 8px; }
 
   .legs { border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
   .row {

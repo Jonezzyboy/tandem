@@ -130,7 +130,7 @@
         <div class="plan-head">
           <div class="eyebrow">Per repo, in merge order</div>
           <button class="icon-btn" aria-label="Re-check plan" title="Re-check" onclick={plan}>
-            <span class:spin={planning}><Icon name="refresh" /></span>
+            <Icon name="refresh" spin={planning} />
           </button>
         </div>
         {#if !preview}
@@ -161,7 +161,7 @@
     <div class="foot">
       <span class="muted small">Pushes each leg with commits, opens missing PRs, then refreshes the Related PRs block.</span>
       <button class="btn primary" disabled={publishing || planning || acting.length === 0} onclick={publish}>
-        <span class:spin={publishing}><Icon name="send" /></span>
+        <Icon name="send" spin={publishing} />
         {#if acting.length === 0}Nothing to publish{:else if creating === acting.length}Open {creating} PR{creating === 1 ? '' : 's'}{:else}Publish {acting.length} PR{acting.length === 1 ? '' : 's'}{/if}
       </button>
     </div>

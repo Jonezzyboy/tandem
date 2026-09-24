@@ -78,7 +78,7 @@
         </div>
       </div>
       <button class="btn primary start" disabled={!validId || selected.length === 0 || starting} onclick={start}>
-        <span class:spin={starting}><Icon name="branch" /></span>
+        <Icon name="branch" spin={starting} />
         Create {selected.length || ''} worktree{selected.length === 1 ? '' : 's'}
       </button>
       {#if results}

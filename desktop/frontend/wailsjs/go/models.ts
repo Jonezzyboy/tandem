@@ -4,6 +4,7 @@ export namespace core {
 	    from: string;
 	    to: string;
 	    via?: string;
+	    kind?: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new EdgeView(source);
@@ -14,6 +15,7 @@ export namespace core {
 	        this.from = source["from"];
 	        this.to = source["to"];
 	        this.via = source["via"];
+	        this.kind = source["kind"];
 	    }
 	}
 	export class PRView {
@@ -228,6 +230,50 @@ export namespace main {
 	        this.output = source["output"];
 	    }
 	}
+	export class CleanItem {
+	    id: string;
+	    title: string;
+	    ready: boolean;
+	    reason: string;
+	    worktrees: string[];
+	    branches: string[];
+	    kept: string[];
+	    files: string[];
+	    dir: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new CleanItem(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.title = source["title"];
+	        this.ready = source["ready"];
+	        this.reason = source["reason"];
+	        this.worktrees = source["worktrees"];
+	        this.branches = source["branches"];
+	        this.kept = source["kept"];
+	        this.files = source["files"];
+	        this.dir = source["dir"];
+	    }
+	}
+	export class CleanResult {
+	    id: string;
+	    ok: boolean;
+	    message: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new CleanResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.ok = source["ok"];
+	        this.message = source["message"];
+	    }
+	}
 	export class InboxItem {
 	    repo: string;
 	    number: number;
@@ -407,6 +453,26 @@ export namespace main {
 	        this.forceWithLease = source["forceWithLease"];
 	    }
 	}
+	export class PinItem {
+	    leg: string;
+	    module: string;
+	    rev: string;
+	    status: string;
+	    message: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new PinItem(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.leg = source["leg"];
+	        this.module = source["module"];
+	        this.rev = source["rev"];
+	        this.status = source["status"];
+	        this.message = source["message"];
+	    }
+	}
 	
 	export class RepoInfo {
 	    name: string;
@@ -455,6 +521,66 @@ export namespace main {
 	        this.title = source["title"];
 	        this.repos = source["repos"];
 	    }
+	}
+	export class TrainLeg {
+	    repo: string;
+	    name: string;
+	    level: number;
+	    pr: number;
+	    url: string;
+	    merged: boolean;
+	    problems: string[];
+	
+	    static createFrom(source: any = {}) {
+	        return new TrainLeg(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.repo = source["repo"];
+	        this.name = source["name"];
+	        this.level = source["level"];
+	        this.pr = source["pr"];
+	        this.url = source["url"];
+	        this.merged = source["merged"];
+	        this.problems = source["problems"];
+	    }
+	}
+	export class TrainPlan {
+	    legs: TrainLeg[];
+	    toMerge: number;
+	    blocked: number;
+	    running: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new TrainPlan(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.legs = this.convertValues(source["legs"], TrainLeg);
+	        this.toMerge = source["toMerge"];
+	        this.blocked = source["blocked"];
+	        this.running = source["running"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
 	}
 
 }
