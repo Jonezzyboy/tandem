@@ -143,8 +143,12 @@ cd desktop && wails dev          # hot reload; also served at http://localhost:3
 `go test ./...` in `desktop/` needs `frontend/dist` to exist (it is embedded), so
 run `scripts/build-app.sh` or `npm run build` in `frontend/` first.
 
-Shortcuts: ⌘N new change, ⌘R refresh, ⌘0 inbox, ⌘1–9 jump to a change.
-`TANDEM_EDITOR` (default `code`) is what "Open in editor" runs.
+Settings (⌘, or the gear by your account in the sidebar) holds the theme
+(Graphite, Paper, Midnight, Forest, High contrast, or System to follow macOS),
+keyboard shortcuts, which can be re-recorded, the editor "Open in editor" runs,
+and defaults for the merge train and draft PRs. They are saved to
+`~/Library/Application Support/com.alanjones.tandem/settings.json`
+(`TANDEM_CONFIG_DIR` overrides the folder). ⌘1–9 always jump to a change.
 
 ## Releasing
 

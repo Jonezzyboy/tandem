@@ -136,7 +136,7 @@ export interface Activity {
   tone: 'ok' | 'warn' | 'muted'
 }
 
-export type Route = { name: 'inbox' } | { name: 'change'; id: string } | { name: 'new' }
+export type Route = { name: 'inbox' } | { name: 'change'; id: string } | { name: 'new' } | { name: 'settings' }
 
 export interface PinItem {
   leg: string

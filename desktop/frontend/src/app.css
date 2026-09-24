@@ -1,28 +1,7 @@
 :root {
-  --bg: #111216;
-  --nav: #0c0d10;
-  --panel: #16171c;
-  --raised: #1a1b21;
-  --selected: #1f2129;
-  --line: #25272e;
-  --line-2: #34363f;
-  --text: #eceae4;
-  --text-2: #c9c7c1;
-  --muted: #9c9ea8;
-  --accent: #2a4fd6;
-  --accent-bg: #1b2550;
-  --accent-text: #9db2ff;
-  --ok: #5cc98a;
-  --ok-text: #8fddb0;
-  --ok-bg: #12241a;
-  --warn: #ff9e6b;
-  --warn-text: #ffb088;
-  --warn-bg: #2a1810;
-  --warn-row: #1a1410;
   --sans: 'Geist Variable', system-ui, sans-serif;
   --mono: 'Geist Mono Variable', ui-monospace, monospace;
   --display: 'Bricolage Grotesque Variable', var(--sans);
-  color-scheme: dark;
 }
 
 * { box-sizing: border-box; }
@@ -40,7 +19,7 @@ body {
 }
 
 a { color: var(--accent-text); text-decoration: none; }
-a:hover { color: #c4d1ff; }
+a:hover { color: var(--link-hover); }
 
 button, input, textarea { font: inherit; color: inherit; }
 
@@ -65,10 +44,10 @@ button, input, textarea { font: inherit; color: inherit; }
 /* Block, so the box is exactly the icon: inline SVG sits on the text baseline,
    and a rotation turns around the taller line box instead of the glyph. */
 svg.icon { display: block; flex-shrink: 0; }
-.btn:hover:not(:disabled) { background: #22242c; }
+.btn:hover:not(:disabled) { background: var(--hover); }
 .btn:disabled { opacity: 0.5; cursor: default; }
-.btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
-.btn.primary:hover:not(:disabled) { background: #3a5ee4; }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+.btn.primary:hover:not(:disabled) { background: var(--accent-hover); border-color: var(--accent-hover); }
 .btn.small { min-height: 30px; padding: 0 10px; font-size: 13px; }
 
 .icon-btn {

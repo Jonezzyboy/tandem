@@ -49,6 +49,8 @@ type App struct {
 	inbox    *Inbox
 	inboxAt  time.Time
 	trains   map[string]context.CancelFunc
+	settings Settings
+	account  *Account
 }
 
 func NewApp(store change.Store, roots []string) *App {
@@ -61,6 +63,7 @@ func NewApp(store change.Store, roots []string) *App {
 		inflight: map[string]bool{},
 		ops:      map[string]*sync.Mutex{},
 		trains:   map[string]context.CancelFunc{},
+		settings: defaultSettings(),
 	}
 }
 
@@ -711,19 +714,15 @@ func (a *App) OpenFolder(path string) error {
 	return exec.Command("open", p).Start()
 }
 
-// OpenEditor runs $TANDEM_EDITOR (default "code") on path.
+// OpenEditor opens path with the editor from Settings.
 func (a *App) OpenEditor(path string) error {
 	p, err := a.within(path)
 	if err != nil {
 		return err
 	}
-	editor := os.Getenv("TANDEM_EDITOR")
-	if editor == "" {
-		editor = "code"
-	}
-	bin, err := exec.LookPath(editor)
+	cmd, err := a.editorCommand()
 	if err != nil {
-		return fmt.Errorf("editor %q not found: set TANDEM_EDITOR", editor)
+		return err
 	}
-	return exec.Command(bin, p).Start()
+	return exec.Command(cmd[0], append(cmd[1:], p)...).Start()
 }

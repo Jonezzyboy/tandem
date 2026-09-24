@@ -209,3 +209,22 @@ func Search(ctx context.Context, qualifiers ...string) ([]SearchPR, error) {
 	}
 	return prs, nil
 }
+
+type User struct {
+	Login     string `json:"login"`
+	Name      string `json:"name"`
+	AvatarURL string `json:"avatar_url"`
+}
+
+// CurrentUser is the account gh is signed in as.
+func CurrentUser(ctx context.Context) (User, error) {
+	out, err := run(ctx, "", "", "api", "user")
+	if err != nil {
+		return User{}, err
+	}
+	var u User
+	if err := json.Unmarshal([]byte(out), &u); err != nil {
+		return User{}, fmt.Errorf("parse gh api user: %w", err)
+	}
+	return u, nil
+}

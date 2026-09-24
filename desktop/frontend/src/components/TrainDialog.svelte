@@ -1,5 +1,6 @@
 <script lang="ts">
-  import { onMount } from 'svelte'
+  import { onMount, untrack } from 'svelte'
+  import { prefs } from '@lib/settings.svelte'
   import { api, errorText } from '@lib/api'
   import { app, fail } from '@lib/state.svelte'
   import type { ChangeView, TrainPlan } from '@lib/types'
@@ -9,7 +10,7 @@
 
   let plan = $state<TrainPlan | null>(null)
   let loading = $state(false)
-  let method = $state<'squash' | 'merge' | 'rebase'>('squash')
+  let method = $state<'squash' | 'merge' | 'rebase'>(untrack(() => prefs.settings.mergeMethod))
 
   const run = $derived(app.trains[view.id])
   const running = $derived(run?.running ?? false)
@@ -134,11 +135,11 @@
 </div>
 
 <style>
-  .scrim { position: fixed; inset: 0; background: rgba(5, 6, 8, 0.6); }
+  .scrim { position: fixed; inset: 0; background: var(--scrim); }
   .sheet {
     position: fixed; top: 64px; bottom: 48px; left: 50%; transform: translateX(-50%);
     width: min(1000px, calc(100vw - 80px)); background: var(--bg); border: 1px solid var(--line-2);
-    border-radius: 16px; display: flex; flex-direction: column; box-shadow: 0 24px 60px rgba(0, 0, 0, 0.5);
+    border-radius: 16px; display: flex; flex-direction: column; box-shadow: 0 24px 60px var(--shadow);
   }
   .top { display: flex; justify-content: space-between; align-items: flex-start; padding: 22px 24px 0; }
   h2 { margin: 4px 0 0; font-family: var(--display); font-weight: 700; font-size: 26px; }
@@ -156,7 +157,7 @@
   .event { display: grid; grid-template-columns: 16px 112px minmax(0, 1fr); gap: 10px; align-items: center; }
   .event.past { color: var(--muted); }
   .name { font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .error { margin: 6px 0 0; padding: 10px 12px; border-radius: 8px; background: var(--warn-bg); border: 1px solid #8a4a2a; color: var(--warn-text); font: 12px/1.6 var(--mono); white-space: pre-wrap; }
+  .error { margin: 6px 0 0; padding: 10px 12px; border-radius: 8px; background: var(--warn-bg); border: 1px solid var(--warn-border); color: var(--warn-text); font: 12px/1.6 var(--mono); white-space: pre-wrap; }
   .foot { display: flex; justify-content: space-between; align-items: center; gap: 16px; padding: 14px 24px 20px; border-top: 1px solid var(--line); }
   .methods { display: flex; gap: 14px; align-items: center; border: 0; margin: 0; padding: 0; }
   .methods legend { float: left; margin-right: 4px; }

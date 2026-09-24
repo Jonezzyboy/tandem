@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onDestroy } from 'svelte'
+  import { onDestroy, onMount } from 'svelte'
   import { api } from '@lib/api'
   import { ago, reviewLabel } from '@lib/format'
   import { app, fail, log } from '@lib/state.svelte'
@@ -30,6 +30,29 @@
   let now = $state(Date.now())
   const tick = setInterval(() => (now = Date.now()), 1000)
   onDestroy(() => clearInterval(tick))
+
+  // Change-scoped shortcuts arrive from App's keymap as tandem:command events.
+  function onCommand(e: Event) {
+    if (!view || app.composer || app.trainOpen) return
+    switch ((e as CustomEvent<string>).detail) {
+      case 'syncAll':
+        if (!syncing) sync()
+        break
+      case 'runChecks':
+        if (checking === null) runChecks()
+        break
+      case 'publishPRs':
+        app.composer = true
+        break
+      case 'mergeTrain':
+        if (view.legs.some((l) => l.pr)) app.trainOpen = true
+        break
+    }
+  }
+  onMount(() => {
+    window.addEventListener('tandem:command', onCommand)
+    return () => window.removeEventListener('tandem:command', onCommand)
+  })
 
   function tone(l: LegView): 'ok' | 'warn' | '' {
     if (l.localError || l.prError || (l.pr && (l.pr.fail > 0 || l.pr.review === 'CHANGES_REQUESTED'))) return 'warn'
@@ -274,7 +297,7 @@
   .accent { color: var(--accent-text); }
   h1 { margin: 0; font-family: var(--display); font-weight: 700; font-size: 30px; letter-spacing: -0.01em; line-height: 1.15; }
   .actions { display: flex; gap: 8px; align-items: center; flex-shrink: 0; }
-  .banner { padding: 10px 14px; border-radius: 10px; background: var(--warn-bg); border: 1px solid #8a4a2a; font-size: 13px; }
+  .banner { padding: 10px 14px; border-radius: 10px; background: var(--warn-bg); border: 1px solid var(--warn-border); font-size: 13px; }
 
   .order {
     display: flex; align-items: center; gap: 12px; padding: 14px 18px;
@@ -283,8 +306,8 @@
   .order-label { width: 92px; }
   .level { display: flex; flex-direction: column; gap: 6px; }
   .chip { padding: 6px 11px; border: 1px solid var(--line-2); border-radius: 8px; font-size: 13px; }
-  .chip.ok { border-color: #2f6b4a; background: var(--ok-bg); }
-  .chip.warn { border-color: #8a4a2a; background: var(--warn-bg); }
+  .chip.ok { border-color: var(--ok-border); background: var(--ok-bg); }
+  .chip.warn { border-color: var(--warn-border); background: var(--warn-bg); }
   .order-note { margin-left: auto; font-size: 12px; text-align: right; }
   .repin { margin-left: 8px; }
 
@@ -318,7 +341,7 @@
   .check { display: flex; align-items: center; gap: 10px; font-size: 13px; }
   .grow { flex: 1; min-width: 0; }
   .log {
-    margin: 2px 0 6px 26px; padding: 10px 12px; background: #08090b; border: 1px solid var(--line);
+    margin: 2px 0 6px 26px; padding: 10px 12px; background: var(--log-bg); border: 1px solid var(--line);
     border-radius: 8px; font: 12px/1.6 var(--mono); color: var(--text-2); white-space: pre-wrap; max-height: 260px; overflow: auto;
   }
   .act { display: grid; grid-template-columns: 34px 1fr; gap: 8px; font-size: 13px; line-height: 1.45; }
