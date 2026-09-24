@@ -1,0 +1,32 @@
+cask "tandem" do
+  version "@VERSION@"
+  sha256 "@SHA256@"
+
+  url "https://github.com/Jonezzyboy/tandem/releases/download/v#{version}/Tandem_v#{version}_macos_universal.zip"
+  name "Tandem"
+  desc "Worktrees, merge order and linked PRs for one change across many repos"
+  homepage "https://github.com/Jonezzyboy/tandem"
+
+  depends_on formula: "gh"
+  depends_on :macos
+
+  app "Tandem.app"
+
+  # Ad-hoc signed rather than notarised, so Gatekeeper blocks first launch
+  # otherwise. Drop once the build carries a Developer ID signature.
+  postflight_steps do
+    run "/usr/bin/xattr",
+        args:           ["-dr", "com.apple.quarantine", "{{appdir}}/Tandem.app"],
+        writable_paths: ["Tandem.app"],
+        writable_base:  :appdir
+  end
+
+  # Changes and worktrees under ~/code/.tandem are the user's work, so zap
+  # leaves them alone.
+  zap trash: [
+    "~/Library/Caches/com.alanjones.tandem",
+    "~/Library/HTTPStorages/com.alanjones.tandem",
+    "~/Library/Saved Application State/com.alanjones.tandem.savedState",
+    "~/Library/WebKit/com.alanjones.tandem",
+  ]
+end
