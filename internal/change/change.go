@@ -17,18 +17,27 @@ import (
 )
 
 type Leg struct {
-	Repo     string `json:"repo"`
-	Source   string `json:"source"`
-	Worktree string `json:"worktree"`
+	Repo   string `json:"repo"`
+	Source string `json:"source"`
+	// Worktree is set only for legs made before changes used branches in the
+	// clone itself; Dir is where a leg's files are either way.
+	Worktree string `json:"worktree,omitempty"`
 	Base     string `json:"base"`
 	BaseRef  string `json:"baseRef"`
 	PR       int    `json:"pr,omitempty"`
 	PRURL    string `json:"prUrl,omitempty"`
 }
 
-// Name is the repo name without its vendor, used for worktree dirs and CLI args.
+// Name is the repo name without its vendor, used in CLI args.
 func (l Leg) Name() string {
 	return filepath.Base(l.Repo)
+}
+
+func (l Leg) Dir() string {
+	if l.Worktree != "" {
+		return l.Worktree
+	}
+	return l.Source
 }
 
 // Edge means From must merge before To. Both are Leg.Repo values.
@@ -74,7 +83,7 @@ func ValidateID(id string) error {
 	return nil
 }
 
-// Store keeps each change at <Home>/<id>/change.json, beside its worktrees.
+// Store keeps each change at <Home>/<id>/change.json.
 type Store struct {
 	Home string
 }

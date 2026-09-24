@@ -90,7 +90,7 @@
       <div class="row dashed">
         <div class="repo mono">{cleanable.length} landed change{cleanable.length === 1 ? '' : 's'}</div>
         <div class="stack">
-          <span class="title">{cleanable.reduce((n, c) => n + c.worktrees.length, 0)} worktrees and their branches can go</span>
+          <span class="title">{cleanable.reduce((n, c) => n + c.branches.length, 0)} merged branches can go</span>
           <span class="muted small">{cleanable.map((c) => c.id).join(', ')} · every path is listed before anything is removed</span>
         </div>
         <div class="age"></div>

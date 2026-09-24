@@ -178,7 +178,7 @@
             onkeydown={(e) => e.key === 'Enter' && saveEditor()} />
           {#if editorSaved}<span class="ok small">Saved</span>{/if}
         </div>
-        <span class="muted small">What “Open in editor” runs with the worktree path, e.g. <span class="mono">code</span>, <span class="mono">cursor</span>, <span class="mono">zed</span>, <span class="mono">idea</span>. Empty uses <span class="mono">$TANDEM_EDITOR</span>, then <span class="mono">code</span>.</span>
+        <span class="muted small">What “Open in editor” runs with the repo’s path, e.g. <span class="mono">code</span>, <span class="mono">cursor</span>, <span class="mono">zed</span>, <span class="mono">idea</span>. Empty uses <span class="mono">$TANDEM_EDITOR</span>, then <span class="mono">code</span>.</span>
       </div>
       <fieldset class="field">
         <legend>Merge train default</legend>
@@ -203,7 +203,7 @@
     <div class="card about">
       <div><span class="muted">Version</span><span class="mono">{prefs.version || '…'}</span></div>
       <div><span class="muted">Settings file</span><span class="mono selectable">{prefs.path}</span></div>
-      <div><span class="muted">Changes and worktrees</span><span class="mono selectable">{prefs.home}</span></div>
+      <div><span class="muted">Change records</span><span class="mono selectable">{prefs.home}</span></div>
     </div>
   </section>
 </div>

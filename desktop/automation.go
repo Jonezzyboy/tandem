@@ -165,6 +165,7 @@ type CleanItem struct {
 	Title     string   `json:"title"`
 	Ready     bool     `json:"ready"`
 	Reason    string   `json:"reason"`
+	Switches  []string `json:"switches"`
 	Worktrees []string `json:"worktrees"`
 	Branches  []string `json:"branches"`
 	Kept      []string `json:"kept"`
@@ -181,7 +182,10 @@ func (a *App) CleanPlan() ([]CleanItem, error) {
 	out := make([]CleanItem, 0, len(cands))
 	for _, cc := range cands {
 		it := CleanItem{ID: cc.Change.ID, Title: cc.Change.Title, Ready: cc.Ready, Reason: cc.Reason, Dir: cc.Dir,
-			Worktrees: []string{}, Branches: []string{}, Kept: []string{}, Files: []string{}}
+			Switches: []string{}, Worktrees: []string{}, Branches: []string{}, Kept: []string{}, Files: []string{}}
+		for _, s := range cc.Switches {
+			it.Switches = append(it.Switches, s.Source+" → "+s.Base)
+		}
 		for _, w := range cc.Worktrees {
 			it.Worktrees = append(it.Worktrees, w.Path)
 		}
@@ -234,5 +238,27 @@ func (a *App) Clean(ids []string) ([]CleanResult, error) {
 		out = append(out, r)
 	}
 	a.emit("changes", a.Changes())
+	return out, nil
+}
+
+// Switch checks out the change's branch in every leg (toBase: each leg's base
+// branch), leaving legs with uncommitted work where they are.
+func (a *App) Switch(id string, toBase bool) ([]LegResult, error) {
+	lock := a.opLock(id)
+	lock.Lock()
+	defer lock.Unlock()
+	c, err := a.store.Load(id)
+	if err != nil {
+		return nil, err
+	}
+	out := []LegResult{}
+	for _, r := range core.Switch(a.ctx, c, toBase) {
+		lr := LegResult{Leg: r.Leg.Name(), OK: r.Err == nil, Message: "on " + r.To}
+		if r.Err != nil {
+			lr.Message = "stayed put: " + core.FirstLine(r.Err.Error())
+		}
+		out = append(out, lr)
+	}
+	go a.refreshAll()
 	return out, nil
 }

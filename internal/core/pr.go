@@ -108,7 +108,7 @@ func PublishPRs(ctx context.Context, c *change.Change, plans []*PRPlan, title st
 			if updated == p.State.PR.Body {
 				return
 			}
-			if err := gh.EditBody(ctx, p.Leg.Worktree, p.State.PR.Number, updated); err != nil {
+			if err := gh.EditBody(ctx, p.Leg.Dir(), p.State.PR.Number, updated); err != nil {
 				p.Err = err
 				return
 			}
@@ -123,7 +123,7 @@ func publish(ctx context.Context, c *change.Change, p *PRPlan, title string, o P
 	if o.ForceWithLease {
 		push = append(push, "--force-with-lease")
 	}
-	if _, err := gitx.Run(ctx, p.Leg.Worktree, push...); err != nil {
+	if _, err := gitx.Run(ctx, p.Leg.Dir(), push...); err != nil {
 		if strings.Contains(err.Error(), "non-fast-forward") || strings.Contains(err.Error(), "fetch first") {
 			err = fmt.Errorf("push rejected: branch diverged from origin (after a sync, publish with force-with-lease)")
 		}
@@ -133,7 +133,7 @@ func publish(ctx context.Context, c *change.Change, p *PRPlan, title string, o P
 	if p.Action != PRCreate {
 		return
 	}
-	n, u, err := gh.Create(ctx, p.Leg.Worktree, gh.CreateOpts{
+	n, u, err := gh.Create(ctx, p.Leg.Dir(), gh.CreateOpts{
 		Base: p.Leg.Base, Head: c.Branch, Title: title, Body: c.Body, Draft: o.Draft, Reviewers: c.Reviewers,
 	})
 	if err != nil {

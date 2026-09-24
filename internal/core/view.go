@@ -35,7 +35,9 @@ type EdgeView struct {
 type LegView struct {
 	Repo       string   `json:"repo"`
 	Name       string   `json:"name"`
-	Worktree   string   `json:"worktree"`
+	Dir        string   `json:"dir"`
+	Current    string   `json:"current"`
+	OnBranch   bool     `json:"onBranch"`
 	Base       string   `json:"base"`
 	BaseRef    string   `json:"baseRef"`
 	Level      int      `json:"level"`
@@ -90,7 +92,8 @@ func BuildView(c *change.Change, g Graph, graphErr error, states []LegState, rem
 	}
 	for _, s := range states {
 		lv := LegView{
-			Repo: s.Leg.Repo, Name: filepath.Base(s.Leg.Repo), Worktree: s.Leg.Worktree,
+			Repo: s.Leg.Repo, Name: filepath.Base(s.Leg.Repo), Dir: s.Leg.Dir(),
+			Current: s.Status.Current, OnBranch: s.OnBranch(),
 			Base: s.Leg.Base, BaseRef: s.Leg.BaseRef, Level: g.Levels[s.Leg.Repo],
 			Ahead: s.Status.Ahead, Behind: s.Status.Behind, Dirty: s.Status.Dirty, Blockers: []string{},
 		}
@@ -136,7 +139,7 @@ func MergeLocal(prev, next ChangeView) ChangeView {
 				l.Blockers = append(l.Blockers, b)
 			}
 		}
-		if l.Dirty > 0 && l.PR != nil && l.PR.State == "OPEN" {
+		if l.Dirty > 0 && l.OnBranch && l.PR != nil && l.PR.State == "OPEN" {
 			l.Blockers = append(l.Blockers, "uncommitted changes")
 		}
 		if len(l.Blockers) > 0 {

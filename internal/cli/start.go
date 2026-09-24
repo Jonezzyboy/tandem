@@ -49,11 +49,19 @@ func runStart(ctx context.Context, e *env, args []string) error {
 			failed++
 			rows = append(rows, []ui.Cell{{Text: "✗", Color: e.ui.Orange}, ui.Plain(res.Repo.Name), {Text: res.Err.Error(), Color: e.ui.Orange}})
 		default:
-			note := "worktree " + res.Leg.Worktree
-			if res.Warning != "" {
-				note += " (" + res.Warning + ")"
+			note := "branch " + c.Branch
+			if !res.Created {
+				note += " (existing)"
 			}
-			rows = append(rows, []ui.Cell{{Text: "✓", Color: e.ui.Green}, ui.Plain(res.Leg.Repo), ui.Plain(note)})
+			if res.Switched {
+				note += ", checked out"
+			}
+			cells := []ui.Cell{{Text: "✓", Color: e.ui.Green}, ui.Plain(res.Leg.Repo), ui.Plain(note)}
+			if res.Warning != "" {
+				cells[0] = ui.Cell{Text: "!", Color: e.ui.Orange}
+				cells = append(cells, ui.Cell{Text: res.Warning, Color: e.ui.Orange})
+			}
+			rows = append(rows, cells)
 		}
 	}
 	if c.Title != "" {

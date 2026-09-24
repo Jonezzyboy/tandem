@@ -72,7 +72,7 @@ func Pin(ctx context.Context, c *change.Change, g Graph, commit bool) []PinResul
 				r := &out[i]
 				e := edges[i]
 				msg := fmt.Sprintf("Pin %s to %s", e.Via, short(r.Rev))
-				r.Changed, r.Committed, r.Err = PinTo(ctx, r.Downstream, e.Dir, e.Via, r.Rev, commit, msg)
+				r.Changed, r.Committed, r.Err = PinTo(ctx, c, r.Downstream, e.Dir, e.Via, r.Rev, commit, msg)
 			}
 		})
 	}
@@ -80,30 +80,38 @@ func Pin(ctx context.Context, c *change.Change, g Graph, commit bool) []PinResul
 	return out
 }
 
+// pushedHead is the tip of the upstream's branch (checked out or not), provided
+// origin already has it.
 func pushedHead(ctx context.Context, c *change.Change, l *change.Leg) (string, string) {
-	if gitx.HasRemote(ctx, l.Worktree, "origin") {
-		if err := gitx.Fetch(ctx, l.Worktree); err != nil {
+	dir := l.Dir()
+	if gitx.HasRemote(ctx, dir, "origin") {
+		if err := gitx.Fetch(ctx, dir); err != nil {
 			return "", FirstLine(err.Error())
 		}
 	}
-	head, err := gitx.Run(ctx, l.Worktree, "rev-parse", "HEAD")
+	head, err := gitx.Run(ctx, dir, "rev-parse", "refs/heads/"+c.Branch)
 	if err != nil {
 		return "", FirstLine(err.Error())
 	}
-	remote, err := gitx.Run(ctx, l.Worktree, "rev-parse", "--verify", "--quiet", "refs/remotes/origin/"+c.Branch)
+	remote, err := gitx.Run(ctx, dir, "rev-parse", "--verify", "--quiet", "refs/remotes/origin/"+c.Branch)
 	if err != nil || remote != head {
 		return "", fmt.Sprintf("%s has commits that are not pushed: publish it first", l.Name())
 	}
 	return head, ""
 }
 
-// PinTo runs go get module@rev in dir (relative to the leg's worktree). It
-// reports whether go.mod or go.sum changed and whether that was committed.
-func PinTo(ctx context.Context, l *change.Leg, dir, module, rev string, commit bool, message string) (bool, bool, error) {
-	abs := filepath.Join(l.Worktree, dir)
+// PinTo runs go get module@rev in dir (relative to the leg's repo), which must
+// have the change's branch checked out. It reports whether go.mod or go.sum
+// changed and whether that was committed.
+func PinTo(ctx context.Context, c *change.Change, l *change.Leg, dir, module, rev string, commit bool, message string) (bool, bool, error) {
+	if err := requireBranch(ctx, c, l); err != nil {
+		return false, false, err
+	}
+	root := l.Dir()
+	abs := filepath.Join(root, dir)
 	files := []string{filepath.Join(dir, "go.mod"), filepath.Join(dir, "go.sum")}
 	if commit {
-		out, err := gitx.Run(ctx, l.Worktree, append([]string{"status", "--porcelain", "--"}, files...)...)
+		out, err := gitx.Run(ctx, root, append([]string{"status", "--porcelain", "--"}, files...)...)
 		if err != nil {
 			return false, false, err
 		}
@@ -117,7 +125,7 @@ func PinTo(ctx context.Context, l *change.Leg, dir, module, rev string, commit b
 	if out, err := cmd.CombinedOutput(); err != nil {
 		return false, false, fmt.Errorf("go get %s@%s: %s", module, short(rev), strings.TrimSpace(string(out)))
 	}
-	diff, err := gitx.Run(ctx, l.Worktree, append([]string{"status", "--porcelain", "--"}, files...)...)
+	diff, err := gitx.Run(ctx, root, append([]string{"status", "--porcelain", "--"}, files...)...)
 	if err != nil || diff == "" {
 		return false, false, err
 	}
@@ -126,14 +134,14 @@ func PinTo(ctx context.Context, l *change.Leg, dir, module, rev string, commit b
 	}
 	var present []string
 	for _, f := range files {
-		if _, err := os.Stat(filepath.Join(l.Worktree, f)); err == nil {
+		if _, err := os.Stat(filepath.Join(root, f)); err == nil {
 			present = append(present, f)
 		}
 	}
-	if _, err := gitx.Run(ctx, l.Worktree, append([]string{"add", "--"}, present...)...); err != nil {
+	if _, err := gitx.Run(ctx, root, append([]string{"add", "--"}, present...)...); err != nil {
 		return true, false, err
 	}
-	if _, err := gitx.Run(ctx, l.Worktree, append([]string{"commit", "--quiet", "-m", message, "--"}, present...)...); err != nil {
+	if _, err := gitx.Run(ctx, root, append([]string{"commit", "--quiet", "-m", message, "--"}, present...)...); err != nil {
 		return true, false, err
 	}
 	return true, true, nil

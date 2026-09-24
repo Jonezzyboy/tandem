@@ -24,6 +24,22 @@
   const goEdges = $derived((view?.edges ?? []).filter((e) => e.kind === 'go').length)
   const trainRunning = $derived(app.trains[id]?.running ?? false)
 
+  const offBranch = $derived((view?.legs ?? []).filter((l) => !l.onBranch))
+  let switching = $state(false)
+
+  async function switchTo(toBase: boolean) {
+    switching = true
+    try {
+      const results = await api.switchTo(id, toBase)
+      for (const r of results) log(id, `${r.leg}: ${r.message}`, r.ok ? 'muted' : 'warn')
+      await api.focus(id)
+    } catch (e) {
+      fail(e)
+    } finally {
+      switching = false
+    }
+  }
+
   let syncing = $state(false)
   let pinning = $state(false)
   let checking = $state<string | null>(null)
@@ -66,6 +82,7 @@
     const parts: string[] = []
     if (l.ahead) parts.push(`↑${l.ahead}`)
     if (l.behind) parts.push(`↓${l.behind}`)
+    if (!l.onBranch) return { text: [parts.join(' '), `repo is on ${l.current || 'a detached HEAD'}`].filter(Boolean).join(' · '), warn: true }
     const detail = l.dirty ? `${l.dirty} uncommitted` : l.behind ? `behind ${l.base}` : l.ahead ? 'clean' : 'no commits yet'
     return { text: [parts.join(' '), detail].filter(Boolean).join(' · '), warn: l.dirty > 0 || l.behind > 0 }
   }
@@ -137,8 +154,15 @@
           <span class="accent">{view.id}</span><span>·</span>
           {#if view.branch !== view.id}<span>branch {view.branch}</span><span>·</span>{/if}
           <span title="Local git state is watched every few seconds; GitHub is read every minute">
-            {view.remote ? `GitHub read ${ago(view.remoteAt, now)} ago` : 'GitHub not read yet'}
+            {view.remote ? `GitHub ${ago(view.remoteAt, now)} ago` : 'GitHub not read yet'}
           </span>
+          {#if offBranch.length === 0 && view.legs.length > 0}
+            <span>·</span>
+            <span class="ok">checked out</span>
+            <span>·</span>
+            <button class="link" disabled={switching} onclick={() => switchTo(true)} style="--wails-draggable: no-drag"
+              title="Switch every repo to {view.legs[0].base}" aria-label="Switch every repo to {view.legs[0].base}">→ {view.legs[0].base}</button>
+          {/if}
         </div>
         <h1>{view.title || 'Untitled change'}</h1>
       </div>
@@ -160,6 +184,19 @@
         </button>
       </div>
     </header>
+
+    {#if offBranch.length > 0}
+      <div class="switch-banner">
+        <Icon name="branch" />
+        <span class="grow-text">
+          {offBranch.length} of {view.legs.length} repos aren't on <span class="mono">{view.branch}</span>, so local services there run other code:
+          <span class="mono">{offBranch.map((l) => `${l.name} (${l.current || 'detached'})`).join(', ')}</span>
+        </span>
+        <button class="btn small" disabled={switching} onclick={() => switchTo(false)}>
+          <Icon name="sync" size={14} spin={switching} />Switch to {view.branch}
+        </button>
+      </div>
+    {/if}
 
     {#if view.graphError}
       <div class="banner warn">{view.graphError}</div>
@@ -230,10 +267,10 @@
             <button class="icon-btn" aria-label="Run checks on {l.name}" title="Run checks" disabled={checking !== null} onclick={() => runChecks(l.name)}>
               <Icon name="play" spin={checking === l.name} />
             </button>
-            <button class="icon-btn" aria-label="Open {l.name} in editor" title="Open in editor" onclick={() => api.openEditor(l.worktree).catch(fail)}>
+            <button class="icon-btn" aria-label="Open {l.name} in editor" title="Open in editor" onclick={() => api.openEditor(l.dir).catch(fail)}>
               <Icon name="code" />
             </button>
-            <button class="icon-btn" aria-label="Show {l.name} in Finder" title="Show in Finder" onclick={() => api.openFolder(l.worktree).catch(fail)}>
+            <button class="icon-btn" aria-label="Show {l.name} in Finder" title="Show in Finder" onclick={() => api.openFolder(l.dir).catch(fail)}>
               <Icon name="folder" />
             </button>
           </div>
@@ -297,6 +334,13 @@
   .accent { color: var(--accent-text); }
   h1 { margin: 0; font-family: var(--display); font-weight: 700; font-size: 30px; letter-spacing: -0.01em; line-height: 1.15; }
   .actions { display: flex; gap: 8px; align-items: center; flex-shrink: 0; }
+  .switch-banner {
+    display: flex; align-items: center; gap: 12px; padding: 10px 12px 10px 14px; border-radius: 10px;
+    background: var(--warn-row); border: 1px solid var(--warn-border); color: var(--warn-text); font-size: 13px;
+  }
+  .grow-text { flex: 1; line-height: 1.45; }
+  .link { border: 0; background: none; padding: 0; color: var(--accent-text); font: inherit; cursor: pointer; }
+  .link:hover:not(:disabled) { color: var(--link-hover); text-decoration: underline; }
   .banner { padding: 10px 14px; border-radius: 10px; background: var(--warn-bg); border: 1px solid var(--warn-border); font-size: 13px; }
 
   .order {

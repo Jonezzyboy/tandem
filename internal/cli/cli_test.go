@@ -115,7 +115,7 @@ func TestEndToEnd(t *testing.T) {
 		"go.mod":   "module example.com/proto\n\ngo 1.26\n",
 		"proto.go": "package proto\n\nconst Version = 1\n",
 	})
-	newRepo(t, root, "api", map[string]string{
+	api := newRepo(t, root, "api", map[string]string{
 		"go.mod": "module example.com/api\n\ngo 1.26\n\nrequire example.com/proto v1.0.0\n",
 	})
 
@@ -123,10 +123,14 @@ func TestEndToEnd(t *testing.T) {
 	if !strings.Contains(out, "proto → api") {
 		t.Errorf("start did not infer proto → api:\n%s", out)
 	}
-	wtProto := filepath.Join(home, "DEV-1", "proto")
-	wtAPI := filepath.Join(home, "DEV-1", "api")
-	if got := git(t, wtAPI, "branch", "--show-current"); got != "DEV-1" {
-		t.Fatalf("api worktree on %q", got)
+	wtProto, wtAPI := proto, api
+	for _, repo := range []string{proto, api} {
+		if got := git(t, repo, "branch", "--show-current"); got != "DEV-1" {
+			t.Fatalf("%s is on %q, want DEV-1 checked out in the clone", repo, got)
+		}
+	}
+	if _, err := os.Stat(filepath.Join(home, "DEV-1", "proto")); !os.IsNotExist(err) {
+		t.Errorf("start made a worktree: %v", err)
 	}
 	if out := mustTD(t, "start", "DEV-1", "proto"); !strings.Contains(out, "already in DEV-1") {
 		t.Errorf("re-adding a leg:\n%s", out)
@@ -180,10 +184,13 @@ func TestEndToEnd(t *testing.T) {
 		t.Errorf("second td pr created PRs again: %d creates\n%s", n, calls)
 	}
 
-	writeFile(t, filepath.Join(proto, "upstream.go"), "package proto\n")
-	git(t, proto, "add", ".")
-	git(t, proto, "commit", "--quiet", "-m", "upstream")
-	git(t, proto, "push", "--quiet", "origin", "main")
+	// Someone else lands a commit on main.
+	other := filepath.Join(base, "other")
+	git(t, base, "clone", "--quiet", filepath.Join(base, "origins", "proto.git"), other)
+	writeFile(t, filepath.Join(other, "upstream.go"), "package proto\n")
+	git(t, other, "add", ".")
+	git(t, other, "commit", "--quiet", "-m", "upstream")
+	git(t, other, "push", "--quiet", "origin", "main")
 	out, _ = td(t, "sync", "DEV-1")
 	if !strings.Contains(out, "rebased onto origin/main (1 new commits) · already pushed") {
 		t.Errorf("sync proto:\n%s", out)
@@ -192,9 +199,33 @@ func TestEndToEnd(t *testing.T) {
 		t.Errorf("sync should skip dirty api:\n%s", out)
 	}
 
-	t.Chdir(wtAPI)
+	// Inside a leg's repo, the change is found without naming it.
+	t.Chdir(filepath.Join(wtAPI))
 	if out := mustTD(t, "path", "proto"); strings.TrimSpace(out) != wtProto {
-		t.Errorf("path from inside a worktree = %q", out)
+		t.Errorf("path from inside a leg's repo = %q", out)
+	}
+
+	out, code := td(t, "switch", "--base")
+	if code == 0 || !regexp.MustCompile(`proto\s+on main`).MatchString(out) || !regexp.MustCompile(`api\s+stayed put: 1 uncommitted files`).MatchString(out) {
+		t.Errorf("switch --base exited %d:\n%s", code, out)
+	}
+	if got := git(t, proto, "branch", "--show-current"); got != "main" {
+		t.Errorf("proto on %q after switch --base", got)
+	}
+	if got := git(t, api, "branch", "--show-current"); got != "DEV-1" {
+		t.Errorf("dirty api was switched to %q", got)
+	}
+	out = mustTD(t, "status", "DEV-1", "--offline")
+	if !regexp.MustCompile(`proto\s+↑1 · on main`).MatchString(out) {
+		t.Errorf("status should count DEV-1 while proto is on main:\n%s", out)
+	}
+	if out, code := td(t, "check", "DEV-1", "proto"); code == 0 || !strings.Contains(out, "proto is on main, not DEV-1: switch to it first") {
+		t.Errorf("check off-branch exited %d:\n%s", code, out)
+	}
+	os.Remove(filepath.Join(api, "scratch.txt"))
+	mustTD(t, "switch", "DEV-1")
+	if got := git(t, proto, "branch", "--show-current"); got != "DEV-1" {
+		t.Errorf("proto on %q after switch", got)
 	}
 }
 
@@ -249,7 +280,7 @@ func TestMergeAndCleanCLI(t *testing.T) {
 	newRepo(t, root, "api", map[string]string{"go.mod": "module example.com/api\n\ngo 1.26\n\nrequire example.com/proto v1.0.0\n"})
 	mustTD(t, "start", "DEV-7", "proto", "api", "--title", "Retries")
 	for _, leg := range []string{"proto", "api"} {
-		wt := filepath.Join(home, "DEV-7", leg)
+		wt := filepath.Join(root, "acme", leg)
 		writeFile(t, filepath.Join(wt, "work.txt"), leg)
 		git(t, wt, "add", ".")
 		git(t, wt, "commit", "--quiet", "-m", "work")
@@ -265,7 +296,7 @@ func TestMergeAndCleanCLI(t *testing.T) {
 	if !regexp.MustCompile(`api ← example.com/proto\s+pinned to \w{12}, committed`).MatchString(out) {
 		t.Errorf("pin:\n%s", out)
 	}
-	git(t, filepath.Join(home, "DEV-7", "api"), "push", "--quiet")
+	git(t, filepath.Join(root, "acme", "api"), "push", "--quiet")
 
 	pr("proto", 1, "CHANGES_REQUESTED", "OPEN")
 	if out, code := td(t, "merge", "DEV-7", "--yes"); code == 0 || !strings.Contains(out, "changes requested") || !strings.Contains(out, "2 of 2 legs blocked") {
@@ -293,12 +324,21 @@ func TestMergeAndCleanCLI(t *testing.T) {
 	}
 
 	out = mustTD(t, "clean", "--yes")
-	for _, want := range []string{"remove worktree  " + filepath.Join(home, "DEV-7", "proto"), "delete branch    DEV-7", "DEV-7 cleaned"} {
+	for _, want := range []string{"switch to main   " + filepath.Join(root, "acme", "proto"), "delete branch    DEV-7", "DEV-7 cleaned"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("clean output missing %q:\n%s", want, out)
 		}
 	}
 	if _, err := os.Stat(filepath.Join(home, "DEV-7")); !os.IsNotExist(err) {
 		t.Errorf("change dir survived clean: %v", err)
+	}
+	for _, leg := range []string{"proto", "api"} {
+		repo := filepath.Join(root, "acme", leg)
+		if got := git(t, repo, "branch", "--show-current"); got != "main" {
+			t.Errorf("%s left on %q after clean", leg, got)
+		}
+		if out := git(t, repo, "branch", "--list", "DEV-7"); out != "" {
+			t.Errorf("%s kept branch DEV-7", leg)
+		}
 	}
 }

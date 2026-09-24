@@ -49,6 +49,8 @@ export function Start(arg1:main.StartRequest):Promise<Array<main.StartItem>>;
 
 export function StartTrain(arg1:string,arg2:string):Promise<void>;
 
+export function Switch(arg1:string,arg2:boolean):Promise<Array<main.LegResult>>;
+
 export function Sync(arg1:string):Promise<Array<main.LegResult>>;
 
 export function SystemDark():Promise<boolean>;

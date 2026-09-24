@@ -119,15 +119,15 @@ func (f *fixture) change() *change.Change {
 	}
 	for _, l := range c.Legs {
 		f.commit(l, "work.txt", "work")
-		run(f.t, l.Worktree, "git", "push", "--quiet", "-u", "origin", "DEV-1")
+		run(f.t, l.Dir(), "git", "push", "--quiet", "-u", "origin", "DEV-1")
 	}
 	return c
 }
 
 func (f *fixture) commit(l change.Leg, file, data string) {
-	write(f.t, filepath.Join(l.Worktree, file), data, 0o644)
-	run(f.t, l.Worktree, "git", "add", ".")
-	run(f.t, l.Worktree, "git", "commit", "--quiet", "-m", "change "+file)
+	write(f.t, filepath.Join(l.Dir(), file), data, 0o644)
+	run(f.t, l.Dir(), "git", "add", ".")
+	run(f.t, l.Dir(), "git", "commit", "--quiet", "-m", "change "+file)
 }
 
 func (f *fixture) pr(repo string, number int, state, review string, checks string) {
@@ -170,14 +170,14 @@ func TestTrainMergesInOrderAndPinsDownstream(t *testing.T) {
 
 	api, _ := c.Leg("api")
 	protoSHA := run(t, filepath.Join(f.root, "..", "origins", "proto.git"), "git", "rev-parse", "DEV-1")
-	gomod, _ := os.ReadFile(filepath.Join(api.Worktree, "go.mod"))
+	gomod, _ := os.ReadFile(filepath.Join(api.Dir(), "go.mod"))
 	if !strings.Contains(string(gomod), "// pinned example.com/proto@"+protoSHA) {
 		t.Errorf("api go.mod not pinned to proto's merge commit %s:\n%s", protoSHA, gomod)
 	}
-	if msg := run(t, api.Worktree, "git", "log", "-1", "--format=%s"); !strings.HasPrefix(msg, "Pin example.com/proto to merged ") {
+	if msg := run(t, api.Dir(), "git", "log", "-1", "--format=%s"); !strings.HasPrefix(msg, "Pin example.com/proto to merged ") {
 		t.Errorf("pin commit message = %q", msg)
 	}
-	if run(t, api.Worktree, "git", "rev-parse", "HEAD") != run(t, api.Worktree, "git", "rev-parse", "@{u}") {
+	if run(t, api.Dir(), "git", "rev-parse", "HEAD") != run(t, api.Dir(), "git", "rev-parse", "@{u}") {
 		t.Error("pin commit was not pushed")
 	}
 	if last := events[len(events)-1]; last.Phase != "done" {
@@ -251,13 +251,13 @@ func TestPin(t *testing.T) {
 		t.Fatalf("unpushed upstream: %+v", res)
 	}
 
-	run(t, proto.Worktree, "git", "push", "--quiet")
-	head := run(t, proto.Worktree, "git", "rev-parse", "HEAD")
+	run(t, proto.Dir(), "git", "push", "--quiet")
+	head := run(t, proto.Dir(), "git", "rev-parse", "HEAD")
 	res = Pin(context.Background(), c, g, true)
 	if res[0].Err != nil || !res[0].Committed || res[0].Rev != head {
 		t.Fatalf("pin: %+v", res[0])
 	}
-	if out := run(t, api.Worktree, "git", "status", "--porcelain"); out != "" {
+	if out := run(t, api.Dir(), "git", "status", "--porcelain"); out != "" {
 		t.Errorf("pin left changes: %q", out)
 	}
 }
@@ -279,27 +279,98 @@ func TestClean(t *testing.T) {
 	}
 
 	f.pr("api", 2, "MERGED", "", green)
-	write(t, filepath.Join(api.Worktree, "wip.txt"), "wip", 0o644)
+	write(t, filepath.Join(api.Dir(), "wip.txt"), "wip", 0o644)
 	cands, _ = CleanCandidates(context.Background(), f.store)
-	if cands[0].Ready || !strings.Contains(cands[0].Reason, "api: 1 uncommitted files") {
+	if cands[0].Ready || !strings.Contains(cands[0].Reason, "api: 1 uncommitted files on DEV-1") {
 		t.Fatalf("uncommitted work should block: %+v", cands[0])
 	}
-	os.Remove(filepath.Join(api.Worktree, "wip.txt"))
+	os.Remove(filepath.Join(api.Dir(), "wip.txt"))
 
+	// A repo already moved off the change needs no switch back.
+	run(t, proto.Dir(), "git", "switch", "--quiet", "main")
 	cands, _ = CleanCandidates(context.Background(), f.store)
 	cc := cands[0]
-	if !cc.Ready || len(cc.Worktrees) != 2 || len(cc.Branches) != 2 || len(cc.Files) != 1 {
+	if !cc.Ready || len(cc.Switches) != 1 || cc.Switches[0].Repo != "acme/api" || len(cc.Branches) != 2 || len(cc.Worktrees) != 0 || len(cc.Files) != 1 {
 		t.Fatalf("ready candidate: %+v", cc)
 	}
 	if err := Clean(context.Background(), cc); err != nil {
 		t.Fatal(err)
 	}
-	for _, p := range []string{proto.Worktree, api.Worktree, cc.Dir} {
-		if _, err := os.Stat(p); !os.IsNotExist(err) {
-			t.Errorf("%s still exists", p)
+	for _, l := range []*change.Leg{proto, api} {
+		if got := run(t, l.Dir(), "git", "branch", "--show-current"); got != "main" {
+			t.Errorf("%s on %q after clean", l.Name(), got)
+		}
+		if out := run(t, l.Dir(), "git", "branch", "--list", "DEV-1"); out != "" {
+			t.Errorf("%s kept DEV-1", l.Name())
 		}
 	}
-	if out := run(t, proto.Source, "git", "branch", "--list", "DEV-1"); out != "" {
-		t.Errorf("local branch kept: %q", out)
+	if _, err := os.Stat(cc.Dir); !os.IsNotExist(err) {
+		t.Errorf("change dir survived: %v", err)
+	}
+}
+
+func TestStartLeavesDirtyRepoOnItsBranch(t *testing.T) {
+	f := newFixture(t)
+	proto := f.repo("proto", "module example.com/proto\n\ngo 1.26\n")
+	api := f.repo("api", "module example.com/api\n\ngo 1.26\n")
+	write(t, filepath.Join(api.Path, "wip.txt"), "wip", 0o644)
+
+	c, results, err := Start(context.Background(), f.store, "DEV-2", "", []workspace.Repo{proto, api})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !results[0].Switched || results[1].Switched || !strings.Contains(results[1].Warning, "stayed on main: 1 uncommitted files") {
+		t.Fatalf("results: %+v", results)
+	}
+	if got := run(t, api.Path, "git", "branch", "--show-current"); got != "main" {
+		t.Errorf("dirty api switched to %q", got)
+	}
+	if run(t, api.Path, "git", "branch", "--list", "DEV-2") == "" {
+		t.Error("branch not created in the dirty repo")
+	}
+	if len(c.Legs) != 2 {
+		t.Errorf("legs = %d, want both recorded", len(c.Legs))
+	}
+
+	os.Remove(filepath.Join(api.Path, "wip.txt"))
+	for _, r := range Switch(context.Background(), c, false) {
+		if r.Err != nil {
+			t.Errorf("switch %s: %v", r.Leg.Name(), r.Err)
+		}
+	}
+	if got := run(t, api.Path, "git", "branch", "--show-current"); got != "DEV-2" {
+		t.Errorf("api on %q after switch", got)
+	}
+	for _, r := range Switch(context.Background(), c, true) {
+		if r.Err != nil || r.To != "main" {
+			t.Errorf("switch to base %s: %+v", r.Leg.Name(), r)
+		}
+	}
+}
+
+func TestOffBranchLegsAreRefused(t *testing.T) {
+	f := newFixture(t)
+	c := f.change()
+	g, _ := BuildGraph(c)
+	api, _ := c.Leg("api")
+	run(t, api.Dir(), "git", "switch", "--quiet", "main")
+
+	if _, err := RunChecks(context.Background(), c, api, nil); err == nil || !strings.Contains(err.Error(), "api is on main, not DEV-1") {
+		t.Errorf("checks off-branch: %v", err)
+	}
+	res := Pin(context.Background(), c, g, true)
+	if len(res) != 1 || res[0].Err == nil || !strings.Contains(res[0].Err.Error(), "api is on main") {
+		t.Errorf("pin off-branch: %+v", res)
+	}
+	f.pr("proto", 1, "OPEN", "APPROVED", green)
+	f.pr("api", 2, "OPEN", "APPROVED", green)
+	var found bool
+	for _, tc := range TrainPreflight(context.Background(), c, g) {
+		for _, p := range tc.Problems {
+			found = found || strings.Contains(p, "on main, not DEV-1: switch so it can be re-pinned")
+		}
+	}
+	if !found {
+		t.Error("train should refuse to start when a leg it must re-pin is off its branch")
 	}
 }
