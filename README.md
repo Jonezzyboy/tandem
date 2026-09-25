@@ -191,7 +191,7 @@ changes picks the one it has checked out.
 | `td status [ID] [--offline]` | Local state, PR, CI and review for every repo, in merge order. |
 | `td check [ID] [repo...]` | Run local checks, all repos at once. |
 | `td sync [ID]` | Fetch every repo and rebase the clean ones onto their base. |
-| `td pr [ID] [--title] [--body \| --body-file] [--draft] [--reviewer a,b] [--dry-run]` | Push, open or update PRs, and refresh the Related PRs section in all of them. |
+| `td pr [ID] [--title] [--body \| --body-file] [--draft] [--ready] [--reviewer a,b] [--dry-run]` | Push, open or update PRs, refresh the Related PRs section in all of them, and with `--ready` take drafts out of draft. |
 | `td link` / `td unlink [ID] <upstream> <downstream>` | Declare or remove a merge-order edge. |
 | `td pin [ID] [--no-commit]` | Point downstream Go repos at their upstream's pushed commit. |
 | `td merge [ID] [--method squash\|merge\|rebase] [--dry-run] [--yes]` | Run the merge train. |

@@ -28,6 +28,7 @@
   const trainRunning = $derived(app.trains[id]?.running ?? false)
 
   const offBranch = $derived((view?.legs ?? []).filter((l) => !l.onBranch))
+  const unpublished = $derived((view?.legs ?? []).some((l) => !l.pr || l.pr.draft))
   const switching = $derived(switchingIds[id] ?? false)
   const switchTo = (toBase: boolean) => checkOut(id, toBase)
 
@@ -201,9 +202,15 @@
         <button class="btn" onclick={() => (app.trainOpen = true)} disabled={!view.legs.some((l) => l.pr)}>
           <Icon name="branch" spin={trainRunning} />{trainRunning ? 'Train running' : 'Merge train'}
         </button>
-        <button class="btn primary" onclick={() => (app.composer = true)}>
-          <Icon name="send" />{view.legs.some((l) => l.pr) ? 'Publish PRs' : 'Open PRs'}
-        </button>
+        {#if unpublished}
+          <button class="btn primary" onclick={() => (app.composer = true)}>
+            <Icon name="send" />{view.legs.some((l) => !l.pr) ? 'Open PRs' : 'Publish PRs'}
+          </button>
+        {:else}
+          <button class="btn" onclick={() => (app.composer = true)} title="Push branches and update PR descriptions">
+            <Icon name="send" />Update PRs
+          </button>
+        {/if}
       </div>
     </header>
 
@@ -418,7 +425,8 @@
   .tools :global(.icon-btn:disabled) { opacity: 0.4; }
 
   .panels { display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 16px; flex: 1; min-height: 220px; }
-  .panel { padding: 16px 18px; border-radius: 12px; border: 1px solid var(--line); display: flex; flex-direction: column; gap: 10px; overflow: auto; }
+  .panel { padding: 16px 18px; border-radius: 12px; border: 1px solid var(--line); display: flex; flex-direction: column; gap: 10px; overflow: auto; max-height: 440px; }
+  .panel > * { flex-shrink: 0; }
   .output { background: var(--nav); }
   .activity { background: var(--panel); }
   .panel-head { display: flex; justify-content: space-between; align-items: center; }

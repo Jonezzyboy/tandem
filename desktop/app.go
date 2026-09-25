@@ -434,7 +434,12 @@ type PRRequest struct {
 	Body           string   `json:"body"`
 	Reviewers      []string `json:"reviewers"`
 	Draft          bool     `json:"draft"`
+	Ready          bool     `json:"ready"`
 	ForceWithLease bool     `json:"forceWithLease"`
+}
+
+func (r PRRequest) options() core.PROptions {
+	return core.PROptions{Draft: r.Draft, Ready: r.Ready, ForceWithLease: r.ForceWithLease}
 }
 
 type PlanItem struct {
@@ -442,6 +447,7 @@ type PlanItem struct {
 	Name   string `json:"name"`
 	Level  int    `json:"level"`
 	Action string `json:"action"`
+	Ready  bool   `json:"ready"`
 	Note   string `json:"note"`
 	Error  string `json:"error"`
 	Dirty  int    `json:"dirty"`
@@ -477,7 +483,7 @@ func (a *App) PlanPRs(id string, req PRRequest) (PRPreview, error) {
 	if err != nil {
 		return PRPreview{}, err
 	}
-	return preview(title, core.PlanPRs(a.ctx, c, g, req.Draft)), nil
+	return preview(title, core.PlanPRs(a.ctx, c, g, req.options())), nil
 }
 
 func (a *App) PublishPRs(id string, req PRRequest) (PRPreview, error) {
@@ -488,8 +494,8 @@ func (a *App) PublishPRs(id string, req PRRequest) (PRPreview, error) {
 	if err != nil {
 		return PRPreview{}, err
 	}
-	plans := core.PlanPRs(a.ctx, c, g, req.Draft)
-	core.PublishPRs(a.ctx, c, plans, title, core.PROptions{Draft: req.Draft, ForceWithLease: req.ForceWithLease})
+	plans := core.PlanPRs(a.ctx, c, g, req.options())
+	core.PublishPRs(a.ctx, c, plans, title, req.options())
 	if err := a.store.Save(c); err != nil {
 		return PRPreview{}, err
 	}
@@ -500,7 +506,7 @@ func (a *App) PublishPRs(id string, req PRRequest) (PRPreview, error) {
 func preview(title string, plans []*core.PRPlan) PRPreview {
 	p := PRPreview{Title: title, Items: []PlanItem{}}
 	for _, pl := range plans {
-		it := PlanItem{Repo: pl.Leg.Repo, Name: pl.Leg.Name(), Level: pl.Level, Note: pl.Note, Dirty: pl.State.Status.Dirty}
+		it := PlanItem{Repo: pl.Leg.Repo, Name: pl.Leg.Name(), Level: pl.Level, Ready: pl.Ready, Note: pl.Note, Dirty: pl.State.Status.Dirty}
 		switch pl.Action {
 		case core.PRCreate:
 			it.Action = "create"

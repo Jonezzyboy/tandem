@@ -86,6 +86,7 @@ export interface PRRequest {
   body: string
   reviewers: string[]
   draft: boolean
+  ready: boolean
   forceWithLease: boolean
 }
 
@@ -94,6 +95,7 @@ export interface PlanItem {
   name: string
   level: number
   action: 'create' | 'update' | 'skip'
+  ready: boolean
   note: string
   error: string
   dirty: number
