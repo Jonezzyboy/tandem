@@ -430,6 +430,7 @@ export namespace main {
 	    name: string;
 	    level: number;
 	    action: string;
+	    ready: boolean;
 	    note: string;
 	    error: string;
 	    dirty: number;
@@ -445,6 +446,7 @@ export namespace main {
 	        this.name = source["name"];
 	        this.level = source["level"];
 	        this.action = source["action"];
+	        this.ready = source["ready"];
 	        this.note = source["note"];
 	        this.error = source["error"];
 	        this.dirty = source["dirty"];
@@ -488,6 +490,7 @@ export namespace main {
 	    body: string;
 	    reviewers: string[];
 	    draft: boolean;
+	    ready: boolean;
 	    forceWithLease: boolean;
 	
 	    static createFrom(source: any = {}) {
@@ -500,6 +503,7 @@ export namespace main {
 	        this.body = source["body"];
 	        this.reviewers = source["reviewers"];
 	        this.draft = source["draft"];
+	        this.ready = source["ready"];
 	        this.forceWithLease = source["forceWithLease"];
 	    }
 	}

@@ -13,6 +13,8 @@
   let body = $state(untrack(() => view.body))
   let reviewers = $state(untrack(() => (view.reviewers ?? []).join(', ')))
   let draft = $state(untrack(() => prefs.settings.draftPRs))
+  const hasDrafts = $derived(view.legs.some((l) => l.pr?.draft && l.pr.state === 'OPEN'))
+  let ready = $state(untrack(() => hasDrafts))
   let forceWithLease = $state(false)
   let preview = $state<PRPreview | null>(null)
   let planning = $state(false)
@@ -28,6 +30,7 @@
       body,
       reviewers: reviewers.split(',').map((r) => r.trim()).filter(Boolean),
       draft,
+      ready,
       forceWithLease,
     }
   }
@@ -49,7 +52,7 @@
       done = await api.publishPRs(view.id, request())
       for (const it of done.items) {
         if (it.error) log(view.id, `${it.name}: ${it.error}`, 'warn')
-        else if (it.action !== 'skip' && it.url) log(view.id, `${it.name}: ${it.action === 'create' ? 'opened' : 'updated'} ${it.url}`, 'ok')
+        else if (it.action !== 'skip' && it.url) log(view.id, `${it.name}: ${it.action === 'create' ? 'opened' : it.ready ? 'ready for review' : 'updated'} ${it.url}`, 'ok')
       }
     } catch (e) {
       fail(e)
@@ -121,6 +124,9 @@
         </div>
         <div class="toggles">
           <label class="toggle"><input type="checkbox" bind:checked={draft} onchange={plan} />Open new PRs as drafts</label>
+          {#if hasDrafts}
+            <label class="toggle"><input type="checkbox" bind:checked={ready} onchange={plan} />Mark drafts ready for review</label>
+          {/if}
           <label class="toggle" title="Needed after Sync rebased a branch that was already pushed">
             <input type="checkbox" bind:checked={forceWithLease} />Push with --force-with-lease
           </label>
@@ -163,7 +169,7 @@
       <span class="muted small">Pushes each leg with commits, opens missing PRs, then refreshes the Related PRs block.</span>
       <button class="btn primary" disabled={publishing || planning || acting.length === 0} onclick={publish}>
         <Icon name="send" spin={publishing} />
-        {#if acting.length === 0}Nothing to publish{:else if creating === acting.length}Open {creating} PR{creating === 1 ? '' : 's'}{:else}Publish {acting.length} PR{acting.length === 1 ? '' : 's'}{/if}
+        {#if acting.length === 0}Nothing to publish{:else if creating === acting.length}Open {creating} PR{creating === 1 ? '' : 's'}{:else if creating === 0}Update {acting.length} PR{acting.length === 1 ? '' : 's'}{:else}Publish {acting.length} PR{acting.length === 1 ? '' : 's'}{/if}
       </button>
     </div>
   {/if}

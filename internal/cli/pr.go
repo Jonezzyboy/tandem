@@ -12,11 +12,12 @@ import (
 )
 
 func runPR(ctx context.Context, e *env, args []string) error {
-	flags := newFlags("pr", "td pr [ID] [--title T] [--body B | --body-file F] [--draft] [--reviewer a,b] [--dry-run]")
+	flags := newFlags("pr", "td pr [ID] [--title T] [--body B | --body-file F] [--draft] [--ready] [--reviewer a,b] [--dry-run]")
 	title := flags.String("title", "", "PR title (default: the change title, prefixed with its ID)")
 	body := flags.String("body", "", "shared PR description")
 	bodyFile := flags.String("body-file", "", "read the shared description from a file, - for stdin")
 	draft := flags.Bool("draft", false, "open new PRs as drafts")
+	ready := flags.Bool("ready", false, "mark open draft PRs ready for review")
 	reviewers := flags.String("reviewer", "", "comma-separated reviewers for new PRs")
 	dryRun := flags.Bool("dry-run", false, "show what would happen without pushing or touching GitHub")
 	forceLease := flags.Bool("force-with-lease", false, "push with --force-with-lease, for branches rebased by td sync")
@@ -55,7 +56,8 @@ func runPR(ctx context.Context, e *env, args []string) error {
 	if err != nil {
 		return err
 	}
-	plans := core.PlanPRs(ctx, c, g, *draft)
+	opts := core.PROptions{Draft: *draft, Ready: *ready, ForceWithLease: *forceLease}
+	plans := core.PlanPRs(ctx, c, g, opts)
 
 	fmt.Fprintf(e.out, "%s  %s\n", e.ui.Bold(c.ID), t)
 	rows := [][]ui.Cell{}
@@ -76,7 +78,7 @@ func runPR(ctx context.Context, e *env, args []string) error {
 		return nil
 	}
 
-	core.PublishPRs(ctx, c, plans, t, core.PROptions{Draft: *draft, ForceWithLease: *forceLease})
+	core.PublishPRs(ctx, c, plans, t, opts)
 	if err := e.store.Save(c); err != nil {
 		return err
 	}

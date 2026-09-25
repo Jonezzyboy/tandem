@@ -26,12 +26,15 @@ type PRPlan struct {
 	Level  int
 	State  LegState
 	Action PRAction
-	Note   string
-	Err    error
+	// Ready marks an open draft PR ready for review once its body is updated.
+	Ready bool
+	Note  string
+	Err   error
 }
 
 type PROptions struct {
 	Draft          bool
+	Ready          bool
 	ForceWithLease bool
 }
 
@@ -51,7 +54,7 @@ func PRTitle(c *change.Change, title string) (string, error) {
 
 // PlanPRs reads every leg's state and decides, per leg, whether to open a PR,
 // refresh an existing one, or leave it. Plans come back in merge order.
-func PlanPRs(ctx context.Context, c *change.Change, g Graph, draft bool) []*PRPlan {
+func PlanPRs(ctx context.Context, c *change.Change, g Graph, o PROptions) []*PRPlan {
 	states := Snapshot(ctx, c, true)
 	SortByLevel(states, g.Levels)
 	plans := make([]*PRPlan, len(states))
@@ -66,11 +69,15 @@ func PlanPRs(ctx context.Context, c *change.Change, g Graph, draft bool) []*PRPl
 			p.Note = "already merged"
 		case s.PR != nil && s.PR.State == "OPEN":
 			p.Action, p.Note = PRUpdate, "push, refresh related PRs on #"+strconv.Itoa(s.PR.Number)
+			if o.Ready && s.PR.IsDraft {
+				p.Ready = true
+				p.Note += ", mark ready for review"
+			}
 		case s.Status.Ahead == 0:
 			p.Note = "nothing to open: no commits ahead of " + s.Leg.BaseRef
 		default:
 			p.Action, p.Note = PRCreate, fmt.Sprintf("push %d commits, open PR into %s", s.Status.Ahead, s.Leg.Base)
-			if draft {
+			if o.Draft {
 				p.Note += " as draft"
 			}
 		}
@@ -113,6 +120,20 @@ func PublishPRs(ctx context.Context, c *change.Change, plans []*PRPlan, title st
 				return
 			}
 			p.State.PR.Body = updated
+		})
+	}
+	wg.Wait()
+
+	for _, p := range plans {
+		if !p.Ready || p.Err != nil {
+			continue
+		}
+		wg.Go(func() {
+			if err := gh.Ready(ctx, p.Leg.Dir(), p.State.PR.Number); err != nil {
+				p.Err = err
+				return
+			}
+			p.State.PR.IsDraft = false
 		})
 	}
 	wg.Wait()

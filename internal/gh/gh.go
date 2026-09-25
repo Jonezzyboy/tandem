@@ -167,6 +167,11 @@ func EditBody(ctx context.Context, dir string, number int, body string) error {
 	return err
 }
 
+func Ready(ctx context.Context, dir string, number int) error {
+	_, err := run(ctx, dir, "", "pr", "ready", strconv.Itoa(number))
+	return err
+}
+
 // Ref turns https://github.com/owner/repo/pull/12 into owner/repo#12, which
 // GitHub renders as a cross-repo link.
 func Ref(prURL string) string {
