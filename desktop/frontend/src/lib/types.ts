@@ -8,6 +8,16 @@ export interface PRView {
   fail: number
   pending: number
   failing: string[] | null
+  mergeSha?: string
+}
+
+export interface PinView {
+  module: string
+  upstream: string
+  dir: string
+  rev: string
+  applied: boolean
+  error?: string
 }
 
 export interface LegView {
@@ -26,6 +36,7 @@ export interface LegView {
   localError?: string
   pr: PRView | null
   prError?: string
+  pins?: PinView[]
   blockers: string[]
 }
 

@@ -224,9 +224,14 @@ dependencies order the train but aren't re-pinned.
 **Pinning on its own.** `td pin` does step 2 without merging. It pins to the
 upstream's merge commit once its PR has merged, otherwise to its pushed branch
 (`td pr` pushes it), then pushes the downstream so reviewers see the final
-`go.mod`. Merging an upstream on its own and re-pinning lets the downstream PRs
-be approved before the train runs. Private modules need `GOPRIVATE` set as
-usual.
+`go.mod`. Private modules need `GOPRIVATE` set as usual.
+
+**When an upstream merges on its own.** The app notices on its next GitHub
+refresh and runs `go get` at the merge commit in each open downstream repo that
+is on its branch and has no `go.mod`/`go.sum` edits of its own. The update is
+left uncommitted, and a banner offers **Commit & push**, so the downstream PRs
+can be reviewed and tested against the merged code before the train runs. The
+train refuses to start while such an update sits uncommitted.
 
 </details>
 

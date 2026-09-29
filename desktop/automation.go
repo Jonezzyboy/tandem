@@ -53,6 +53,43 @@ func (a *App) Pin(id string) ([]PinItem, error) {
 	return out, nil
 }
 
+// CommitPins commits and pushes the go.mod/go.sum updates for merged upstreams
+// in every leg that has them, running any go get still outstanding first.
+func (a *App) CommitPins(id string) ([]LegResult, error) {
+	lock := a.opLock(id)
+	lock.Lock()
+	defer lock.Unlock()
+	c, err := a.store.Load(id)
+	if err != nil {
+		return nil, err
+	}
+	v, err := a.buildView(id, false)
+	if err != nil {
+		return nil, err
+	}
+	out := []LegResult{}
+	for _, lv := range v.Legs {
+		if len(lv.Pins) == 0 {
+			continue
+		}
+		l, err := c.Leg(lv.Repo)
+		if err != nil {
+			return nil, err
+		}
+		mods := make([]string, len(lv.Pins))
+		for i, p := range lv.Pins {
+			mods[i] = p.Module
+		}
+		r := LegResult{Leg: lv.Name, OK: true, Message: "committed and pushed " + strings.Join(mods, ", ")}
+		if err := core.CommitPins(a.ctx, c, l, lv.Pins); err != nil {
+			r.OK, r.Message = false, core.FirstLine(err.Error())
+		}
+		out = append(out, r)
+	}
+	go a.refresh(id, true)
+	return out, nil
+}
+
 func short(s string) string {
 	if len(s) > 12 {
 		return s[:12]

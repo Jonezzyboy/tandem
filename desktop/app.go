@@ -49,6 +49,9 @@ type App struct {
 	inbox    *Inbox
 	inboxAt  time.Time
 	trains   map[string]context.CancelFunc
+	// goup records each automatic go get by change, leg, dir, module and rev,
+	// with its error ("" on success), so one merge commit is tried once.
+	goup     map[string]string
 	settings Settings
 	account  *Account
 }
@@ -63,6 +66,7 @@ func NewApp(store change.Store, roots []string) *App {
 		inflight: map[string]bool{},
 		ops:      map[string]*sync.Mutex{},
 		trains:   map[string]context.CancelFunc{},
+		goup:     map[string]string{},
 		settings: defaultSettings(),
 	}
 }
@@ -190,12 +194,21 @@ func (a *App) buildView(id string, remote bool) (core.ChangeView, error) {
 		}
 	}
 	v := core.BuildView(c, g, graphErr, states, remote)
-
 	a.mu.Lock()
 	prev, had := a.views[id]
+	a.mu.Unlock()
 	if !remote && had {
 		v = core.MergeLocal(prev, v)
 	}
+	if graphErr == nil {
+		core.MergedPins(ctx, c, g, &v)
+		if a.goUp(ctx, id, c, &v) {
+			core.MergedPins(ctx, c, g, &v)
+		}
+		a.pinErrors(id, &v)
+	}
+
+	a.mu.Lock()
 	changed := !had || !sameView(prev, v)
 	a.views[id] = v
 	if remote {
@@ -209,6 +222,74 @@ func (a *App) buildView(id string, remote bool) (core.ChangeView, error) {
 		a.emit("changes", a.Changes())
 	}
 	return v, nil
+}
+
+// goUp runs go get for pins whose upstream has merged, leaving go.mod and
+// go.sum for the user to commit. It skips legs off their branch or with
+// go.mod/go.sum edits of their own, and anything while an operation or train
+// holds the change.
+func (a *App) goUp(ctx context.Context, id string, c *change.Change, v *core.ChangeView) bool {
+	lock := a.opLock(id)
+	if !lock.TryLock() {
+		return false
+	}
+	defer lock.Unlock()
+	ran := false
+	for _, lv := range v.Legs {
+		l, err := c.Leg(lv.Repo)
+		if err != nil || !lv.OnBranch {
+			continue
+		}
+		for _, p := range lv.Pins {
+			key := goupKey(id, lv.Repo, p)
+			a.mu.Lock()
+			_, tried := a.goup[key]
+			a.mu.Unlock()
+			if p.Applied || tried || !core.ManifestsClean(ctx, l, p.Dir) {
+				continue
+			}
+			_, _, err := core.PinTo(ctx, c, l, p.Dir, p.Module, p.Rev, false, "")
+			msg := ""
+			if err != nil {
+				msg = core.FirstLine(err.Error())
+				a.activity(id, lv.Name+": "+msg, "warn")
+			} else {
+				a.activity(id, fmt.Sprintf("%s: %s merged, so %s is now at %s (uncommitted)", lv.Name, p.Upstream, p.Module, short(p.Rev)), "ok")
+			}
+			a.mu.Lock()
+			a.goup[key] = msg
+			a.mu.Unlock()
+			ran = true
+		}
+	}
+	return ran
+}
+
+func goupKey(id, repo string, p core.PinView) string {
+	return strings.Join([]string{id, repo, p.Dir, p.Module, p.Rev}, "|")
+}
+
+func (a *App) pinErrors(id string, v *core.ChangeView) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	for i := range v.Legs {
+		for j := range v.Legs[i].Pins {
+			p := &v.Legs[i].Pins[j]
+			if !p.Applied {
+				p.Error = a.goup[goupKey(id, v.Legs[i].Repo, *p)]
+			}
+		}
+	}
+}
+
+type ActivityUpdate struct {
+	Change string `json:"change"`
+	Text   string `json:"text"`
+	Tone   string `json:"tone"`
+}
+
+func (a *App) activity(id, text, tone string) {
+	a.emit("activity", ActivityUpdate{Change: id, Text: text, Tone: tone})
 }
 
 func sameView(x, y core.ChangeView) bool {

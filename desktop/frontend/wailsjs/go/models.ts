@@ -18,6 +18,28 @@ export namespace core {
 	        this.kind = source["kind"];
 	    }
 	}
+	export class PinView {
+	    module: string;
+	    upstream: string;
+	    dir: string;
+	    rev: string;
+	    applied: boolean;
+	    error?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new PinView(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.module = source["module"];
+	        this.upstream = source["upstream"];
+	        this.dir = source["dir"];
+	        this.rev = source["rev"];
+	        this.applied = source["applied"];
+	        this.error = source["error"];
+	    }
+	}
 	export class PRView {
 	    number: number;
 	    url: string;
@@ -28,6 +50,7 @@ export namespace core {
 	    fail: number;
 	    pending: number;
 	    failing: string[];
+	    mergeSha?: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new PRView(source);
@@ -44,6 +67,7 @@ export namespace core {
 	        this.fail = source["fail"];
 	        this.pending = source["pending"];
 	        this.failing = source["failing"];
+	        this.mergeSha = source["mergeSha"];
 	    }
 	}
 	export class LegView {
@@ -62,6 +86,7 @@ export namespace core {
 	    localError?: string;
 	    pr?: PRView;
 	    prError?: string;
+	    pins?: PinView[];
 	    blockers: string[];
 	
 	    static createFrom(source: any = {}) {
@@ -85,6 +110,7 @@ export namespace core {
 	        this.localError = source["localError"];
 	        this.pr = this.convertValues(source["pr"], PRView);
 	        this.prError = source["prError"];
+	        this.pins = this.convertValues(source["pins"], PinView);
 	        this.blockers = source["blockers"];
 	    }
 	
@@ -162,6 +188,7 @@ export namespace core {
 		    return a;
 		}
 	}
+	
 	
 	
 

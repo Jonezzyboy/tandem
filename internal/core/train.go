@@ -79,13 +79,19 @@ func TrainPreflight(ctx context.Context, c *change.Change, g Graph) []TrainCheck
 		}
 	}
 	repinned := map[string]bool{}
+	uncommitted := map[string][]string{}
 	for _, e := range goEdges(g) {
 		if !merged[e.From] {
 			repinned[e.To] = true
 			continue
 		}
-		if down, err := c.Leg(e.To); err == nil && !pinnedTo(down, e.Dir, e.Via, mergedSHA[e.From]) {
-			repinned[e.To] = true
+		down, err := c.Leg(e.To)
+		if err != nil || merged[e.To] || pinnedTo(ctx, down, e.Dir, e.Via, mergedSHA[e.From], true) {
+			continue
+		}
+		repinned[e.To] = true
+		if pinnedTo(ctx, down, e.Dir, e.Via, mergedSHA[e.From], false) {
+			uncommitted[e.To] = append(uncommitted[e.To], e.Via)
 		}
 	}
 	out := make([]TrainCheck, 0, len(states))
@@ -101,6 +107,9 @@ func TrainPreflight(ctx context.Context, c *change.Change, g Graph) []TrainCheck
 			tc.Problems = append(tc.Problems, "PR closed without merging")
 		default:
 			tc.Problems = append(tc.Problems, readiness(s.PR, !repinned[s.Leg.Repo])...)
+			if mods := uncommitted[s.Leg.Repo]; len(mods) > 0 {
+				tc.Problems = append(tc.Problems, "go.mod updated to the merged "+strings.Join(mods, ", ")+" but not committed: commit and push it")
+			}
 			if repinned[s.Leg.Repo] && !s.OnBranch() {
 				tc.Problems = append(tc.Problems, "on "+orDetached(s.Status.Current)+", not "+c.Branch+": switch so it can be re-pinned")
 			}

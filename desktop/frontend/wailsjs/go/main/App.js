@@ -34,6 +34,10 @@ export function CleanPlan() {
   return window['go']['main']['App']['CleanPlan']();
 }
 
+export function CommitPins(arg1) {
+  return window['go']['main']['App']['CommitPins'](arg1);
+}
+
 export function Editors() {
   return window['go']['main']['App']['Editors']();
 }
