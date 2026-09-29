@@ -293,10 +293,9 @@ func TestMergeAndCleanCLI(t *testing.T) {
 	}
 
 	out := mustTD(t, "pin", "DEV-7")
-	if !regexp.MustCompile(`api ← example.com/proto\s+pinned to \w{12}, committed`).MatchString(out) {
+	if !regexp.MustCompile(`api ← example.com/proto\s+pinned to \w{12}, pushed`).MatchString(out) {
 		t.Errorf("pin:\n%s", out)
 	}
-	git(t, filepath.Join(root, "acme", "api"), "push", "--quiet")
 
 	pr("proto", 1, "CHANGES_REQUESTED", "OPEN")
 	if out, code := td(t, "merge", "DEV-7", "--yes"); code == 0 || !strings.Contains(out, "changes requested") || !strings.Contains(out, "2 of 2 legs blocked") {

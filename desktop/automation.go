@@ -17,7 +17,8 @@ type PinItem struct {
 	Message string `json:"message"`
 }
 
-// Pin re-points downstream Go legs at their upstream's pushed HEAD and commits.
+// Pin re-points downstream Go legs at their upstream's merge commit (or pushed
+// HEAD before it merges), commits and pushes.
 func (a *App) Pin(id string) ([]PinItem, error) {
 	lock := a.opLock(id)
 	lock.Lock()
@@ -31,7 +32,7 @@ func (a *App) Pin(id string) ([]PinItem, error) {
 		return nil, err
 	}
 	out := []PinItem{}
-	for _, r := range core.Pin(a.ctx, c, g, true) {
+	for _, r := range core.Pin(a.ctx, c, g, true, true) {
 		it := PinItem{Leg: r.Downstream.Name(), Module: r.Module, Rev: r.Rev}
 		switch {
 		case r.Skipped != "":
@@ -41,7 +42,10 @@ func (a *App) Pin(id string) ([]PinItem, error) {
 		case !r.Changed:
 			it.Status, it.Message = "already", "already at "+short(r.Rev)
 		default:
-			it.Status, it.Message = "pinned", "pinned to "+short(r.Rev)+", committed"
+			it.Status, it.Message = "pinned", "pinned to "+short(r.Rev)+", pushed"
+			if r.Merged {
+				it.Message = "pinned to merged " + short(r.Rev) + ", pushed"
+			}
 		}
 		out = append(out, it)
 	}

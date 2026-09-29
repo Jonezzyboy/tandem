@@ -139,15 +139,20 @@ func PublishPRs(ctx context.Context, c *change.Change, plans []*PRPlan, title st
 	wg.Wait()
 }
 
-func publish(ctx context.Context, c *change.Change, p *PRPlan, title string, o PROptions) {
+func pushBranch(ctx context.Context, c *change.Change, l *change.Leg, forceWithLease bool) error {
 	push := []string{"push", "--quiet", "-u", "origin", c.Branch}
-	if o.ForceWithLease {
+	if forceWithLease {
 		push = append(push, "--force-with-lease")
 	}
-	if _, err := gitx.Run(ctx, p.Leg.Dir(), push...); err != nil {
-		if strings.Contains(err.Error(), "non-fast-forward") || strings.Contains(err.Error(), "fetch first") {
-			err = fmt.Errorf("push rejected: branch diverged from origin (after a sync, publish with force-with-lease)")
-		}
+	_, err := gitx.Run(ctx, l.Dir(), push...)
+	if err != nil && (strings.Contains(err.Error(), "non-fast-forward") || strings.Contains(err.Error(), "fetch first")) {
+		return fmt.Errorf("push rejected: branch diverged from origin (after a sync, publish with force-with-lease)")
+	}
+	return err
+}
+
+func publish(ctx context.Context, c *change.Change, p *PRPlan, title string, o PROptions) {
+	if err := pushBranch(ctx, c, p.Leg, o.ForceWithLease); err != nil {
 		p.Err = err
 		return
 	}

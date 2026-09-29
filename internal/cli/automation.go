@@ -29,8 +29,9 @@ func (e *env) confirm(question string, yes bool) (bool, error) {
 }
 
 func runPin(ctx context.Context, e *env, args []string) error {
-	flags := newFlags("pin", "td pin [ID] [--no-commit]")
+	flags := newFlags("pin", "td pin [ID] [--no-commit] [--no-push]")
 	noCommit := flags.Bool("no-commit", false, "update go.mod/go.sum without committing")
+	noPush := flags.Bool("no-push", false, "commit the pin without pushing it")
 	pos, err := parseArgs(flags, args)
 	if err != nil {
 		return err
@@ -43,7 +44,7 @@ func runPin(ctx context.Context, e *env, args []string) error {
 	if err != nil {
 		return err
 	}
-	results := core.Pin(ctx, c, g, !*noCommit)
+	results := core.Pin(ctx, c, g, !*noCommit, !*noCommit && !*noPush)
 	if len(results) == 0 {
 		fmt.Fprintln(e.out, e.ui.Dim("no Go dependencies between legs: nothing to pin"))
 		return nil
@@ -63,9 +64,15 @@ func runPin(ctx context.Context, e *env, args []string) error {
 			rows = append(rows, []ui.Cell{{Text: "✓", Color: e.ui.Green}, ui.Plain(target), {Text: "already at " + shortSHA(r.Rev), Color: e.ui.Dim}})
 		default:
 			note := "pinned to " + shortSHA(r.Rev)
-			if r.Committed {
+			if r.Merged {
+				note = "pinned to merged " + shortSHA(r.Rev)
+			}
+			switch {
+			case r.Pushed:
+				note += ", pushed"
+			case r.Committed:
 				note += ", committed"
-			} else {
+			default:
 				note += ", not committed"
 			}
 			rows = append(rows, []ui.Cell{{Text: "✓", Color: e.ui.Green}, ui.Plain(target), ui.Plain(note)})
