@@ -2,13 +2,14 @@
   import { onDestroy, onMount } from 'svelte'
   import { api } from '@lib/api'
   import { ago, reviewLabel } from '@lib/format'
-  import { app, checkOut, fail, log, switching as switchingIds } from '@lib/state.svelte'
+  import { app, checkOut, fail, loadCleanPlan, log, navigate, switching as switchingIds } from '@lib/state.svelte'
   import { editorLabel } from '@lib/settings.svelte'
-  import type { LegView } from '@lib/types'
+  import type { CleanItem, LegView } from '@lib/types'
   import Composer from './Composer.svelte'
   import TrainDialog from './TrainDialog.svelte'
   import AddReposDialog from './AddReposDialog.svelte'
   import EdgesDialog from './EdgesDialog.svelte'
+  import CleanDialog from './CleanDialog.svelte'
   import Icon from './Icon.svelte'
 
   let { id }: { id: string } = $props()
@@ -27,7 +28,19 @@
   const goEdges = $derived((view?.edges ?? []).filter((e) => e.kind === 'go').length)
   const trainRunning = $derived(app.trains[id]?.running ?? false)
 
-  const offBranch = $derived((view?.legs ?? []).filter((l) => !l.onBranch))
+  const landed = $derived(!!view?.remote && view.legs.length > 0 && view.legs.every((l) => l.pr && l.pr.state !== 'OPEN'))
+  const cleanItem = $derived((app.cleanPlan ?? []).find((c) => c.id === id))
+  // Held apart from the plan, which drops the change as soon as it's cleaned.
+  let cleaning = $state<CleanItem | null>(null)
+  $effect(() => {
+    if (landed) loadCleanPlan()
+  })
+  function closeClean() {
+    cleaning = null
+    if (!app.changes.some((c) => c.id === id)) navigate({ name: 'inbox' })
+  }
+
+  const offBranch = $derived(landed ? [] : (view?.legs ?? []).filter((l) => !l.onBranch))
   const pinLegs = $derived((view?.legs ?? []).filter((l) => l.pins?.length))
   const mergedUpstreams = $derived([...new Set(pinLegs.flatMap((l) => l.pins!.map((p) => p.upstream)))])
   const unpublished = $derived((view?.legs ?? []).some((l) => !l.pr || l.pr.draft))
@@ -236,6 +249,26 @@
       </div>
     </header>
 
+    {#if landed}
+      <div class="landed-banner">
+        <Icon name="check" color="var(--ok)" />
+        <span class="grow-text">
+          {#if cleanItem?.ready}
+            Every PR has landed. Clean up deletes this change's branches{cleanItem.switches.length ? ', switches repos back to their base' : ''} and removes it from My changes.
+          {:else if cleanItem}
+            Every PR has landed, but it can't be cleaned up yet: <span class="warn">{cleanItem.reason}</span>
+          {:else}
+            Every PR has landed. Checking what cleaning up would remove…
+          {/if}
+        </span>
+        {#if cleanItem?.ready}
+          <button class="btn small" onclick={() => (cleaning = cleanItem ?? null)}><Icon name="close" size={14} />Clean up</button>
+        {:else}
+          <button class="btn small" disabled={app.cleanLoading} onclick={loadCleanPlan}><Icon name="refresh" size={14} spin={app.cleanLoading} />Recheck</button>
+        {/if}
+      </div>
+    {/if}
+
     {#if offBranch.length > 0}
       <div class="switch-banner">
         <Icon name="branch" />
@@ -409,6 +442,9 @@
   {#if edgesOpen}
     <EdgesDialog {view} onclose={() => (edgesOpen = false)} />
   {/if}
+  {#if cleaning}
+    <CleanDialog items={[cleaning]} onclose={closeClean} />
+  {/if}
   {#if app.trainOpen}
     <TrainDialog {view} onclose={() => (app.trainOpen = false)} />
   {/if}
@@ -430,6 +466,10 @@
     background: var(--warn-row); border: 1px solid var(--warn-border); color: var(--warn-text); font-size: 13px;
   }
   .grow-text { flex: 1; line-height: 1.45; }
+  .landed-banner {
+    display: flex; align-items: center; gap: 12px; padding: 10px 12px 10px 14px; border-radius: 10px;
+    background: var(--ok-bg); border: 1px solid var(--ok-border); font-size: 13px;
+  }
   .pin-banner {
     display: flex; align-items: center; gap: 12px; padding: 10px 12px 10px 14px; border-radius: 10px;
     background: var(--ok-bg); border: 1px solid var(--ok-border); font-size: 13px;

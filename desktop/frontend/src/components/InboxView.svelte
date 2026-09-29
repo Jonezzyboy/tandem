@@ -66,6 +66,21 @@
     </section>
   {/if}
 
+  {#if cleanable.length}
+    <section>
+      <div class="eyebrow">Housekeeping</div>
+      <div class="row dashed">
+        <div class="repo mono">{cleanable.length} landed change{cleanable.length === 1 ? '' : 's'}</div>
+        <div class="stack">
+          <span class="title">{cleanable.reduce((n, c) => n + c.branches.length, 0)} merged branches can go</span>
+          <span class="muted small">{cleanable.map((c) => c.id).join(', ')} · every path is listed before anything is removed</span>
+        </div>
+        <div class="age"></div>
+        <button class="btn small" onclick={() => (cleaning = true)}>Review cleanup</button>
+      </div>
+    </section>
+  {/if}
+
   <section>
     <div class="eyebrow">Your open PRs · {mine.length}</div>
     {#if app.inbox?.mineError}<div class="row muted">GitHub: {app.inbox.mineError}</div>{/if}
@@ -83,22 +98,6 @@
   </section>
 </div>
 
-{#if cleanable.length}
-  <div class="page housekeeping">
-    <section>
-      <div class="eyebrow">Housekeeping</div>
-      <div class="row dashed">
-        <div class="repo mono">{cleanable.length} landed change{cleanable.length === 1 ? '' : 's'}</div>
-        <div class="stack">
-          <span class="title">{cleanable.reduce((n, c) => n + c.branches.length, 0)} merged branches can go</span>
-          <span class="muted small">{cleanable.map((c) => c.id).join(', ')} · every path is listed before anything is removed</span>
-        </div>
-        <div class="age"></div>
-        <button class="btn small" onclick={() => (cleaning = true)}>Review cleanup</button>
-      </div>
-    </section>
-  </div>
-{/if}
 
 {#if cleaning}
   <CleanDialog items={cleanable} onclose={() => (cleaning = false)} />
@@ -118,7 +117,6 @@
   }
   .row.empty { display: block; background: transparent; border-style: dashed; }
   .row.dashed { background: transparent; border-style: dashed; }
-  .housekeeping { padding-top: 0; }
   .row.link { cursor: pointer; }
   .row.link:hover { background: var(--raised); }
   .repo { font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-2); }

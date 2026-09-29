@@ -238,8 +238,9 @@ train refuses to start while such an update sits uncommitted.
 <details>
 <summary><strong>Cleaning up</strong></summary>
 
-`td clean` (or **Review cleanup** in the Inbox) lists every change whose PRs
-have all merged or closed, with exactly what it would do:
+`td clean` (or **Review cleanup** in the Inbox, or **Clean up** on a change
+once every PR has landed) lists every change whose PRs have all merged or
+closed, with exactly what it would do:
 - which repos it would switch back to their base;
 - which local branches it would delete;
 - which files it would remove.

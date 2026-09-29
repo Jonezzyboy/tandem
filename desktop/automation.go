@@ -275,6 +275,9 @@ func (a *App) Clean(ids []string) ([]CleanResult, error) {
 		} else {
 			a.mu.Lock()
 			delete(a.views, cc.Change.ID)
+			if a.focus == cc.Change.ID {
+				a.focus = ""
+			}
 			a.mu.Unlock()
 		}
 		out = append(out, r)
