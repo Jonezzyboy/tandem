@@ -136,6 +136,13 @@ func (f *fixture) pr(repo string, number int, state, review string, checks strin
 	write(f.t, filepath.Join(f.ghDir, repo+".json"), json, 0o644)
 }
 
+// mergedPR records repo's PR as merged at sha.
+func (f *fixture) mergedPR(repo string, number int, sha string) {
+	json := fmt.Sprintf(`{"number":%d,"url":"https://github.com/acme/%s/pull/%d","state":"MERGED","body":"","isDraft":false,"reviewDecision":"APPROVED","headRefOid":"__HEAD__","statusCheckRollup":[],"mergeCommit":{"oid":"%s"}}`,
+		number, repo, number, sha)
+	write(f.t, filepath.Join(f.ghDir, repo+".json"), json, 0o644)
+}
+
 const (
 	green = `{"name":"test","status":"COMPLETED","conclusion":"SUCCESS"}`
 	red   = `{"name":"test","status":"COMPLETED","conclusion":"FAILURE"}`
@@ -246,14 +253,14 @@ func TestPin(t *testing.T) {
 	api, _ := c.Leg("api")
 
 	f.commit(*proto, "more.txt", "unpushed")
-	res := Pin(context.Background(), c, g, true)
+	res := Pin(context.Background(), c, g, true, false)
 	if len(res) != 1 || !strings.Contains(res[0].Skipped, "not pushed") {
 		t.Fatalf("unpushed upstream: %+v", res)
 	}
 
 	run(t, proto.Dir(), "git", "push", "--quiet")
 	head := run(t, proto.Dir(), "git", "rev-parse", "HEAD")
-	res = Pin(context.Background(), c, g, true)
+	res = Pin(context.Background(), c, g, true, false)
 	if res[0].Err != nil || !res[0].Committed || res[0].Rev != head {
 		t.Fatalf("pin: %+v", res[0])
 	}
@@ -348,6 +355,60 @@ func TestStartLeavesDirtyRepoOnItsBranch(t *testing.T) {
 	}
 }
 
+func TestPinUsesMergeCommitOnceUpstreamMerged(t *testing.T) {
+	f := newFixture(t)
+	c := f.change()
+	g, _ := BuildGraph(c)
+	proto, _ := c.Leg("proto")
+	api, _ := c.Leg("api")
+	mergeSHA := run(t, proto.Dir(), "git", "rev-parse", "main")
+	f.mergedPR("proto", 1, mergeSHA)
+	f.commit(*proto, "more.txt", "unpushed after merge")
+
+	res := Pin(context.Background(), c, g, true, true)
+	if len(res) != 1 || res[0].Err != nil || res[0].Skipped != "" || !res[0].Merged || res[0].Rev != mergeSHA || !res[0].Pushed {
+		t.Fatalf("pin: %+v", res)
+	}
+	gomod, _ := os.ReadFile(filepath.Join(api.Dir(), "go.mod"))
+	if !strings.Contains(string(gomod), "// pinned example.com/proto@"+mergeSHA) {
+		t.Errorf("api go.mod not pinned to proto's merge commit:\n%s", gomod)
+	}
+	if msg := run(t, api.Dir(), "git", "log", "-1", "--format=%s"); !strings.HasPrefix(msg, "Pin example.com/proto to merged ") {
+		t.Errorf("pin commit message = %q", msg)
+	}
+	if run(t, api.Dir(), "git", "rev-parse", "HEAD") != run(t, api.Dir(), "git", "rev-parse", "@{u}") {
+		t.Error("pin commit was not pushed")
+	}
+}
+
+func TestPreflightToleratesFailingChecksUntilPinnedToMerge(t *testing.T) {
+	f := newFixture(t)
+	c := f.change()
+	g, _ := BuildGraph(c)
+	proto, _ := c.Leg("proto")
+	api, _ := c.Leg("api")
+	mergeSHA := run(t, proto.Dir(), "git", "rev-parse", "main")
+	f.mergedPR("proto", 1, mergeSHA)
+	f.pr("api", 2, "OPEN", "APPROVED", red)
+
+	problems := func() string {
+		var got []string
+		for _, tc := range TrainPreflight(context.Background(), c, g) {
+			got = append(got, strings.Join(tc.Problems, ", "))
+		}
+		return strings.Join(got, "|")
+	}
+	if got := problems(); got != "|" {
+		t.Errorf("api's failing CI should be tolerated before it is pinned to the merge: %q", got)
+	}
+
+	gomod := "module example.com/api\n\ngo 1.26\n\nrequire example.com/proto v0.0.0-20260929000000-" + mergeSHA[:12] + "\n"
+	write(t, filepath.Join(api.Dir(), "go.mod"), gomod, 0o644)
+	if got := problems(); got != "|failing checks: test" {
+		t.Errorf("once pinned to the merge, api's failing CI should block: %q", got)
+	}
+}
+
 func TestOffBranchLegsAreRefused(t *testing.T) {
 	f := newFixture(t)
 	c := f.change()
@@ -358,7 +419,7 @@ func TestOffBranchLegsAreRefused(t *testing.T) {
 	if _, err := RunChecks(context.Background(), c, api, nil); err == nil || !strings.Contains(err.Error(), "api is on main, not DEV-1") {
 		t.Errorf("checks off-branch: %v", err)
 	}
-	res := Pin(context.Background(), c, g, true)
+	res := Pin(context.Background(), c, g, true, false)
 	if len(res) != 1 || res[0].Err == nil || !strings.Contains(res[0].Err.Error(), "api is on main") {
 		t.Errorf("pin off-branch: %+v", res)
 	}

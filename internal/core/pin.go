@@ -12,6 +12,8 @@ import (
 	"github.com/jonezzyboy/tandem/internal/change"
 	"github.com/jonezzyboy/tandem/internal/gitx"
 	"github.com/jonezzyboy/tandem/internal/graph"
+	"golang.org/x/mod/modfile"
+	gomodule "golang.org/x/mod/module"
 )
 
 type PinResult struct {
@@ -19,8 +21,11 @@ type PinResult struct {
 	Downstream *change.Leg
 	Module     string
 	Rev        string
-	Changed    bool
-	Committed  bool
+	// Merged says Rev is the upstream PR's merge commit, not its branch head.
+	Merged    bool
+	Changed   bool
+	Committed bool
+	Pushed    bool
 	// Skipped says why nothing was attempted; Err is a failure while pinning.
 	Skipped string
 	Err     error
@@ -38,21 +43,27 @@ func goEdges(g Graph) []graph.Edge {
 	return out
 }
 
-// Pin points every downstream Go requirement at its upstream leg's pushed HEAD.
-// The upstream must be pushed first, since go get fetches the commit from its
-// origin. With commit, go.mod and go.sum are committed and nothing else is.
-func Pin(ctx context.Context, c *change.Change, g Graph, commit bool) []PinResult {
+type upstreamRev struct {
+	sha    string
+	merged bool
+	why    string
+}
+
+// Pin points every downstream Go requirement at its upstream leg: the merge
+// commit once the upstream PR has merged, otherwise its pushed HEAD, since go
+// get fetches the commit from origin. With commit, go.mod and go.sum are
+// committed and nothing else is; with push too, each downstream that gained a
+// commit is pushed.
+func Pin(ctx context.Context, c *change.Change, g Graph, commit, push bool) []PinResult {
 	edges := goEdges(g)
 	out := make([]PinResult, len(edges))
-	heads := map[string]string{}
-	headErr := map[string]string{}
+	revs := map[string]upstreamRev{}
 	for _, e := range edges {
-		if _, done := heads[e.From]; done {
+		if _, done := revs[e.From]; done {
 			continue
 		}
 		up, _ := c.Leg(e.From)
-		sha, why := pushedHead(ctx, c, up)
-		heads[e.From], headErr[e.From] = sha, why
+		revs[e.From] = resolveUpstream(ctx, c, up)
 	}
 
 	// Edges into the same downstream run in sequence: they may edit one go.mod.
@@ -60,7 +71,8 @@ func Pin(ctx context.Context, c *change.Change, g Graph, commit bool) []PinResul
 	for i, e := range edges {
 		up, _ := c.Leg(e.From)
 		down, _ := c.Leg(e.To)
-		out[i] = PinResult{Upstream: up, Downstream: down, Module: e.Via, Rev: heads[e.From], Skipped: headErr[e.From]}
+		r := revs[e.From]
+		out[i] = PinResult{Upstream: up, Downstream: down, Module: e.Via, Rev: r.sha, Merged: r.merged, Skipped: r.why}
 		if out[i].Skipped == "" {
 			byDown[e.To] = append(byDown[e.To], i)
 		}
@@ -68,16 +80,45 @@ func Pin(ctx context.Context, c *change.Change, g Graph, commit bool) []PinResul
 	var wg sync.WaitGroup
 	for _, idx := range byDown {
 		wg.Go(func() {
+			var committed []int
 			for _, i := range idx {
 				r := &out[i]
 				e := edges[i]
 				msg := fmt.Sprintf("Pin %s to %s", e.Via, short(r.Rev))
+				if r.Merged {
+					msg = fmt.Sprintf("Pin %s to merged %s", e.Via, short(r.Rev))
+				}
 				r.Changed, r.Committed, r.Err = PinTo(ctx, c, r.Downstream, e.Dir, e.Via, r.Rev, commit, msg)
+				if r.Committed {
+					committed = append(committed, i)
+				}
+			}
+			if !push || len(committed) == 0 {
+				return
+			}
+			err := pushBranch(ctx, c, out[committed[0]].Downstream, false)
+			for _, i := range committed {
+				if err != nil {
+					out[i].Err = fmt.Errorf("committed the pin but %w", err)
+				} else {
+					out[i].Pushed = true
+				}
 			}
 		})
 	}
 	wg.Wait()
 	return out
+}
+
+func resolveUpstream(ctx context.Context, c *change.Change, l *change.Leg) upstreamRev {
+	if pr, err := ViewPR(ctx, c, l); err == nil && pr != nil && pr.State == "MERGED" {
+		if sha := pr.MergeSHA(); sha != "" {
+			return upstreamRev{sha: sha, merged: true}
+		}
+		return upstreamRev{why: fmt.Sprintf("%s merged but GitHub reported no merge commit to pin to", l.Name())}
+	}
+	sha, why := pushedHead(ctx, c, l)
+	return upstreamRev{sha: sha, why: why}
 }
 
 // pushedHead is the tip of the upstream's branch (checked out or not), provided
@@ -98,6 +139,28 @@ func pushedHead(ctx context.Context, c *change.Change, l *change.Leg) (string, s
 		return "", fmt.Sprintf("%s has commits that are not pushed: publish it first", l.Name())
 	}
 	return head, ""
+}
+
+// pinnedTo reports whether the go.mod in dir (relative to the leg's working
+// tree) requires module at a pseudo-version of rev.
+func pinnedTo(l *change.Leg, dir, module, rev string) bool {
+	path := filepath.Join(l.Dir(), dir, "go.mod")
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return false
+	}
+	f, err := modfile.ParseLax(path, data, nil)
+	if err != nil {
+		return false
+	}
+	for _, r := range f.Require {
+		if r.Mod.Path != module || !gomodule.IsPseudoVersion(r.Mod.Version) {
+			continue
+		}
+		v, err := gomodule.PseudoVersionRev(r.Mod.Version)
+		return err == nil && strings.HasPrefix(rev, v)
+	}
+	return false
 }
 
 // PinTo runs go get module@rev in dir (relative to the leg's repo), which must

@@ -193,7 +193,7 @@ changes picks the one it has checked out.
 | `td sync [ID]` | Fetch every repo and rebase the clean ones onto their base. |
 | `td pr [ID] [--title] [--body \| --body-file] [--draft] [--ready] [--reviewer a,b] [--dry-run]` | Push, open or update PRs, refresh the Related PRs section in all of them, and with `--ready` take drafts out of draft. |
 | `td link` / `td unlink [ID] <upstream> <downstream>` | Declare or remove a merge-order edge. |
-| `td pin [ID] [--no-commit]` | Point downstream Go repos at their upstream's pushed commit. |
+| `td pin [ID] [--no-commit] [--no-push]` | Point downstream Go repos at their upstream's merge commit, or its pushed commit before it merges, and push. |
 | `td merge [ID] [--method squash\|merge\|rebase] [--dry-run] [--yes]` | Run the merge train. |
 | `td clean [--yes]` | Switch landed changes back to base and delete their branches. |
 | `td path [ID] [repo]`, `td list`, `td version` | Where a repo is, every change, the version. |
@@ -206,7 +206,8 @@ terminal to ask on.
 
 **Preflight.** It checks every PR first. Drafts, missing approvals and failing
 checks stop the train before anything merges. Failing CI is tolerated on a repo
-the train will re-pin, since the pin is often the fix.
+the train will re-pin (its upstream is unmerged, or merged but not yet pinned to
+the merge commit), since the pin is often the fix.
 
 **Then, level by level:**
 
@@ -220,9 +221,12 @@ the train will re-pin, since the pin is often the fix.
 merged, and the next `td merge` skips them and carries on. Composer and npm
 dependencies order the train but aren't re-pinned.
 
-**Pinning on its own.** `td pin` does step 2 without merging, against the
-upstream's pushed branch (`td pr` pushes it). Private modules need `GOPRIVATE`
-set as usual.
+**Pinning on its own.** `td pin` does step 2 without merging. It pins to the
+upstream's merge commit once its PR has merged, otherwise to its pushed branch
+(`td pr` pushes it), then pushes the downstream so reviewers see the final
+`go.mod`. Merging an upstream on its own and re-pinning lets the downstream PRs
+be approved before the train runs. Private modules need `GOPRIVATE` set as
+usual.
 
 </details>
 

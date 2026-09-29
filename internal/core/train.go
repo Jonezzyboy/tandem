@@ -65,20 +65,26 @@ type TrainCheck struct {
 }
 
 // TrainPreflight reports, per leg in merge order, what would stop a train.
-// Failing checks are tolerated on legs the train will re-pin, since the pin
-// is often what fixes them.
+// Failing checks are tolerated on legs the train will re-pin (an upstream is
+// unmerged, or merged but not yet pinned), since the pin is often the fix.
 func TrainPreflight(ctx context.Context, c *change.Change, g Graph) []TrainCheck {
 	states := Snapshot(ctx, c, true)
 	SortByLevel(states, g.Levels)
 	merged := map[string]bool{}
+	mergedSHA := map[string]string{}
 	for _, s := range states {
 		if s.PR != nil && s.PR.State == "MERGED" {
 			merged[s.Leg.Repo] = true
+			mergedSHA[s.Leg.Repo] = s.PR.MergeSHA()
 		}
 	}
 	repinned := map[string]bool{}
 	for _, e := range goEdges(g) {
 		if !merged[e.From] {
+			repinned[e.To] = true
+			continue
+		}
+		if down, err := c.Leg(e.To); err == nil && !pinnedTo(down, e.Dir, e.Via, mergedSHA[e.From]) {
 			repinned[e.To] = true
 		}
 	}
@@ -210,7 +216,7 @@ func pinLevel(ctx context.Context, c *change.Change, g Graph, lvl int, mergedSHA
 			continue
 		}
 		if committed {
-			if _, err := gitx.Run(ctx, down.Dir(), "push", "--quiet", "origin", c.Branch); err != nil {
+			if err := pushBranch(ctx, c, down, false); err != nil {
 				return fmt.Errorf("%s: pinned %s but the push failed: %w", down.Name(), e.Via, err)
 			}
 			head, err := gitx.Run(ctx, down.Dir(), "rev-parse", "refs/heads/"+c.Branch)
