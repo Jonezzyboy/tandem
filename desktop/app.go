@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -174,7 +175,8 @@ func (a *App) refresh(id string, remote bool) {
 		return
 	}
 	defer a.end(key)
-	if _, err := a.buildView(id, remote); err != nil {
+	// A change cleaned while a refresh was queued is simply gone.
+	if _, err := a.buildView(id, remote); err != nil && !errors.Is(err, fs.ErrNotExist) {
 		a.emit("error", err.Error())
 	}
 }
