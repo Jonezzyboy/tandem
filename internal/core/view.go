@@ -36,22 +36,24 @@ type EdgeView struct {
 }
 
 type LegView struct {
-	Repo       string   `json:"repo"`
-	Name       string   `json:"name"`
-	Dir        string   `json:"dir"`
-	Lang       string   `json:"lang"`
-	Current    string   `json:"current"`
-	OnBranch   bool     `json:"onBranch"`
-	Base       string   `json:"base"`
-	BaseRef    string   `json:"baseRef"`
-	Level      int      `json:"level"`
-	Ahead      int      `json:"ahead"`
-	Behind     int      `json:"behind"`
-	Dirty      int      `json:"dirty"`
-	LocalError string   `json:"localError,omitempty"`
-	PR         *PRView  `json:"pr"`
-	PRError    string   `json:"prError,omitempty"`
-	Blockers   []string `json:"blockers"`
+	Repo       string  `json:"repo"`
+	Name       string  `json:"name"`
+	Dir        string  `json:"dir"`
+	Lang       string  `json:"lang"`
+	Current    string  `json:"current"`
+	OnBranch   bool    `json:"onBranch"`
+	Base       string  `json:"base"`
+	BaseRef    string  `json:"baseRef"`
+	Level      int     `json:"level"`
+	Ahead      int     `json:"ahead"`
+	Behind     int     `json:"behind"`
+	Dirty      int     `json:"dirty"`
+	LocalError string  `json:"localError,omitempty"`
+	PR         *PRView `json:"pr"`
+	PRError    string  `json:"prError,omitempty"`
+	// Pins are Go requirements on merged upstream legs still to commit here.
+	Pins     []PinView `json:"pins,omitempty"`
+	Blockers []string  `json:"blockers"`
 }
 
 type PRView struct {
@@ -64,6 +66,8 @@ type PRView struct {
 	Fail    int      `json:"fail"`
 	Pending int      `json:"pending"`
 	Failing []string `json:"failing"`
+	// MergeSHA is the commit the PR landed as, once merged.
+	MergeSHA string `json:"mergeSha,omitempty"`
 }
 
 func NewPRView(pr *gh.PR) *PRView {
@@ -73,7 +77,7 @@ func NewPRView(pr *gh.PR) *PRView {
 	r := pr.Rollup()
 	return &PRView{
 		Number: pr.Number, URL: pr.URL, State: pr.State, Draft: pr.IsDraft, Review: pr.ReviewDecision,
-		Pass: r.Pass, Fail: r.Fail, Pending: r.Pending, Failing: r.Failing,
+		Pass: r.Pass, Fail: r.Fail, Pending: r.Pending, Failing: r.Failing, MergeSHA: pr.MergeSHA(),
 	}
 }
 

@@ -28,6 +28,8 @@
   const trainRunning = $derived(app.trains[id]?.running ?? false)
 
   const offBranch = $derived((view?.legs ?? []).filter((l) => !l.onBranch))
+  const pinLegs = $derived((view?.legs ?? []).filter((l) => l.pins?.length))
+  const mergedUpstreams = $derived([...new Set(pinLegs.flatMap((l) => l.pins!.map((p) => p.upstream)))])
   const unpublished = $derived((view?.legs ?? []).some((l) => !l.pr || l.pr.draft))
   const switching = $derived(switchingIds[id] ?? false)
   const switchTo = (toBase: boolean) => checkOut(id, toBase)
@@ -52,6 +54,7 @@
 
   let syncing = $state(false)
   let pinning = $state(false)
+  let committingPins = $state(false)
   let checking = $state<string | null>(null)
   let now = $state(Date.now())
   const tick = setInterval(() => (now = Date.now()), 1000)
@@ -122,6 +125,25 @@
     } finally {
       pinning = false
     }
+  }
+
+  async function commitPins() {
+    committingPins = true
+    try {
+      const results = await api.commitPins(id)
+      for (const r of results) log(id, `${r.leg}: ${r.message}`, r.ok ? 'ok' : 'warn')
+    } catch (e) {
+      fail(e)
+    } finally {
+      committingPins = false
+    }
+  }
+
+  function pinState(l: LegView, p: NonNullable<LegView['pins']>[number]): { text: string; warn: boolean } {
+    if (p.applied) return { text: 'updated, uncommitted', warn: false }
+    if (p.error) return { text: p.error, warn: true }
+    if (!l.onBranch) return { text: `repo is on ${l.current || 'a detached HEAD'}`, warn: true }
+    return { text: 'go.mod has other uncommitted edits: commit or discard them', warn: true }
   }
 
   async function runChecks(leg = '') {
@@ -227,6 +249,27 @@
       </div>
     {/if}
 
+    {#if pinLegs.length > 0}
+      <div class="pin-banner">
+        <Icon name="sync" />
+        <div class="grow-text">
+          <div><span class="mono">{mergedUpstreams.join(', ')}</span> merged. Downstream go.mod now points at the merge commit; commit and push it so those PRs can be reviewed and tested:</div>
+          {#each pinLegs as l (l.repo)}
+            {#each l.pins! as p (p.dir + p.module)}
+              {@const st = pinState(l, p)}
+              <div class="pin-line mono small">
+                {l.name} ← {p.module}@{p.rev.slice(0, 12)}
+                <span class:warn={st.warn} class:muted={!st.warn}>· {st.text}</span>
+              </div>
+            {/each}
+          {/each}
+        </div>
+        <button class="btn small primary" disabled={committingPins} onclick={commitPins}>
+          <Icon name="send" size={14} spin={committingPins} />Commit & push
+        </button>
+      </div>
+    {/if}
+
     {#if view.graphError}
       <div class="banner warn">{view.graphError}</div>
     {/if}
@@ -245,7 +288,7 @@
         <Icon name="branch" size={14} />Edit order
       </button>
       {#if goEdges > 0}
-        <button class="btn small" onclick={pin} disabled={pinning} title="Point downstream Go legs at their upstream leg's pushed commit, and commit go.mod/go.sum">
+        <button class="btn small" onclick={pin} disabled={pinning} title="Point downstream Go legs at their upstream leg's merge commit (or pushed commit before it merges), then commit and push go.mod/go.sum">
           <Icon name="sync" size={14} spin={pinning} />Re-pin
         </button>
       {/if}
@@ -387,6 +430,11 @@
     background: var(--warn-row); border: 1px solid var(--warn-border); color: var(--warn-text); font-size: 13px;
   }
   .grow-text { flex: 1; line-height: 1.45; }
+  .pin-banner {
+    display: flex; align-items: center; gap: 12px; padding: 10px 12px 10px 14px; border-radius: 10px;
+    background: var(--ok-bg); border: 1px solid var(--ok-border); font-size: 13px;
+  }
+  .pin-line { margin-top: 3px; }
   .banner { padding: 10px 14px; border-radius: 10px; background: var(--warn-bg); border: 1px solid var(--warn-border); font-size: 13px; }
 
   .order {
@@ -424,8 +472,9 @@
   .tools { display: flex; justify-content: flex-end; gap: 2px; }
   .tools :global(.icon-btn:disabled) { opacity: 0.4; }
 
-  .panels { display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 16px; flex: 1; min-height: 220px; }
-  .panel { padding: 16px 18px; border-radius: 12px; border: 1px solid var(--line); display: flex; flex-direction: column; gap: 10px; overflow: auto; max-height: 440px; }
+  /* The panels take the window's leftover height and scroll inside it. */
+  .panels { display: grid; grid-template-columns: minmax(0, 1fr) 360px; grid-template-rows: minmax(0, 1fr); gap: 16px; flex: 1 1 0; min-height: 320px; }
+  .panel { padding: 16px 18px; border-radius: 12px; border: 1px solid var(--line); display: flex; flex-direction: column; gap: 10px; overflow: auto; }
   .panel > * { flex-shrink: 0; }
   .output { background: var(--nav); }
   .activity { background: var(--panel); }

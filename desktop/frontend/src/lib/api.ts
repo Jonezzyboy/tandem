@@ -29,6 +29,7 @@ export const api = {
   unlink: (id: string, up: string, down: string) => App.Unlink(id, up, down),
   switchTo: (id: string, toBase = false) => App.Switch(id, toBase) as unknown as Promise<LegResult[]>,
   pin: (id: string) => App.Pin(id) as unknown as Promise<PinItem[]>,
+  commitPins: (id: string) => App.CommitPins(id) as unknown as Promise<LegResult[]>,
   trainPlan: (id: string) => App.TrainPlan(id) as unknown as Promise<TrainPlan>,
   startTrain: (id: string, method: string) => App.StartTrain(id, method),
   cancelTrain: (id: string) => App.CancelTrain(id),

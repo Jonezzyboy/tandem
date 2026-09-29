@@ -107,6 +107,7 @@ export function init() {
   on<Inbox>('inbox', (i) => { app.inbox = i })
   on<CheckEvent>('check', recordCheck)
   on<TrainEvent>('train', recordTrain)
+  on<{ change: string; text: string; tone: Activity['tone'] }>('activity', (a) => log(a.change, a.text, a.tone))
   on<string>('error', (e) => { app.error = e })
   window.addEventListener('focus', () => api.focus(currentId()))
 }

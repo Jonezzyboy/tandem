@@ -141,13 +141,26 @@ func pushedHead(ctx context.Context, c *change.Change, l *change.Leg) (string, s
 	return head, ""
 }
 
-// pinnedTo reports whether the go.mod in dir (relative to the leg's working
-// tree) requires module at a pseudo-version of rev.
-func pinnedTo(l *change.Leg, dir, module, rev string) bool {
-	path := filepath.Join(l.Dir(), dir, "go.mod")
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return false
+func manifestFiles(dir string) []string {
+	return []string{filepath.Join(dir, "go.mod"), filepath.Join(dir, "go.sum")}
+}
+
+// pinnedTo reports whether the leg's go.mod in dir requires module at a
+// pseudo-version of rev: in HEAD with head, else in the working tree.
+func pinnedTo(ctx context.Context, l *change.Leg, dir, module, rev string, head bool) bool {
+	path := filepath.Join(dir, "go.mod")
+	var data []byte
+	if head {
+		out, err := gitx.Run(ctx, l.Dir(), "show", "HEAD:"+filepath.ToSlash(filepath.Clean(path)))
+		if err != nil {
+			return false
+		}
+		data = []byte(out)
+	} else {
+		var err error
+		if data, err = os.ReadFile(filepath.Join(l.Dir(), path)); err != nil {
+			return false
+		}
 	}
 	f, err := modfile.ParseLax(path, data, nil)
 	if err != nil {
@@ -158,9 +171,116 @@ func pinnedTo(l *change.Leg, dir, module, rev string) bool {
 			continue
 		}
 		v, err := gomodule.PseudoVersionRev(r.Mod.Version)
-		return err == nil && strings.HasPrefix(rev, v)
+		return err == nil && v != "" && strings.HasPrefix(rev, v)
 	}
 	return false
+}
+
+// PinView is a Go requirement of an open downstream leg on an upstream leg
+// whose PR has merged, while the downstream's HEAD isn't at the merge commit.
+type PinView struct {
+	Module   string `json:"module"`
+	Upstream string `json:"upstream"`
+	Dir      string `json:"dir"`
+	Rev      string `json:"rev"`
+	// Applied means the working tree is already at Rev, waiting to be committed.
+	Applied bool   `json:"applied"`
+	Error   string `json:"error,omitempty"`
+}
+
+// MergedPins fills each open leg's Pins from the merge commits the view's PRs
+// report.
+func MergedPins(ctx context.Context, c *change.Change, g Graph, v *ChangeView) {
+	idx := map[string]int{}
+	for i := range v.Legs {
+		idx[v.Legs[i].Repo] = i
+		v.Legs[i].Pins = nil
+	}
+	for _, e := range goEdges(g) {
+		ui, uok := idx[e.From]
+		di, dok := idx[e.To]
+		if !uok || !dok {
+			continue
+		}
+		up, down := &v.Legs[ui], &v.Legs[di]
+		if up.PR == nil || up.PR.MergeSHA == "" || down.PR == nil || down.PR.State != "OPEN" {
+			continue
+		}
+		l, err := c.Leg(e.To)
+		if err != nil || pinnedTo(ctx, l, e.Dir, e.Via, up.PR.MergeSHA, true) {
+			continue
+		}
+		down.Pins = append(down.Pins, PinView{
+			Module: e.Via, Upstream: up.Name, Dir: e.Dir, Rev: up.PR.MergeSHA,
+			Applied: pinnedTo(ctx, l, e.Dir, e.Via, up.PR.MergeSHA, false),
+		})
+	}
+}
+
+// ManifestsClean reports whether go.mod and go.sum in dir have no uncommitted
+// changes, so a go get there touches nothing but its own edit.
+func ManifestsClean(ctx context.Context, l *change.Leg, dir string) bool {
+	out, err := gitx.Run(ctx, l.Dir(), append([]string{"status", "--porcelain", "--"}, manifestFiles(dir)...)...)
+	return err == nil && out == ""
+}
+
+// CommitPins applies any of pins not yet in the working tree, commits go.mod
+// and go.sum for all of them and pushes the leg.
+func CommitPins(ctx context.Context, c *change.Change, l *change.Leg, pins []PinView) error {
+	if err := requireBranch(ctx, c, l); err != nil {
+		return err
+	}
+	var dirs, msgs []string
+	for _, p := range pins {
+		if !p.Applied {
+			if !ManifestsClean(ctx, l, p.Dir) {
+				return fmt.Errorf("%s has other uncommitted go.mod/go.sum changes: commit or discard them first", l.Name())
+			}
+			if _, _, err := PinTo(ctx, c, l, p.Dir, p.Module, p.Rev, false, ""); err != nil {
+				return err
+			}
+		}
+		dirs = append(dirs, p.Dir)
+		msgs = append(msgs, fmt.Sprintf("Pin %s to merged %s", p.Module, short(p.Rev)))
+	}
+	committed, err := commitManifests(ctx, l.Dir(), dirs, strings.Join(msgs, "; "))
+	if err != nil {
+		return err
+	}
+	if !committed {
+		return fmt.Errorf("%s: go.mod and go.sum have nothing to commit", l.Name())
+	}
+	if err := pushBranch(ctx, c, l, false); err != nil {
+		return fmt.Errorf("committed the pin but %w", err)
+	}
+	return nil
+}
+
+// commitManifests commits go.mod and go.sum in dirs and nothing else,
+// reporting whether there was anything to commit.
+func commitManifests(ctx context.Context, root string, dirs []string, message string) (bool, error) {
+	var present []string
+	for _, d := range dirs {
+		for _, f := range manifestFiles(d) {
+			if _, err := os.Stat(filepath.Join(root, f)); err == nil {
+				present = append(present, f)
+			}
+		}
+	}
+	if len(present) == 0 {
+		return false, nil
+	}
+	if _, err := gitx.Run(ctx, root, append([]string{"add", "--"}, present...)...); err != nil {
+		return false, err
+	}
+	staged, err := gitx.Run(ctx, root, append([]string{"diff", "--cached", "--name-only", "--"}, present...)...)
+	if err != nil || staged == "" {
+		return false, err
+	}
+	if _, err := gitx.Run(ctx, root, append([]string{"commit", "--quiet", "-m", message, "--"}, present...)...); err != nil {
+		return false, err
+	}
+	return true, nil
 }
 
 // PinTo runs go get module@rev in dir (relative to the leg's repo), which must
@@ -171,22 +291,15 @@ func PinTo(ctx context.Context, c *change.Change, l *change.Leg, dir, module, re
 		return false, false, err
 	}
 	root := l.Dir()
-	abs := filepath.Join(root, dir)
-	files := []string{filepath.Join(dir, "go.mod"), filepath.Join(dir, "go.sum")}
-	if commit {
-		out, err := gitx.Run(ctx, root, append([]string{"status", "--porcelain", "--"}, files...)...)
-		if err != nil {
-			return false, false, err
-		}
-		if out != "" {
-			return false, false, fmt.Errorf("%s has uncommitted go.mod/go.sum changes: commit or discard them first", l.Name())
-		}
+	files := manifestFiles(dir)
+	if commit && !ManifestsClean(ctx, l, dir) {
+		return false, false, fmt.Errorf("%s has uncommitted go.mod/go.sum changes: commit or discard them first", l.Name())
 	}
 	cmd := exec.CommandContext(ctx, "go", "get", module+"@"+rev)
-	cmd.Dir = abs
+	cmd.Dir = filepath.Join(root, dir)
 	cmd.Env = append(os.Environ(), "GOFLAGS=-mod=mod")
 	if out, err := cmd.CombinedOutput(); err != nil {
-		return false, false, fmt.Errorf("go get %s@%s: %s", module, short(rev), strings.TrimSpace(string(out)))
+		return false, false, fmt.Errorf("go get %s@%s: %s", module, short(rev), goError(string(out)))
 	}
 	diff, err := gitx.Run(ctx, root, append([]string{"status", "--porcelain", "--"}, files...)...)
 	if err != nil || diff == "" {
@@ -195,19 +308,25 @@ func PinTo(ctx context.Context, c *change.Change, l *change.Leg, dir, module, re
 	if !commit {
 		return true, false, nil
 	}
-	var present []string
-	for _, f := range files {
-		if _, err := os.Stat(filepath.Join(root, f)); err == nil {
-			present = append(present, f)
+	committed, err := commitManifests(ctx, root, []string{dir}, message)
+	return true, committed, err
+}
+
+// goError is go's output without its progress lines, on one line: callers
+// show only the first line, and "go: downloading" would hide the failure.
+func goError(out string) string {
+	var keep []string
+	for _, line := range strings.Split(out, "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "go: downloading ") || strings.HasPrefix(line, "go: finding ") || strings.HasPrefix(line, "go: extracting ") {
+			continue
 		}
+		keep = append(keep, line)
 	}
-	if _, err := gitx.Run(ctx, root, append([]string{"add", "--"}, present...)...); err != nil {
-		return true, false, err
+	if len(keep) == 0 {
+		return strings.TrimSpace(out)
 	}
-	if _, err := gitx.Run(ctx, root, append([]string{"commit", "--quiet", "-m", message, "--"}, present...)...); err != nil {
-		return true, false, err
-	}
-	return true, true, nil
+	return strings.Join(keep, "; ")
 }
 
 func short(sha string) string {

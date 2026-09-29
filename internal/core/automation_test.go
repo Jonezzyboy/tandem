@@ -31,10 +31,13 @@ case "$1 $2" in
 esac
 `
 
-// fakeGo records go get by appending a comment to go.mod, standing in for the
-// module fetch a real pin needs.
+// fakeGo stands in for the module fetch a real pin needs: go get mod@rev
+// requires mod at a pseudo-version of rev and records the call as a comment.
 const fakeGo = `#!/bin/sh
 [ "$1" = get ] || { echo "unexpected go $*" >&2; exit 1; }
+mod=${2%@*}
+rev=$(echo "${2#*@}" | cut -c1-12)
+sed "s#^require $mod .*#require $mod v0.0.0-20260101000000-$rev#" go.mod > go.mod.tmp && mv go.mod.tmp go.mod
 echo "// pinned $2" >> go.mod
 `
 
@@ -404,8 +407,92 @@ func TestPreflightToleratesFailingChecksUntilPinnedToMerge(t *testing.T) {
 
 	gomod := "module example.com/api\n\ngo 1.26\n\nrequire example.com/proto v0.0.0-20260929000000-" + mergeSHA[:12] + "\n"
 	write(t, filepath.Join(api.Dir(), "go.mod"), gomod, 0o644)
+	if got := problems(); !strings.Contains(got, "go.mod updated to the merged example.com/proto but not committed") {
+		t.Errorf("an uncommitted pin should block: %q", got)
+	}
+	run(t, api.Dir(), "git", "commit", "--quiet", "-am", "pin")
 	if got := problems(); got != "|failing checks: test" {
 		t.Errorf("once pinned to the merge, api's failing CI should block: %q", got)
+	}
+}
+
+func TestMergedUpstreamPinIsAppliedThenCommitted(t *testing.T) {
+	f := newFixture(t)
+	c := f.change()
+	g, _ := BuildGraph(c)
+	proto, _ := c.Leg("proto")
+	api, _ := c.Leg("api")
+	mergeSHA := run(t, proto.Dir(), "git", "rev-parse", "main")
+	f.mergedPR("proto", 1, mergeSHA)
+	f.pr("api", 2, "OPEN", "APPROVED", green)
+	ctx := context.Background()
+
+	pins := func() []PinView {
+		v := BuildView(c, g, nil, Snapshot(ctx, c, true), true)
+		MergedPins(ctx, c, g, &v)
+		for _, l := range v.Legs {
+			if l.Repo == "acme/api" {
+				return l.Pins
+			}
+			if len(l.Pins) > 0 {
+				t.Errorf("%s: unexpected pins %+v", l.Repo, l.Pins)
+			}
+		}
+		return nil
+	}
+	p := pins()
+	if len(p) != 1 || p[0].Applied || p[0].Rev != mergeSHA || p[0].Module != "example.com/proto" || p[0].Upstream != "proto" {
+		t.Fatalf("before go get: %+v", p)
+	}
+
+	if changed, committed, err := PinTo(ctx, c, api, p[0].Dir, p[0].Module, p[0].Rev, false, ""); err != nil || !changed || committed {
+		t.Fatalf("go get: changed=%v committed=%v err=%v", changed, committed, err)
+	}
+	if p = pins(); len(p) != 1 || !p[0].Applied {
+		t.Fatalf("after go get: %+v", p)
+	}
+
+	if err := CommitPins(ctx, c, api, p); err != nil {
+		t.Fatal(err)
+	}
+	if msg := run(t, api.Dir(), "git", "log", "-1", "--format=%s"); msg != "Pin example.com/proto to merged "+mergeSHA[:12] {
+		t.Errorf("commit message = %q", msg)
+	}
+	if run(t, api.Dir(), "git", "rev-parse", "HEAD") != run(t, api.Dir(), "git", "rev-parse", "@{u}") {
+		t.Error("pin commit was not pushed")
+	}
+	if out := run(t, api.Dir(), "git", "status", "--porcelain"); out != "" {
+		t.Errorf("left changes: %q", out)
+	}
+	if p = pins(); len(p) != 0 {
+		t.Errorf("after commit: %+v", p)
+	}
+	for _, tc := range TrainPreflight(ctx, c, g) {
+		if len(tc.Problems) > 0 {
+			t.Errorf("preflight: %s: %v", tc.Leg.Name(), tc.Problems)
+		}
+	}
+}
+
+func TestCommitPinsRefusesOtherGoModEdits(t *testing.T) {
+	f := newFixture(t)
+	c := f.change()
+	proto, _ := c.Leg("proto")
+	api, _ := c.Leg("api")
+	mergeSHA := run(t, proto.Dir(), "git", "rev-parse", "main")
+	write(t, filepath.Join(api.Dir(), "go.mod"), "module example.com/api\n\ngo 1.26\n\nrequire example.com/proto v1.0.0\n// mine\n", 0o644)
+
+	err := CommitPins(context.Background(), c, api, []PinView{{Module: "example.com/proto", Dir: ".", Rev: mergeSHA}})
+	if err == nil || !strings.Contains(err.Error(), "other uncommitted go.mod/go.sum changes") {
+		t.Errorf("err = %v", err)
+	}
+}
+
+func TestGoErrorDropsProgressLines(t *testing.T) {
+	out := "go: downloading github.com/acme/pkg v0.0.0-20260929150721-1bdce5128ac8\ngo: github.com/acme/pkg@v0.0.0-20260929150721-1bdce5128ac8: verifying module: checksum mismatch\n\tdownloaded: h1:abc\n"
+	want := "go: github.com/acme/pkg@v0.0.0-20260929150721-1bdce5128ac8: verifying module: checksum mismatch; downloaded: h1:abc"
+	if got := goError(out); got != want {
+		t.Errorf("goError = %q, want %q", got, want)
 	}
 }
 
