@@ -103,7 +103,7 @@
       {:else}
         {#each run.events as ev, i (i)}
           {@const current = running && i === run.events.length - 1}
-          <div class="event" class:past={!current && (ev.phase === 'waiting' || ev.phase === 'merging')}>
+          <div class="event" class:past={!current && (ev.phase === 'waiting' || ev.phase === 'merging' || ev.phase === 'retrying')}>
             {#if ev.phase === 'done' || ev.phase === 'merged' || ev.phase === 'pinned'}<Icon name="check" color="var(--ok)" />
             {:else if current}<Icon name="running" spin />
             {:else}<Icon name="clock" color="var(--muted)" />{/if}

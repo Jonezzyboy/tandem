@@ -194,7 +194,7 @@ changes picks the one it has checked out.
 | `td pr [ID] [--title] [--body \| --body-file] [--draft] [--ready] [--reviewer a,b] [--dry-run]` | Push, open or update PRs, refresh the Related PRs section in all of them, and with `--ready` take drafts out of draft. |
 | `td link` / `td unlink [ID] <upstream> <downstream>` | Declare or remove a merge-order edge. |
 | `td pin [ID] [--no-commit] [--no-push]` | Point downstream Go repos at their upstream's merge commit, or its pushed commit before it merges, and push. |
-| `td merge [ID] [--method squash\|merge\|rebase] [--dry-run] [--yes]` | Run the merge train. |
+| `td merge [ID] [--method squash\|merge\|rebase] [--triage MODEL] [--dry-run] [--yes]` | Run the merge train. |
 | `td clean [--yes]` | Switch landed changes back to base and delete their branches. |
 | `td path [ID] [repo]`, `td list`, `td version` | Where a repo is, every change, the version. |
 
@@ -220,6 +220,16 @@ the merge commit), since the pin is often the fix.
 **Stopping part-way.** Ctrl-C, a red check or a timeout leaves merged repos
 merged, and the next `td merge` skips them and carries on. Composer and npm
 dependencies order the train but aren't re-pinned.
+
+**Rerunning flaky CI.** With triage on (Settings, or `td merge --triage nimble`
+or `TANDEM_TRIAGE_MODEL`), a red check doesn't stop the train straight away. A
+local [Ollama](https://ollama.com) decision model such as
+[nimble](https://ollama.com/library/nimble) reads each failed GitHub Actions
+job's log and calls it flaky, infra, broken by the pin, or a real regression.
+If every failure on the repo is flaky or infra with at least the set confidence
+(85% by default), the failed jobs are rerun, once per repo by default. Any other
+verdict stops the train as before, with the verdict in the error. The CLI finds
+the server at `$OLLAMA_HOST`, else `localhost:11434`.
 
 **Pinning on its own.** `td pin` does step 2 without merging. It pins to the
 upstream's merge commit once its PR has merged, otherwise to its pushed branch
@@ -285,6 +295,9 @@ covers:
 - **Keyboard shortcuts:** click **Change** and press the new keys.
 - **Editors:** which app opens each language.
 - **Defaults:** the merge method, and whether new PRs open as drafts.
+- **Merge train triage:** the local model that decides whether a red check is
+  flaky and worth rerunning, with **Test connection** to check it's pulled and
+  answering.
 
 **Open in editor** picks by the repo's manifest (`go.mod` is Go, `composer.json`
 is PHP, `package.json` is JS/TS, with root files winning over subfolders). It

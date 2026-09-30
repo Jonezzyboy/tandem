@@ -1,8 +1,10 @@
 <script lang="ts">
   import { onDestroy, untrack } from 'svelte'
   import {
-    actions, keycaps, languages, prefs, problem, saveSettings, shortcutFor, shortcutFromEvent, themes, type ThemeId,
+    actions, keycaps, languages, prefs, problem, saveSettings, shortcutFor, shortcutFromEvent, themes, type ThemeId, type TriageSettings,
   } from '@lib/settings.svelte'
+  import * as App from '@wailsjs/go/main/App'
+  import { errorText } from '@lib/api'
   import Avatar from './Avatar.svelte'
   import Kbd from './Kbd.svelte'
 
@@ -24,6 +26,23 @@
     await saveSettings({ editors: { ...prefs.settings.editors, [lang]: choice } })
     savedLang = lang
     setTimeout(() => (savedLang = ''), 1600)
+  }
+
+  let triageTest = $state<{ running: boolean, ok: boolean, text: string }>({ running: false, ok: false, text: '' })
+
+  function saveTriage(next: Partial<TriageSettings>) {
+    triageTest = { running: false, ok: false, text: '' }
+    saveSettings({ triage: { ...prefs.settings.triage, ...next } })
+  }
+
+  async function testTriage() {
+    // A cold model loads into memory first, which can take several seconds.
+    triageTest = { running: true, ok: false, text: 'Testing…' }
+    try {
+      triageTest = { running: false, ok: true, text: await App.TestTriage(prefs.settings.triage as never) }
+    } catch (e) {
+      triageTest = { running: false, ok: false, text: errorText(e) }
+    }
   }
 
   function onPick(lang: string, value: string) {
@@ -233,6 +252,43 @@
     </div>
   </section>
 
+  <section aria-labelledby="s-triage">
+    <h2 id="s-triage">Merge train triage</h2>
+    <div class="card general">
+      <label class="choice">
+        <input type="checkbox" checked={prefs.settings.triage.enabled} onchange={(e) => saveTriage({ enabled: e.currentTarget.checked })} />
+        When a leg's CI fails, ask a local model whether it's flaky and rerun it if so
+      </label>
+      <label class="setting">
+        <span class="muted">Ollama model</span>
+        <input class="input mono" placeholder="nimble" value={prefs.settings.triage.model}
+          disabled={!prefs.settings.triage.enabled} onchange={(e) => saveTriage({ model: e.currentTarget.value })} />
+      </label>
+      <label class="setting">
+        <span class="muted">Ollama server</span>
+        <input class="input mono" placeholder="http://localhost:11434" value={prefs.settings.triage.url}
+          disabled={!prefs.settings.triage.enabled} onchange={(e) => saveTriage({ url: e.currentTarget.value })} />
+      </label>
+      <label class="setting">
+        <span class="muted">Rerun only when at least this sure</span>
+        <input class="input mono" type="number" min="0.5" max="1" step="0.05" value={prefs.settings.triage.minConfidence}
+          disabled={!prefs.settings.triage.enabled} onchange={(e) => saveTriage({ minConfidence: e.currentTarget.valueAsNumber })} />
+      </label>
+      <label class="setting">
+        <span class="muted">Reruns per leg</span>
+        <input class="input mono" type="number" min="1" max="3" step="1" value={prefs.settings.triage.retries}
+          disabled={!prefs.settings.triage.enabled} onchange={(e) => saveTriage({ retries: e.currentTarget.valueAsNumber })} />
+      </label>
+      <div class="triage-test">
+        <button class="btn small" disabled={!prefs.settings.triage.enabled || triageTest.running} onclick={testTriage}>Test connection</button>
+        {#if triageTest.text}
+          <span class="small" class:ok={triageTest.ok} class:warn={!triageTest.ok && !triageTest.running} class:muted={triageTest.running}
+            role="status">{triageTest.text}</span>
+        {/if}
+      </div>
+    </div>
+  </section>
+
   <section aria-labelledby="s-about">
     <h2 id="s-about">About</h2>
     <div class="card about">
@@ -300,6 +356,9 @@
   fieldset.field { border: 0; margin: 0; padding: 0; }
   legend { font-size: 13px; color: var(--text-2); margin-bottom: 8px; }
   .choices { display: flex; gap: 18px; }
+  .triage-test { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+  .setting { display: grid; grid-template-columns: 240px minmax(0, 320px); align-items: center; gap: 12px; font-size: 13px; }
+  @media (max-width: 640px) { .setting { grid-template-columns: 1fr; gap: 6px; } }
   .choice { display: flex; align-items: center; gap: 8px; font-size: 14px; cursor: pointer; }
   .choice input { accent-color: var(--accent); width: 16px; height: 16px; }
 
