@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io/fs"
 	"os"
 	"os/exec"
@@ -12,6 +13,7 @@ import (
 	"time"
 
 	"github.com/jonezzyboy/tandem/internal/gh"
+	"github.com/jonezzyboy/tandem/internal/triage"
 	"github.com/wailsapp/wails/v2/pkg/options"
 	"github.com/wailsapp/wails/v2/pkg/options/mac"
 	"github.com/wailsapp/wails/v2/pkg/runtime"
@@ -30,9 +32,10 @@ type Settings struct {
 	Editors map[string]string `json:"editors"`
 	// Editor is the single editor command of settings before 0.6, read only
 	// to migrate it into Editors["other"].
-	Editor      string `json:"editor,omitempty"`
-	MergeMethod string `json:"mergeMethod"`
-	DraftPRs    bool   `json:"draftPRs"`
+	Editor      string        `json:"editor,omitempty"`
+	MergeMethod string        `json:"mergeMethod"`
+	DraftPRs    bool          `json:"draftPRs"`
+	Triage      triage.Config `json:"triage"`
 }
 
 // theme is a theme's window background and whether macOS should draw it dark.
@@ -110,6 +113,7 @@ func normalize(s Settings) Settings {
 		editors[lang] = choice
 	}
 	s.Editors, s.Editor = editors, ""
+	s.Triage = s.Triage.Normalize()
 	return s
 }
 
@@ -187,6 +191,19 @@ func (a *App) SaveSettings(s Settings) (Settings, error) {
 		runtime.WindowSetBackgroundColour(a.ctx, bg.R, bg.G, bg.B, bg.A)
 	}
 	return s, nil
+}
+
+// TestTriage runs cfg's model once, so Settings can show it works before a
+// train depends on it.
+func (a *App) TestTriage(cfg triage.Config) (string, error) {
+	ctx, cancel := context.WithTimeout(a.ctx, 3*time.Minute)
+	defer cancel()
+	cfg = cfg.Normalize()
+	start := time.Now()
+	if _, err := triage.New(cfg).Check(ctx); err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("%s answered in %.1fs", cfg.Model, time.Since(start).Seconds()), nil
 }
 
 func (a *App) SettingsPath() string {

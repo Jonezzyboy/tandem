@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"net/url"
 	"os/exec"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -39,6 +40,7 @@ type Check struct {
 	Status     string `json:"status"`
 	Conclusion string `json:"conclusion"`
 	State      string `json:"state"`
+	DetailsURL string `json:"detailsUrl"`
 }
 
 type PR struct {
@@ -86,6 +88,7 @@ func View(ctx context.Context, dir, selector string) (*PR, error) {
 type Rollup struct {
 	Pass, Fail, Pending int
 	Failing             []string
+	FailedChecks        []Check
 }
 
 func (pr *PR) Rollup() Rollup {
@@ -103,6 +106,7 @@ func (pr *PR) Rollup() Rollup {
 			case "FAILURE", "ERROR":
 				r.Fail++
 				r.Failing = append(r.Failing, name)
+				r.FailedChecks = append(r.FailedChecks, c)
 			default:
 				r.Pending++
 			}
@@ -113,9 +117,33 @@ func (pr *PR) Rollup() Rollup {
 		default:
 			r.Fail++
 			r.Failing = append(r.Failing, name)
+			r.FailedChecks = append(r.FailedChecks, c)
 		}
 	}
 	return r
+}
+
+var actionsJob = regexp.MustCompile(`/actions/runs/(\d+)/job/(\d+)`)
+
+// ActionsJob pulls the run and job IDs from a GitHub Actions check's details
+// URL; ok is false for checks from other CI.
+func ActionsJob(detailsURL string) (runID, jobID string, ok bool) {
+	m := actionsJob.FindStringSubmatch(detailsURL)
+	if m == nil {
+		return "", "", false
+	}
+	return m[1], m[2], true
+}
+
+// FailedLog is the output of a GitHub Actions job's failed steps.
+func FailedLog(ctx context.Context, dir, jobID string) (string, error) {
+	return run(ctx, dir, "", "run", "view", "--job", jobID, "--log-failed")
+}
+
+// RerunFailed reruns only the failed jobs of a GitHub Actions run.
+func RerunFailed(ctx context.Context, dir, runID string) error {
+	_, err := run(ctx, dir, "", "run", "rerun", runID, "--failed")
+	return err
 }
 
 type CreateOpts struct {

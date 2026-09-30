@@ -10,6 +10,15 @@ export interface Settings {
   editors: Record<string, string>
   mergeMethod: 'squash' | 'merge' | 'rebase'
   draftPRs: boolean
+  triage: TriageSettings
+}
+
+export interface TriageSettings {
+  enabled: boolean
+  url: string
+  model: string
+  minConfidence: number
+  retries: number
 }
 
 export interface EditorApp {
@@ -77,6 +86,7 @@ const modifierKeys = new Set(['meta', 'control', 'alt', 'shift', 'capslock', 'fn
 export const prefs = $state({
   settings: {
     theme: 'graphite', keys: {}, editors: {}, mergeMethod: 'squash', draftPRs: true,
+    triage: { enabled: false, url: 'http://localhost:11434', model: 'nimble', minConfidence: 0.85, retries: 1 },
   } as Settings,
   account: null as Account | null,
   editorApps: [] as EditorApp[],

@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/jonezzyboy/tandem/internal/change"
+	"github.com/jonezzyboy/tandem/internal/triage"
 	"github.com/jonezzyboy/tandem/internal/workspace"
 )
 
@@ -27,6 +28,11 @@ case "$1 $2" in
   echo "$repo" >> "$FAKE_GH_DIR/merged"
   sha=$(git rev-parse @{u})
   sed -e 's/"state":"OPEN"/"state":"MERGED"/' -e "s/\"mergeCommit\":null/\"mergeCommit\":{\"oid\":\"$sha\"}/" "$f" > "$f.tmp" && mv "$f.tmp" "$f" ;;
+"run view")
+  echo "--- FAIL: TestThing (30.00s) timeout" ;;
+"run rerun")
+  echo "$repo $3" >> "$FAKE_GH_DIR/rerun"
+  [ -f "$f.rerun" ] && mv "$f.rerun" "$f" ;;
 *) echo "unexpected gh $*" >&2; exit 1 ;;
 esac
 `
@@ -147,9 +153,26 @@ func (f *fixture) mergedPR(repo string, number int, sha string) {
 }
 
 const (
-	green = `{"name":"test","status":"COMPLETED","conclusion":"SUCCESS"}`
-	red   = `{"name":"test","status":"COMPLETED","conclusion":"FAILURE"}`
+	green     = `{"name":"test","status":"COMPLETED","conclusion":"SUCCESS"}`
+	red       = `{"name":"test","status":"COMPLETED","conclusion":"FAILURE"}`
+	redAction = `{"name":"test","status":"COMPLETED","conclusion":"FAILURE","detailsUrl":"https://github.com/acme/api/actions/runs/77/job/88"}`
 )
+
+// passOnRerun makes gh run rerun swap repo's PR checks to green.
+func (f *fixture) passOnRerun(repo string) {
+	pr, _ := os.ReadFile(filepath.Join(f.ghDir, repo+".json"))
+	write(f.t, filepath.Join(f.ghDir, repo+".json.rerun"), strings.Replace(string(pr), redAction, green, 1), 0o644)
+}
+
+type fakeTriage struct {
+	verdict triage.Verdict
+	seen    []triage.Failure
+}
+
+func (ft *fakeTriage) Classify(_ context.Context, f triage.Failure) (triage.Verdict, error) {
+	ft.seen = append(ft.seen, f)
+	return ft.verdict, nil
+}
 
 func fastTrain(events *[]TrainEvent) TrainOptions {
 	return TrainOptions{
@@ -226,6 +249,55 @@ func TestTrainStopsWhenPinnedLegFailsCI(t *testing.T) {
 	merged, _ := os.ReadFile(filepath.Join(f.ghDir, "merged"))
 	if string(merged) != "proto\n" {
 		t.Errorf("merged = %q, want only proto", merged)
+	}
+}
+
+func TestTrainRerunsFailureTriagedFlaky(t *testing.T) {
+	f := newFixture(t)
+	c := f.change()
+	f.pr("proto", 1, "OPEN", "APPROVED", green)
+	f.pr("api", 2, "OPEN", "APPROVED", redAction)
+	f.passOnRerun("api")
+	g, _ := BuildGraph(c)
+
+	ft := &fakeTriage{verdict: triage.Verdict{Cause: triage.Flaky, Confidence: 0.93, Retry: true}}
+	var events []TrainEvent
+	o := fastTrain(&events)
+	o.Triage, o.Retries = ft, 1
+	if err := RunTrain(context.Background(), c, g, o); err != nil {
+		t.Fatalf("train: %v\nevents: %+v", err, events)
+	}
+	if rerun, _ := os.ReadFile(filepath.Join(f.ghDir, "rerun")); string(rerun) != "api 77\n" {
+		t.Errorf("reruns = %q, want api's run 77 once", rerun)
+	}
+	if len(ft.seen) != 1 || !strings.HasPrefix(ft.seen[0].HeadCommit, "Pin example.com/proto to merged ") || !strings.Contains(ft.seen[0].Log, "FAIL") {
+		t.Errorf("triage saw %+v", ft.seen)
+	}
+	var retrying bool
+	for _, e := range events {
+		retrying = retrying || (e.Leg == "api" && e.Phase == "retrying")
+	}
+	if !retrying {
+		t.Errorf("no retrying event: %+v", events)
+	}
+}
+
+func TestTrainStopsOnFailureTriagedReal(t *testing.T) {
+	f := newFixture(t)
+	c := f.change()
+	f.pr("proto", 1, "OPEN", "APPROVED", green)
+	f.pr("api", 2, "OPEN", "APPROVED", redAction)
+	g, _ := BuildGraph(c)
+
+	var events []TrainEvent
+	o := fastTrain(&events)
+	o.Triage, o.Retries = &fakeTriage{verdict: triage.Verdict{Cause: triage.Regression, Confidence: 0.97}}, 1
+	err := RunTrain(context.Background(), c, g, o)
+	if err == nil || !strings.Contains(err.Error(), "(triage: test: regression, 97% sure)") {
+		t.Fatalf("err = %v", err)
+	}
+	if _, statErr := os.Stat(filepath.Join(f.ghDir, "rerun")); statErr == nil {
+		t.Error("a real failure was rerun")
 	}
 }
 

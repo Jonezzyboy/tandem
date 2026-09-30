@@ -576,6 +576,7 @@ export namespace main {
 	    editor?: string;
 	    mergeMethod: string;
 	    draftPRs: boolean;
+	    triage: triage.Config;
 	
 	    static createFrom(source: any = {}) {
 	        return new Settings(source);
@@ -589,7 +590,26 @@ export namespace main {
 	        this.editor = source["editor"];
 	        this.mergeMethod = source["mergeMethod"];
 	        this.draftPRs = source["draftPRs"];
+	        this.triage = this.convertValues(source["triage"], triage.Config);
 	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
 	}
 	export class StartItem {
 	    repo: string;
@@ -686,6 +706,31 @@ export namespace main {
 		    }
 		    return a;
 		}
+	}
+
+}
+
+export namespace triage {
+	
+	export class Config {
+	    enabled: boolean;
+	    url: string;
+	    model: string;
+	    minConfidence: number;
+	    retries: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new Config(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.enabled = source["enabled"];
+	        this.url = source["url"];
+	        this.model = source["model"];
+	        this.minConfidence = source["minConfidence"];
+	        this.retries = source["retries"];
+	    }
 	}
 
 }

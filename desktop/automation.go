@@ -7,6 +7,7 @@ import (
 
 	"github.com/jonezzyboy/tandem/internal/change"
 	"github.com/jonezzyboy/tandem/internal/core"
+	"github.com/jonezzyboy/tandem/internal/triage"
 )
 
 type PinItem struct {
@@ -180,9 +181,13 @@ func (a *App) StartTrain(id, method string) error {
 	if err != nil {
 		return err
 	}
-	err = core.RunTrain(ctx, c, g, core.TrainOptions{Method: method, OnEvent: func(ev core.TrainEvent) {
+	o := core.TrainOptions{Method: method, OnEvent: func(ev core.TrainEvent) {
 		a.emit("train", TrainUpdate{Change: id, TrainEvent: ev})
-	}})
+	}}
+	if t := a.Settings().Triage; t.Enabled {
+		o.Triage, o.Retries = triage.New(t), t.Retries
+	}
+	err = core.RunTrain(ctx, c, g, o)
 	if saveErr := a.store.Save(c); saveErr != nil && err == nil {
 		err = saveErr
 	}

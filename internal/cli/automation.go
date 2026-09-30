@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/jonezzyboy/tandem/internal/core"
+	"github.com/jonezzyboy/tandem/internal/triage"
 	"github.com/jonezzyboy/tandem/internal/ui"
 	"golang.org/x/term"
 )
@@ -93,8 +94,9 @@ func shortSHA(s string) string {
 }
 
 func runMerge(ctx context.Context, e *env, args []string) error {
-	flags := newFlags("merge", "td merge [ID] [--method squash|merge|rebase] [--dry-run] [--yes]")
+	flags := newFlags("merge", "td merge [ID] [--method squash|merge|rebase] [--triage MODEL] [--dry-run] [--yes]")
 	method := flags.String("method", "squash", "how GitHub merges each PR: squash, merge or rebase")
+	triageModel := flags.String("triage", os.Getenv("TANDEM_TRIAGE_MODEL"), "local Ollama model that classifies failed checks so flaky ones are rerun once, e.g. nimble ($OLLAMA_HOST sets the server)")
 	dryRun := flags.Bool("dry-run", false, "show the train's plan and stop")
 	yes := flags.Bool("yes", false, "merge without asking")
 	pos, err := parseArgs(flags, args)
@@ -151,7 +153,7 @@ func runMerge(ctx context.Context, e *env, args []string) error {
 		fmt.Fprintln(e.out, "nothing merged")
 		return nil
 	}
-	err = core.RunTrain(ctx, c, g, core.TrainOptions{Method: *method, OnEvent: func(ev core.TrainEvent) {
+	o := core.TrainOptions{Method: *method, OnEvent: func(ev core.TrainEvent) {
 		if ev.Phase == "done" {
 			fmt.Fprintln(e.out, e.ui.Green("  ✓ "+ev.Detail))
 			return
@@ -162,9 +164,16 @@ func runMerge(ctx context.Context, e *env, args []string) error {
 			color = e.ui.Green
 		case "merging":
 			color = e.ui.Blue
+		case "retrying":
+			color = e.ui.Orange
 		}
 		fmt.Fprintf(e.out, "  %d  %-20s %s  %s\n", ev.Level, ev.Leg, color(fmt.Sprintf("%-8s", ev.Phase)), ev.Detail)
-	}})
+	}}
+	if *triageModel != "" {
+		t := triage.Config{Enabled: true, Model: *triageModel}.Normalize()
+		o.Triage, o.Retries = triage.New(t), t.Retries
+	}
+	err = core.RunTrain(ctx, c, g, o)
 	if saveErr := e.store.Save(c); saveErr != nil && err == nil {
 		err = saveErr
 	}

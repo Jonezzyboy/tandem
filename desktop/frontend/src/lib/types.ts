@@ -186,7 +186,7 @@ export interface TrainEvent {
   change: string
   leg: string
   level: number
-  phase: 'waiting' | 'merging' | 'merged' | 'pinned' | 'skipped' | 'done'
+  phase: 'waiting' | 'merging' | 'merged' | 'pinned' | 'retrying' | 'skipped' | 'done'
   detail: string
   url: string
 }

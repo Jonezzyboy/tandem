@@ -126,6 +126,10 @@ export function TandemHome() {
   return window['go']['main']['App']['TandemHome']();
 }
 
+export function TestTriage(arg1) {
+  return window['go']['main']['App']['TestTriage'](arg1);
+}
+
 export function TrainPlan(arg1) {
   return window['go']['main']['App']['TrainPlan'](arg1);
 }

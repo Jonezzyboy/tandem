@@ -12,6 +12,7 @@ import (
 	"github.com/jonezzyboy/tandem/internal/change"
 	"github.com/jonezzyboy/tandem/internal/gh"
 	"github.com/jonezzyboy/tandem/internal/gitx"
+	"github.com/jonezzyboy/tandem/internal/triage"
 )
 
 type TrainOptions struct {
@@ -25,6 +26,14 @@ type TrainOptions struct {
 	// repo is taken to have no CI at all.
 	Settle  time.Duration
 	OnEvent func(TrainEvent)
+	// Triage, when set, classifies a leg's failed checks; if every failure is
+	// retryable its Actions jobs are rerun, at most Retries times per leg.
+	Triage  Triager
+	Retries int
+}
+
+type Triager interface {
+	Classify(ctx context.Context, f triage.Failure) (triage.Verdict, error)
 }
 
 func (o *TrainOptions) defaults() {
@@ -255,6 +264,9 @@ func sleep(ctx context.Context, d time.Duration) error {
 func waitReady(ctx context.Context, c *change.Change, l *change.Leg, lvl int, expectHead string, o TrainOptions) (*gh.PR, error) {
 	start := time.Now()
 	announced := false
+	retries := 0
+	var rerunAt time.Time
+	rerun := map[string]bool{}
 	for {
 		pr, err := ViewPR(ctx, c, l)
 		switch {
@@ -269,8 +281,25 @@ func waitReady(ctx context.Context, c *change.Change, l *change.Leg, lvl int, ex
 		}
 		onHead := expectHead == "" || pr.HeadRefOid == expectHead
 		r := pr.Rollup()
-		if onHead && r.Fail > 0 {
-			return nil, fmt.Errorf("%s: checks failed on #%d: %s", l.Name(), pr.Number, strings.Join(r.Failing, ", "))
+		// GitHub keeps reporting the old failure until a rerun's new job appears.
+		awaitingRerun := time.Since(rerunAt) < o.Settle && allRerun(r.FailedChecks, rerun)
+		if onHead && r.Fail > 0 && !awaitingRerun {
+			note := ""
+			if o.Triage != nil && retries < o.Retries {
+				var retried bool
+				if retried, note = triageFailures(ctx, c, l, lvl, pr, r.FailedChecks, o); retried {
+					retries++
+					rerunAt = time.Now()
+					for _, fc := range r.FailedChecks {
+						rerun[fc.DetailsURL] = true
+					}
+					if err := sleep(ctx, o.Poll); err != nil {
+						return nil, err
+					}
+					continue
+				}
+			}
+			return nil, fmt.Errorf("%s: checks failed on #%d: %s%s", l.Name(), pr.Number, strings.Join(r.Failing, ", "), note)
 		}
 		settled := r.Pass+r.Pending > 0 || expectHead == "" || time.Since(start) > o.Settle
 		if onHead && r.Pending == 0 && settled {
@@ -294,6 +323,63 @@ func waitReady(ctx context.Context, c *change.Change, l *change.Leg, lvl int, ex
 			return nil, err
 		}
 	}
+}
+
+func allRerun(failed []gh.Check, rerun map[string]bool) bool {
+	for _, fc := range failed {
+		if !rerun[fc.DetailsURL] {
+			return false
+		}
+	}
+	return len(failed) > 0
+}
+
+// triageFailures reruns the leg's failed Actions jobs only when the model
+// judges every failure retryable, since one real failure fails the leg anyway.
+// Otherwise it returns the verdicts as a note for the train's error.
+func triageFailures(ctx context.Context, c *change.Change, l *change.Leg, lvl int, pr *gh.PR, failed []gh.Check, o TrainOptions) (bool, string) {
+	head, _ := gitx.Run(ctx, l.Dir(), "log", "-1", "--format=%s", "refs/heads/"+c.Branch)
+	runs := map[string]bool{}
+	var verdicts []string
+	retry := true
+	for _, fc := range failed {
+		name := fc.Name
+		if name == "" {
+			name = fc.Context
+		}
+		runID, jobID, ok := gh.ActionsJob(fc.DetailsURL)
+		if !ok {
+			verdicts = append(verdicts, name+": not a GitHub Actions job")
+			retry = false
+			continue
+		}
+		log, err := gh.FailedLog(ctx, l.Dir(), jobID)
+		if err != nil {
+			verdicts = append(verdicts, name+": "+FirstLine(err.Error()))
+			retry = false
+			continue
+		}
+		v, err := o.Triage.Classify(ctx, triage.Failure{Check: name, HeadCommit: head, Log: log})
+		if err != nil {
+			verdicts = append(verdicts, name+": "+FirstLine(err.Error()))
+			retry = false
+			continue
+		}
+		verdicts = append(verdicts, name+": "+v.String())
+		retry = retry && v.Retry
+		runs[runID] = true
+	}
+	summary := strings.Join(verdicts, "; ")
+	if !retry {
+		return false, " (triage: " + summary + ")"
+	}
+	for runID := range runs {
+		if err := gh.RerunFailed(ctx, l.Dir(), runID); err != nil {
+			return false, " (triage: " + summary + "; rerun failed: " + FirstLine(err.Error()) + ")"
+		}
+	}
+	o.OnEvent(TrainEvent{Leg: l.Name(), Level: lvl, Phase: "retrying", Detail: summary + ", rerunning failed jobs", URL: pr.URL})
+	return true, ""
 }
 
 func waitMerged(ctx context.Context, c *change.Change, l *change.Leg, o TrainOptions) (*gh.PR, error) {
