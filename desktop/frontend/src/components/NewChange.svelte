@@ -10,11 +10,26 @@
   let id = $state('')
   let title = $state('')
   let selected = $state<string[]>([])
+  let existing = $state<string[]>([])
   let worktrees = $state(false)
   let starting = $state(false)
   let results = $state<StartItem[] | null>(null)
 
   const validId = $derived(/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(id) && !id.includes('..'))
+  // ExistingBranches unmounts on an invalid ID and leaves its last matches behind.
+  const loadable = $derived(validId ? existing : [])
+  const loading = $derived(selected.filter((s) => loadable.includes(s)).length)
+  const creating = $derived(selected.length - loading)
+
+  const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : word.endsWith('h') ? 'es' : 's'}`
+  const action = $derived.by(() => {
+    const noun = worktrees ? 'worktree' : 'branch'
+    if (!selected.length) return `Create ${noun}${worktrees ? 's' : 'es'}`
+    if (!loading) return `Create ${plural(creating, noun)}`
+    if (!creating) return `Load ${plural(loading, 'existing branch')}${worktrees ? ' into worktrees' : ''}`
+    if (worktrees) return `Create ${plural(selected.length, noun)}, ${loading} from existing branches`
+    return `Load ${plural(loading, 'existing branch')}, create ${creating} new`
+  })
 
   function unpick(name: string) {
     selected = selected.filter((s) => s !== name)
@@ -46,7 +61,7 @@
         <input id="nc-id" class="input mono" bind:value={id} placeholder="ABC-123" autocomplete="off" />
         <span class="small muted">{worktrees ? 'The branch name in every repo’s worktree.' : 'The branch name in every repo. Clean repos switch to it; any with uncommitted work stay put.'} Repos that already have it keep their commits.</span>
       </div>
-      {#if validId}<ExistingBranches branch={id} bind:selected />{/if}
+      {#if validId}<ExistingBranches branch={id} bind:selected bind:existing />{/if}
       <div class="field">
         <label for="nc-title">Title</label>
         <input id="nc-title" class="input" bind:value={title} placeholder="What this change does" />
@@ -55,7 +70,10 @@
         <span class="label">Repos · {selected.length} selected</span>
         <div class="chips">
           {#each selected as s (s)}
-            <button class="chip mono" onclick={() => unpick(s)} aria-label="Remove {s}">{s} <Icon name="close" size={12} /></button>
+            {@const old = loadable.includes(s)}
+            <button class="chip mono" class:existing={old} onclick={() => unpick(s)} aria-label="Remove {s}" title={old ? `Loads the existing ${id} branch` : undefined}>
+              {#if old}<Icon name="branch" size={12} />{/if}{s} <Icon name="close" size={12} />
+            </button>
           {:else}
             <span class="small muted">Pick repos from the list →</span>
           {/each}
@@ -70,7 +88,7 @@
       </label>
       <button class="btn primary start" disabled={!validId || selected.length === 0 || starting} onclick={start}>
         <Icon name="branch" spin={starting} />
-        Create {selected.length || ''} {worktrees ? `worktree${selected.length === 1 ? '' : 's'}` : `branch${selected.length === 1 ? '' : 'es'}`}
+        {action}
       </button>
       {#if results}
         <div class="results">
@@ -102,6 +120,7 @@
   .label { font-size: 13px; color: var(--text-2); }
   .chips { display: flex; flex-wrap: wrap; gap: 6px; }
   .chip { display: inline-flex; align-items: center; gap: 6px; padding: 5px 9px; border-radius: 7px; border: 1px solid var(--line-2); background: var(--raised); font-size: 12.5px; cursor: pointer; }
+  .chip.existing { border-color: var(--accent); background: var(--accent-bg); color: var(--accent-text); }
   .start { justify-content: center; min-height: 42px; }
   .mode { display: flex; gap: 10px; align-items: flex-start; cursor: pointer; font-size: 14px; }
   .mode input { width: 16px; height: 16px; margin-top: 2px; accent-color: var(--accent); }
