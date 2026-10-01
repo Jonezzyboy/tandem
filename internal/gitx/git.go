@@ -7,7 +7,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 )
 
@@ -28,6 +30,27 @@ func Run(ctx context.Context, dir string, args ...string) (string, error) {
 func RefExists(ctx context.Context, dir, ref string) bool {
 	_, err := Run(ctx, dir, "rev-parse", "--verify", "--quiet", ref+"^{commit}")
 	return err == nil
+}
+
+// MayHaveRef reports false only when ref is surely absent from the repo at
+// dir, reading the ref files without starting git. Anything it can't read
+// that way (a .git file, reftable) counts as maybe.
+func MayHaveRef(dir, ref string) bool {
+	gitDir := filepath.Join(dir, ".git")
+	if fi, err := os.Stat(gitDir); err != nil || !fi.IsDir() {
+		return true
+	}
+	if _, err := os.Stat(filepath.Join(gitDir, "reftable")); err == nil {
+		return true
+	}
+	if _, err := os.Stat(filepath.Join(gitDir, filepath.FromSlash(ref))); err == nil {
+		return true
+	}
+	packed, err := os.ReadFile(filepath.Join(gitDir, "packed-refs"))
+	if err != nil {
+		return false
+	}
+	return bytes.Contains(packed, []byte(" "+ref+"\n"))
 }
 
 func HasRemote(ctx context.Context, dir, name string) bool {
@@ -99,6 +122,17 @@ func StatusOf(ctx context.Context, dir, branch, baseRef string) (Status, error) 
 		return s, fmt.Errorf("parse rev-list counts %q: %w", counts, err)
 	}
 	return s, nil
+}
+
+// CountAhead counts commits on ref that base lacks, or 0 when git can't say.
+func CountAhead(ctx context.Context, dir, base, ref string) int {
+	out, err := Run(ctx, dir, "rev-list", "--count", base+".."+ref)
+	if err != nil {
+		return 0
+	}
+	var n int
+	fmt.Sscanf(out, "%d", &n)
+	return n
 }
 
 func CurrentBranch(ctx context.Context, dir string) string {

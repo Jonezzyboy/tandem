@@ -142,6 +142,14 @@ export interface RepoInfo {
   path: string
 }
 
+export interface BranchInfo {
+  name: string
+  local: boolean
+  remote: boolean
+  ahead: number
+  current: boolean
+}
+
 export interface StartItem {
   repo: string
   ok: boolean

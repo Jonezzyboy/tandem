@@ -469,3 +469,64 @@ func TestStartWithWorktrees(t *testing.T) {
 		t.Errorf("--worktree on a branch change:\n%s", out)
 	}
 }
+
+func TestStartFromExistingBranches(t *testing.T) {
+	base := t.TempDir()
+	root := filepath.Join(base, "code")
+	t.Setenv("TANDEM_ROOT", root)
+	t.Setenv("TANDEM_HOME", filepath.Join(root, ".tandem"))
+	t.Setenv("GIT_CONFIG_GLOBAL", filepath.Join(base, "gitconfig"))
+	t.Setenv("GIT_CONFIG_NOSYSTEM", "1")
+	for _, k := range []string{"GIT_AUTHOR_NAME", "GIT_COMMITTER_NAME"} {
+		t.Setenv(k, "Test")
+	}
+	for _, k := range []string{"GIT_AUTHOR_EMAIL", "GIT_COMMITTER_EMAIL"} {
+		t.Setenv(k, "test@example.com")
+	}
+	t.Chdir(base)
+
+	proto := newRepo(t, root, "proto", map[string]string{"go.mod": "module example.com/proto\n\ngo 1.26\n"})
+	api := newRepo(t, root, "api", map[string]string{"go.mod": "module example.com/api\n\ngo 1.26\n"})
+	web := newRepo(t, root, "web", map[string]string{"go.mod": "module example.com/web\n\ngo 1.26\n"})
+	untouched := newRepo(t, root, "untouched", map[string]string{"go.mod": "module example.com/untouched\n\ngo 1.26\n"})
+
+	git(t, proto, "switch", "--quiet", "-c", "DEV-5")
+	writeFile(t, filepath.Join(proto, "work.go"), "package proto\n")
+	git(t, proto, "add", ".")
+	git(t, proto, "commit", "--quiet", "-m", "work")
+	git(t, api, "branch", "DEV-5")
+	// web has the branch only on origin, pushed from elsewhere.
+	git(t, web, "push", "--quiet", "origin", "main:DEV-5")
+	git(t, web, "fetch", "--quiet", "origin")
+	git(t, web, "pack-refs", "--all")
+
+	if out, code := td(t, "start", "DEV-404", "--existing"); code == 0 || !strings.Contains(out, "no repo under") {
+		t.Errorf("start --existing with no matches exited %d:\n%s", code, out)
+	}
+
+	out := mustTD(t, "start", "DEV-5", "--existing", "--title", "Adopt")
+	for _, want := range []string{"acme/proto", "acme/api", "acme/web", "(existing)"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("start --existing missing %q:\n%s", want, out)
+		}
+	}
+	if strings.Contains(out, "untouched") {
+		t.Errorf("start --existing took a repo without the branch:\n%s", out)
+	}
+	for _, repo := range []string{proto, api, web} {
+		if got := git(t, repo, "branch", "--show-current"); got != "DEV-5" {
+			t.Errorf("%s is on %q, want DEV-5", repo, got)
+		}
+	}
+	if git(t, proto, "log", "-1", "--format=%s") != "work" {
+		t.Error("proto's existing commit was lost")
+	}
+
+	if out := mustTD(t, "add", "DEV-5", "--existing"); !strings.Contains(out, "already in DEV-5") {
+		t.Errorf("add --existing with every match already a leg:\n%s", out)
+	}
+	git(t, untouched, "branch", "DEV-5")
+	if out := mustTD(t, "add", "DEV-5", "--existing"); !strings.Contains(out, "acme/untouched") || strings.Contains(out, "acme/proto") {
+		t.Errorf("add --existing should add only the new match:\n%s", out)
+	}
+}

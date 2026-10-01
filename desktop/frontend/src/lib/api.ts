@@ -1,7 +1,7 @@
 import * as App from '@wailsjs/go/main/App'
 import { EventsOn } from '@wailsjs/runtime/runtime'
 import type {
-  ChangeSummary, ChangeView, CheckEvent, CleanItem, CleanResult, Inbox, LegResult, PinItem, PRPreview, PRRequest,
+  BranchInfo, ChangeSummary, ChangeView, CheckEvent, CleanItem, CleanResult, Inbox, LegResult, PinItem, PRPreview, PRRequest,
   RepoInfo, StartItem, TrainPlan,
 } from './types'
 
@@ -18,6 +18,7 @@ export const api = {
   publishPRs: (id: string, req: PRRequest) => App.PublishPRs(id, req as never) as unknown as Promise<PRPreview>,
   inbox: (force = false) => App.Inbox(force) as unknown as Promise<Inbox>,
   repos: () => App.Repos() as unknown as Promise<RepoInfo[]>,
+  branchRepos: (branch: string) => App.BranchRepos(branch) as unknown as Promise<BranchInfo[]>,
   start: (id: string, title: string, repos: string[], worktrees = false) =>
     App.Start({ id, title, repos, worktrees } as never) as unknown as Promise<StartItem[]>,
   link: (id: string, up: string, down: string) => App.Link(id, up, down),

@@ -15,21 +15,30 @@ import (
 )
 
 func runStart(ctx context.Context, e *env, args []string) error {
-	flags := newFlags("start", "td start <ID> <repo>... [--title T] [--worktree]")
+	flags := newFlags("start", "td start <ID> [repo...] [--existing] [--title T] [--worktree]")
 	title := flags.String("title", "", "change title, used for PR titles")
 	worktree := flags.Bool("worktree", false, "give each repo a worktree under the change instead of checking the branch out in its clone")
+	existing := flags.Bool("existing", false, "also take in every repo that already has a branch named <ID>")
 	pos, err := parseArgs(flags, args)
 	if err != nil {
 		return err
 	}
-	if len(pos) < 2 {
+	if len(pos) < 1 || len(pos) < 2 && !*existing {
 		flags.Usage()
 		return errReported
 	}
 	id := pos[0]
+	if err := change.ValidateID(id); err != nil {
+		return err
+	}
 	repos, err := resolveRepos(e, pos[1:])
 	if err != nil {
 		return err
+	}
+	if *existing {
+		if repos, err = withExisting(ctx, e, id, repos, nil); err != nil {
+			return err
+		}
 	}
 	c, results, err := core.Start(ctx, e.store, id, *title, repos, core.StartOptions{Worktrees: *worktree})
 	if err != nil {
@@ -44,7 +53,8 @@ func runStart(ctx context.Context, e *env, args []string) error {
 // runAdd puts more repos into an existing change: each gets the change's
 // branch, and the merge order is recomputed with them in it.
 func runAdd(ctx context.Context, e *env, args []string) error {
-	flags := newFlags("add", "td add [ID] <repo>...")
+	flags := newFlags("add", "td add [ID] [repo...] [--existing]")
+	existing := flags.Bool("existing", false, "also add every repo that already has the change's branch")
 	pos, err := parseArgs(flags, args)
 	if err != nil {
 		return err
@@ -53,13 +63,22 @@ func runAdd(ctx context.Context, e *env, args []string) error {
 	if err != nil {
 		return err
 	}
-	if len(rest) == 0 {
+	if len(rest) == 0 && !*existing {
 		flags.Usage()
 		return errReported
 	}
 	repos, err := resolveRepos(e, rest)
 	if err != nil {
 		return err
+	}
+	if *existing {
+		if repos, err = withExisting(ctx, e, c.Branch, repos, c); err != nil {
+			return err
+		}
+		if len(repos) == 0 {
+			fmt.Fprintln(e.out, e.ui.Dim("  every repo with branch "+c.Branch+" is already in "+c.ID))
+			return nil
+		}
 	}
 	c, results, err := core.Start(ctx, e.store, c.ID, "", repos, core.StartOptions{})
 	if err != nil {
@@ -75,6 +94,30 @@ func runAdd(ctx context.Context, e *env, args []string) error {
 		}
 	}
 	return nil
+}
+
+// withExisting appends every clone under the roots that has branch, skipping
+// repos already named or already legs of c.
+func withExisting(ctx context.Context, e *env, branch string, repos []workspace.Repo, c *change.Change) ([]workspace.Repo, error) {
+	have := map[string]bool{}
+	for _, r := range repos {
+		have[r.Name] = true
+	}
+	if c != nil {
+		for _, l := range c.Legs {
+			have[l.Repo] = true
+		}
+	}
+	found := core.FindBranch(ctx, workspace.List(e.roots), branch)
+	if len(found) == 0 && len(repos) == 0 {
+		return nil, fmt.Errorf("no repo under %s has a branch named %s", strings.Join(e.roots, ", "), branch)
+	}
+	for _, b := range found {
+		if !have[b.Repo.Name] {
+			repos = append(repos, b.Repo)
+		}
+	}
+	return repos, nil
 }
 
 func resolveRepos(e *env, names []string) ([]workspace.Repo, error) {

@@ -214,6 +214,26 @@ export namespace main {
 	        this.error = source["error"];
 	    }
 	}
+	export class BranchInfo {
+	    name: string;
+	    local: boolean;
+	    remote: boolean;
+	    ahead: number;
+	    current: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new BranchInfo(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.name = source["name"];
+	        this.local = source["local"];
+	        this.remote = source["remote"];
+	        this.ahead = source["ahead"];
+	        this.current = source["current"];
+	    }
+	}
 	export class ChangeSummary {
 	    id: string;
 	    checkedOut: boolean;

@@ -702,6 +702,29 @@ func (a *App) Repos() []RepoInfo {
 	return out
 }
 
+type BranchInfo struct {
+	Name    string `json:"name"`
+	Local   bool   `json:"local"`
+	Remote  bool   `json:"remote"`
+	Ahead   int    `json:"ahead"`
+	Current bool   `json:"current"`
+}
+
+// BranchRepos lists the repos that already have branch, for adopting work
+// begun outside Tandem into a change.
+func (a *App) BranchRepos(branch string) []BranchInfo {
+	branch = strings.TrimSpace(branch)
+	if change.ValidateID(branch) != nil {
+		return []BranchInfo{}
+	}
+	found := core.FindBranch(a.ctx, workspace.List(a.roots), branch)
+	out := make([]BranchInfo, len(found))
+	for i, b := range found {
+		out[i] = BranchInfo{Name: b.Repo.Name, Local: b.Local, Remote: b.Remote, Ahead: b.Ahead, Current: b.Current}
+	}
+	return out
+}
+
 type StartRequest struct {
 	ID    string   `json:"id"`
 	Title string   `json:"title"`
