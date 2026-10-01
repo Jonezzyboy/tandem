@@ -5,7 +5,9 @@
   import Icon from './Icon.svelte'
 
   // exclude lists repos already in the change; they are left out of the matches.
-  let { branch, selected = $bindable([]), exclude = [] }: { branch: string; selected?: string[]; exclude?: string[] } = $props()
+  let { branch, selected = $bindable([]), existing = $bindable([]), exclude = [] }: {
+    branch: string; selected?: string[]; existing?: string[]; exclude?: string[]
+  } = $props()
 
   let found = $state<BranchInfo[]>([])
   let scanning = $state(false)
@@ -14,6 +16,8 @@
 
   const matches = $derived(found.filter((b) => !exclude.includes(b.name)))
   const unpicked = $derived(matches.filter((b) => !selected.includes(b.name)))
+
+  $effect(() => { existing = matches.map((b) => b.name) })
 
   // Typing an ID rescans every clone, so wait for a pause.
   $effect(() => {
@@ -53,8 +57,12 @@
 {#if matches.length}
   <div class="existing">
     <div class="head">
-      <span class="small"><Icon name="branch" size={13} /> <span class="mono">{scanned}</span> already exists in {matches.length} repo{matches.length === 1 ? '' : 's'}</span>
-      {#if unpicked.length}<button class="btn small" onclick={pickAll}>Pick {unpicked.length === matches.length ? 'all' : `the other ${unpicked.length}`}</button>{/if}
+      <Icon name="branch" color="var(--accent-text)" />
+      <div class="stack">
+        <strong>Existing branch found</strong>
+        <span class="small"><span class="mono">{scanned}</span> is already in {matches.length} repo{matches.length === 1 ? '' : 's'}. Pick {matches.length === 1 ? 'it' : 'them'} to load with {matches.length === 1 ? 'its' : 'their'} commits.</span>
+      </div>
+      {#if unpicked.length}<button class="btn small" onclick={pickAll}>Load {unpicked.length === matches.length ? (matches.length === 1 ? 'it' : 'all') : `the other ${unpicked.length}`}</button>{/if}
     </div>
     {#each matches as b (b.name)}
       <label class="row" class:on={selected.includes(b.name)}>
@@ -70,9 +78,11 @@
 
 <style>
   .small { font-size: 12px; }
-  .existing { display: flex; flex-direction: column; gap: 2px; padding: 8px; border: 1px solid var(--line); border-radius: 10px; background: var(--raised); }
-  .head { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 2px 4px 6px; }
-  .head .small { display: inline-flex; align-items: center; gap: 6px; color: var(--text-2); }
+  .existing { display: flex; flex-direction: column; gap: 2px; padding: 10px; border: 1px solid var(--accent); border-radius: 10px; background: var(--accent-bg); }
+  .head { display: flex; align-items: flex-start; gap: 10px; padding: 2px 4px 8px; }
+  .head .stack { display: flex; flex-direction: column; gap: 2px; flex: 1; line-height: 1.4; font-size: 13.5px; }
+  .head strong { color: var(--accent-text); }
+  .head .small { color: var(--text-2); }
   .row { display: flex; gap: 10px; align-items: center; padding: 6px 6px; border-radius: 7px; font-size: 13px; cursor: pointer; }
   .row:hover { background: var(--panel); }
   .row.on { background: var(--selected); }
