@@ -3,6 +3,7 @@
   import { fail, navigate } from '@lib/state.svelte'
   import { prefs } from '@lib/settings.svelte'
   import type { StartItem } from '@lib/types'
+  import ExistingBranches from './ExistingBranches.svelte'
   import Icon from './Icon.svelte'
   import RepoPicker from './RepoPicker.svelte'
 
@@ -43,8 +44,9 @@
       <div class="field">
         <label for="nc-id">Ticket or change ID</label>
         <input id="nc-id" class="input mono" bind:value={id} placeholder="ABC-123" autocomplete="off" />
-        <span class="small muted">{worktrees ? 'The branch name in every repo’s worktree.' : 'The branch name in every repo. Clean repos switch to it; any with uncommitted work stay put.'}</span>
+        <span class="small muted">{worktrees ? 'The branch name in every repo’s worktree.' : 'The branch name in every repo. Clean repos switch to it; any with uncommitted work stay put.'} Repos that already have it keep their commits.</span>
       </div>
+      {#if validId}<ExistingBranches branch={id} bind:selected />{/if}
       <div class="field">
         <label for="nc-title">Title</label>
         <input id="nc-title" class="input" bind:value={title} placeholder="What this change does" />

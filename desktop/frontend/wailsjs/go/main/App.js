@@ -10,6 +10,10 @@ export function AddRepos(arg1, arg2) {
   return window['go']['main']['App']['AddRepos'](arg1, arg2);
 }
 
+export function BranchRepos(arg1) {
+  return window['go']['main']['App']['BranchRepos'](arg1);
+}
+
 export function CancelTrain(arg1) {
   return window['go']['main']['App']['CancelTrain'](arg1);
 }

@@ -8,6 +8,8 @@ export function Account():Promise<main.Account>;
 
 export function AddRepos(arg1:string,arg2:Array<string>):Promise<Array<main.StartItem>>;
 
+export function BranchRepos(arg1:string):Promise<Array<main.BranchInfo>>;
+
 export function CancelTrain(arg1:string):Promise<void>;
 
 export function Change(arg1:string):Promise<core.ChangeView>;

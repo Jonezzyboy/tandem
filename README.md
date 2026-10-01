@@ -155,6 +155,12 @@ ABC-123  Add request retries  3 of 4 legs blocked
   3  monolith      ↑1 clean    #5521      ◌ 1/2 running  changes requested
 ```
 
+**Already started the work?** If you made the `ABC-123` branch by hand in a few
+repos, `td start ABC-123 --existing` finds every clone with that branch, locally
+or on origin, and builds the change from them, commits intact. In the app, type
+the ID on **New change** (or open **Add repos**) and the repos with the branch
+are listed for you to pick.
+
 Inside one of a change's repos you can leave out the ID. A repo in several
 changes picks the one it has checked out.
 
@@ -184,8 +190,8 @@ changes picks the one it has checked out.
 
 | Command | What it does |
 |---|---|
-| `td start <ID> <repo>... [--title T] [--worktree]` | Create a change: a branch per repo, checked out (or a worktree each). |
-| `td add [ID] <repo>...` | Add repos to a change; the merge order updates. |
+| `td start <ID> [repo...] [--existing] [--title T] [--worktree]` | Create a change: a branch per repo, checked out (or a worktree each). `--existing` also takes in every repo that already has a branch named `<ID>`. |
+| `td add [ID] [repo...] [--existing]` | Add repos to a change; the merge order updates. `--existing` adds every repo with the change's branch. |
 | `td remove [ID] <repo>...` | Take repos out of a change. Their branches stay. |
 | `td switch [ID] [--base]` | Check out the change's branch in every repo, or with `--base` their main branch. |
 | `td status [ID] [--offline]` | Local state, PR, CI and review for every repo, in merge order. |

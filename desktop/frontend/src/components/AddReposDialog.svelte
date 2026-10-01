@@ -2,6 +2,7 @@
   import { api } from '@lib/api'
   import { fail, log } from '@lib/state.svelte'
   import type { ChangeView, StartItem } from '@lib/types'
+  import ExistingBranches from './ExistingBranches.svelte'
   import Icon from './Icon.svelte'
   import RepoPicker from './RepoPicker.svelte'
 
@@ -61,6 +62,7 @@
   {:else}
     <div class="body">
       <p class="muted small">Each repo gets the <span class="mono">{view.branch}</span> branch from a freshly fetched base and has it checked out, unless it holds uncommitted work. Tandem works out where it goes in the merge order from its manifests.</p>
+      <ExistingBranches branch={view.branch} bind:selected exclude={view.legs.map((l) => l.repo)} />
       <RepoPicker bind:selected exclude={view.legs.map((l) => l.repo)} />
     </div>
     <div class="foot">
