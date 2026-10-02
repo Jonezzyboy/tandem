@@ -3,6 +3,7 @@ package change
 import (
 	"slices"
 	"testing"
+	"time"
 )
 
 func TestRemoveLegDropsItsDeclaredEdges(t *testing.T) {
@@ -42,5 +43,36 @@ func TestUsesWorktrees(t *testing.T) {
 		if got := tc.c.UsesWorktrees(); got != tc.want {
 			t.Errorf("case %d: UsesWorktrees = %v, want %v", i, got, tc.want)
 		}
+	}
+}
+
+func TestListFollowsSavedOrder(t *testing.T) {
+	s := Store{Home: t.TempDir()}
+	base := time.Date(2026, 10, 1, 0, 0, 0, 0, time.UTC)
+	for i, id := range []string{"A-1", "B-2", "C-3", "D-4"} {
+		if err := s.Save(&Change{ID: id, Branch: id, Created: base.Add(time.Duration(i) * time.Hour)}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	ids := func() []string {
+		all, err := s.List()
+		if err != nil {
+			t.Fatal(err)
+		}
+		var out []string
+		for _, c := range all {
+			out = append(out, c.ID)
+		}
+		return out
+	}
+	if got := ids(); !slices.Equal(got, []string{"D-4", "C-3", "B-2", "A-1"}) {
+		t.Errorf("unordered = %v, want newest first", got)
+	}
+	// GONE-9 was cleaned; D-4 is unranked, so it leads.
+	if err := s.SetOrder([]string{"B-2", "GONE-9", "A-1", "C-3"}); err != nil {
+		t.Fatal(err)
+	}
+	if got := ids(); !slices.Equal(got, []string{"D-4", "B-2", "A-1", "C-3"}) {
+		t.Errorf("ordered = %v", got)
 	}
 }

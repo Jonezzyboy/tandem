@@ -110,6 +110,10 @@ export function Rename(arg1, arg2) {
   return window['go']['main']['App']['Rename'](arg1, arg2);
 }
 
+export function Reorder(arg1) {
+  return window['go']['main']['App']['Reorder'](arg1);
+}
+
 export function Repos() {
   return window['go']['main']['App']['Repos']();
 }

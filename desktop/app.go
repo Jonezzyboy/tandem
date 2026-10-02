@@ -828,6 +828,15 @@ func (a *App) Link(id, upstream, downstream string) error {
 	return nil
 }
 
+// Reorder saves ids as the changes' order, first to last; it sets their ⌘1–9 shortcuts.
+func (a *App) Reorder(ids []string) error {
+	if err := a.store.SetOrder(ids); err != nil {
+		return err
+	}
+	a.emit("changes", a.Changes())
+	return nil
+}
+
 // Rename sets change id's title; a leading change ID is dropped, as PR titles
 // add it back.
 func (a *App) Rename(id, title string) error {

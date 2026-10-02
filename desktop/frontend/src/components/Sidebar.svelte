@@ -1,11 +1,55 @@
 <script lang="ts">
-  import { app, checkOut, navigate, switching } from '@lib/state.svelte'
+  import { tick } from 'svelte'
+  import { api } from '@lib/api'
+  import { app, checkOut, fail, navigate, switching } from '@lib/state.svelte'
   import Icon from './Icon.svelte'
   import Kbd from './Kbd.svelte'
   import Avatar from './Avatar.svelte'
   import { keycaps, prefs, shortcutFor } from '@lib/settings.svelte'
 
   const reviewCount = $derived(app.inbox?.review?.length ?? 0)
+
+  let dragging = $state<string | null>(null)
+  // The gap the dragged change would land in: 0 is above the first, n below the last.
+  let gap = $state<number | null>(null)
+
+  async function move(id: string, to: number) {
+    const ids = app.changes.map((c) => c.id)
+    const from = ids.indexOf(id)
+    if (from < 0 || to < 0 || to > ids.length || to === from || to === from + 1) return
+    ids.splice(from, 1)
+    ids.splice(to > from ? to - 1 : to, 0, id)
+    const prev = app.changes
+    app.changes = ids.map((i) => prev.find((c) => c.id === i)!)
+    try {
+      await api.reorder(ids)
+    } catch (e) {
+      app.changes = prev
+      fail(e)
+    }
+  }
+
+  function onDragOver(e: DragEvent, i: number) {
+    if (!dragging) return
+    e.preventDefault()
+    e.dataTransfer!.dropEffect = 'move'
+    const r = (e.currentTarget as HTMLElement).getBoundingClientRect()
+    gap = e.clientY < r.top + r.height / 2 ? i : i + 1
+  }
+
+  function onDrop(e: DragEvent) {
+    e.preventDefault()
+    if (dragging !== null && gap !== null) move(dragging, gap)
+    dragging = gap = null
+  }
+
+  async function onKey(e: KeyboardEvent, id: string, i: number) {
+    if (!e.altKey || (e.key !== 'ArrowUp' && e.key !== 'ArrowDown')) return
+    e.preventDefault()
+    await move(id, e.key === 'ArrowUp' ? i - 1 : i + 2)
+    await tick()
+    document.querySelector<HTMLElement>(`[data-change="${CSS.escape(id)}"]`)?.focus()
+  }
 </script>
 
 <nav>
@@ -25,13 +69,20 @@
   </div>
 
   <div class="group changes grow-list">
-    <div class="eyebrow label">My changes</div>
+    <div class="eyebrow label" id="my-changes">My changes</div>
+    <div class="list" role="list" aria-labelledby="my-changes">
     {#each app.changes as c, i (c.id)}
-      <div class="change-wrap">
+      <div class="change-wrap" role="listitem" draggable="true"
+        class:dragging={dragging === c.id} class:drop-before={gap === i} class:drop-after={gap === i + 1 && i === app.changes.length - 1}
+        ondragstart={(e) => { dragging = c.id; e.dataTransfer!.effectAllowed = 'move'; e.dataTransfer!.setData('text/plain', c.id) }}
+        ondragover={(e) => onDragOver(e, i)} ondrop={onDrop} ondragend={() => (dragging = gap = null)}>
         <button
           class="change"
+          data-change={c.id}
           class:active={app.route.name === 'change' && app.route.id === c.id}
           onclick={() => navigate({ name: 'change', id: c.id })}
+          onkeydown={(e) => onKey(e, c.id, i)}
+          title="Drag, or ⌥↑ ⌥↓, to reorder"
         >
           <span class="row">
             <span class="id-line">
@@ -53,6 +104,7 @@
     {:else}
       <p class="empty">No changes yet. Start one to put several repos on one branch.</p>
     {/each}
+    </div>
   </div>
   <div class="account">
     <button class="who" onclick={() => navigate({ name: 'settings' })} aria-label="Account and settings">
@@ -118,16 +170,26 @@
     padding: 0 7px;
   }
   .change { flex-direction: column; gap: 2px; padding: 9px 10px; width: 100%; }
+  .list { display: flex; flex-direction: column; gap: 2px; }
   .change-wrap { position: relative; }
+  .change-wrap.dragging { opacity: 0.4; }
+  /* The drop line sits in the 2px gap between rows, so showing it moves nothing. */
+  .change-wrap.drop-before::before, .change-wrap.drop-after::after {
+    content: ''; position: absolute; left: 6px; right: 6px; height: 2px; border-radius: 1px; background: var(--accent-text); pointer-events: none;
+  }
+  .change-wrap.drop-before::before { top: -2px; }
+  .change-wrap.drop-after::after { bottom: -2px; }
   .quick-switch {
     position: absolute; right: 6px; bottom: 7px; width: 26px; height: 26px;
     background: var(--raised); border: 1px solid var(--line-2); opacity: 0; transition: opacity 0.12s;
   }
   .change-wrap:hover .quick-switch, .quick-switch:focus-visible, .quick-switch.busy { opacity: 1; }
-  .row { display: flex; justify-content: space-between; align-items: center; }
+  .row { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; }
+  .row > :global(kbd) { flex-shrink: 0; }
   .id { font-size: 12px; color: var(--accent-text); }
-  .id-line { display: inline-flex; align-items: center; gap: 6px; }
-  .live { width: 6px; height: 6px; border-radius: 3px; background: var(--ok); }
+  /* Plain wrapping text, so the dot trails the ID's last word however it wraps. */
+  .id-line { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+  .live { display: inline-block; width: 6px; height: 6px; margin-left: 6px; border-radius: 3px; background: var(--ok); vertical-align: middle; }
   .title { font-size: 14px; line-height: 1.3; }
   .headline { font-size: 12px; color: var(--muted); }
   .headline.warn { color: var(--warn-text); }
