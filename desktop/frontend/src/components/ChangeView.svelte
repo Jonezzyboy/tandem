@@ -141,6 +141,18 @@
     }
   }
 
+  let refreshing = $state(false)
+  async function refresh() {
+    refreshing = true
+    try {
+      await api.refresh(id)
+    } catch (e) {
+      fail(e)
+    } finally {
+      refreshing = false
+    }
+  }
+
   let syncing = $state(false)
   let pinning = $state(false)
   let committingPins = $state(false)
@@ -155,8 +167,13 @@
 
   // Change-scoped shortcuts arrive from App's keymap as tandem:command events.
   function onCommand(e: Event) {
+    const command = (e as CustomEvent<string>).detail
+    if (command === 'refresh') {
+      if (view && !refreshing) refresh()
+      return
+    }
     if (!view || app.composer || app.trainOpen) return
-    switch ((e as CustomEvent<string>).detail) {
+    switch (command) {
       case 'syncAll':
         if (!syncing) sync()
         break
@@ -319,8 +336,8 @@
         <button class="icon-btn" aria-label="Delete this change" title="Delete change" disabled={planningDiscard} onclick={planDiscard}>
           <Icon name="trash" spin={planningDiscard} />
         </button>
-        <button class="icon-btn" aria-label="Refresh from GitHub" title="Refresh (⌘R)" onclick={() => api.refresh(id)}>
-          <Icon name="refresh" />
+        <button class="icon-btn" aria-label="Refresh from GitHub" title="Refresh (⌘R)" disabled={refreshing} onclick={refresh}>
+          <Icon name={refreshing ? 'running' : 'refresh'} spin={refreshing} />
         </button>
         <button class="btn" onclick={sync} disabled={syncing}>
           <Icon name="sync" spin={syncing} />Sync all

@@ -1,6 +1,5 @@
 <script lang="ts">
   import { onMount } from 'svelte'
-  import { api } from './lib/api'
   import { app, currentId, init, loadInbox, navigate } from './lib/state.svelte'
   import { actions, initSettings, prefs, shortcutFor, shortcutFromEvent } from './lib/settings.svelte'
   import Sidebar from './components/Sidebar.svelte'
@@ -24,12 +23,11 @@
         return navigate({ name: 'inbox' })
       case 'settings':
         return navigate({ name: 'settings' })
-      case 'refresh': {
-        const change = currentId()
-        if (change) api.refresh(change)
+      case 'refresh':
+        // The open ChangeView refreshes itself, to show it's working.
+        if (currentId()) window.dispatchEvent(new CustomEvent('tandem:command', { detail: id }))
         else loadInbox(true)
         return
-      }
       default:
         // Change-scoped actions are handled by the open ChangeView.
         if (currentId()) window.dispatchEvent(new CustomEvent('tandem:command', { detail: id }))
