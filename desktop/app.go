@@ -418,8 +418,10 @@ func (a *App) Focus(id string) {
 	}
 }
 
+// Refresh rereads id from GitHub and returns when done; one already running
+// is not waited for.
 func (a *App) Refresh(id string) {
-	go a.refresh(id, true)
+	a.refresh(id, true)
 }
 
 type LegResult struct {
