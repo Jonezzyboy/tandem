@@ -20,15 +20,19 @@ func main() {
 	app := NewApp(change.Store{Home: workspace.Home()}, workspace.Roots())
 	app.settings = loadSettings()
 	bg, appearance := windowLook(app.settings)
+	win, _ := loadWindow()
 	err := wails.Run(&options.App{
 		Title:            "Tandem",
-		Width:            1320,
-		Height:           860,
-		MinWidth:         980,
-		MinHeight:        620,
+		Width:            win.Width,
+		Height:           win.Height,
+		MinWidth:         minWidth,
+		MinHeight:        minHeight,
 		AssetServer:      &assetserver.Options{Assets: assets},
 		BackgroundColour: bg,
 		OnStartup:        app.startup,
+		StartHidden:      true,
+		OnDomReady:       app.restoreWindow,
+		OnBeforeClose:    app.rememberWindow,
 		Bind:             []any{app},
 		Mac: &mac.Options{
 			TitleBar:   mac.TitleBarHiddenInset(),

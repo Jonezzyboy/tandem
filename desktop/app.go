@@ -56,6 +56,8 @@ type App struct {
 	goup     map[string]string
 	settings Settings
 	account  *Account
+
+	restoreOnce sync.Once
 }
 
 func NewApp(store change.Store, roots []string) *App {
