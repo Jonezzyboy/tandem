@@ -142,7 +142,8 @@ func TestEndToEnd(t *testing.T) {
 	writeFile(t, filepath.Join(wtAPI, "api.go"), "package api\n")
 	git(t, wtAPI, "add", ".")
 	git(t, wtAPI, "commit", "--quiet", "-m", "api")
-	writeFile(t, filepath.Join(wtAPI, "scratch.txt"), "wip")
+	writeFile(t, filepath.Join(wtAPI, "api.go"), "package api\n\n// wip\n")
+	writeFile(t, filepath.Join(wtAPI, ".idea", "vcs.xml"), "<project/>")
 
 	out = mustTD(t, "status", "DEV-1", "--offline")
 	if !regexp.MustCompile(`1\s+proto\s+↑1 clean`).MatchString(out) || !regexp.MustCompile(`2\s+api\s+↑1 1 dirty`).MatchString(out) {
@@ -225,7 +226,7 @@ func TestEndToEnd(t *testing.T) {
 	if out, code := td(t, "check", "DEV-1", "proto"); code == 0 || !strings.Contains(out, "proto is on main, not DEV-1: switch to it first") {
 		t.Errorf("check off-branch exited %d:\n%s", code, out)
 	}
-	os.Remove(filepath.Join(api, "scratch.txt"))
+	git(t, api, "checkout", "--", "api.go")
 	mustTD(t, "switch", "DEV-1")
 	if got := git(t, proto, "branch", "--show-current"); got != "DEV-1" {
 		t.Errorf("proto on %q after switch", got)
