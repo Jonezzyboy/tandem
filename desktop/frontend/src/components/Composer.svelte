@@ -67,13 +67,13 @@
     if (e.key === 'Escape') onclose()
   }
 
+  // Mirrors prbody.Block: one row per PR, numbered by merge step.
   const relatedPreview = $derived.by(() => {
-    const items = preview?.items ?? []
-    const levels = [...new Set(items.map((i) => i.level))].sort((a, b) => a - b)
-    return levels.map((lvl, i) =>
-      `${i + 1}. ${items.filter((it) => it.level === lvl).map((it) => it.url ? it.url.replace('https://github.com/', '').replace('/pull/', '#') : `${it.repo}#…`).join(' · ')}`,
-    )
+    const items = [...(preview?.items ?? [])].sort((a, b) => a.level - b.level || a.repo.localeCompare(b.repo))
+    const steps = [...new Set(items.map((i) => i.level))]
+    return items.map((it) => ({ step: steps.indexOf(it.level) + 1, repo: it.repo, pr: it.url ? `#${it.url.split('/').pop()}` : '#…' }))
   })
+  const sharedStep = $derived(new Set(relatedPreview.map((r) => r.step)).size < relatedPreview.length)
 </script>
 
 <svelte:window onkeydown={onKey} />
@@ -160,7 +160,13 @@
           <div class="related mono">
             <div class="muted">Kept in every PR · numbers fill in as they open</div>
             <div>### Related PRs — merge in this order</div>
-            {#each relatedPreview as line}<div>{line}</div>{/each}
+            <table>
+              <thead><tr><th>Step</th><th>Repo</th><th>PR</th></tr></thead>
+              <tbody>
+                {#each relatedPreview as r (r.repo)}<tr><td class="step">{r.step}</td><td>{r.repo}</td><td>{r.pr}</td></tr>{/each}
+              </tbody>
+            </table>
+            {#if sharedStep}<div class="muted">PRs sharing a step can merge in either order.</div>{/if}
           </div>
         {/if}
       </div>
@@ -202,6 +208,10 @@
     display: flex; flex-direction: column; gap: 4px; padding: 14px; border: 1px dashed var(--line-2);
     border-radius: 10px; background: var(--nav); font-size: 12.5px; color: var(--text-2);
   }
+  .related table { border-collapse: collapse; width: 100%; }
+  .related th, .related td { padding: 4px 10px; border: 1px solid var(--line); text-align: left; font-weight: normal; }
+  .related th { color: var(--muted); }
+  .related .step { text-align: center; width: 48px; }
   .foot { display: flex; justify-content: space-between; align-items: center; gap: 16px; padding: 14px 24px 20px; border-top: 1px solid var(--line); }
   .results { display: flex; flex-direction: column; gap: 10px; padding: 20px 24px 0; flex: 1; }
   .results .foot { margin-top: auto; padding-left: 0; padding-right: 0; justify-content: flex-end; }

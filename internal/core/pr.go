@@ -102,16 +102,15 @@ func PublishPRs(ctx context.Context, c *change.Change, plans []*PRPlan, title st
 	var entries []prbody.Entry
 	for _, p := range plans {
 		if p.State.PR != nil && p.State.PR.State != "CLOSED" {
-			entries = append(entries, prbody.Entry{Level: p.Level, Ref: gh.Ref(p.State.PR.URL)})
+			entries = append(entries, prbody.Entry{Level: p.Level, Repo: p.Leg.Repo, Number: p.State.PR.Number, URL: p.State.PR.URL})
 		}
 	}
-	block := prbody.Block(entries)
 	for _, p := range plans {
 		if p.Action == PRSkip || p.Err != nil || p.State.PR == nil || p.State.PR.State != "OPEN" {
 			continue
 		}
 		wg.Go(func() {
-			updated := prbody.Apply(p.State.PR.Body, block)
+			updated := prbody.Apply(p.State.PR.Body, prbody.Block(entries, p.State.PR.URL))
 			if updated == p.State.PR.Body {
 				return
 			}
