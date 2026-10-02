@@ -511,11 +511,12 @@
   .title-btn:hover { box-shadow: 0 0 0 4px var(--panel); background: var(--panel); }
   .title-btn:focus-visible { outline: 2px solid var(--accent-text); outline-offset: 2px; }
   .untitled { color: var(--muted); }
+  /* Same box as the h1 (line-height 1.15, no border or padding) so editing doesn't move the page; the ring is a shadow. */
   .title-input {
-    margin: 0; padding: 0 4px; margin-left: -5px; font-family: var(--display); font-weight: 700; font-size: 30px; letter-spacing: -0.01em;
-    line-height: 1.15; color: inherit; background: var(--nav); border: 1px solid var(--line-2); border-radius: 6px; outline: none; width: 100%;
+    display: block; box-sizing: border-box; width: 100%; height: 1.15em; margin: 0; padding: 0; border: 0; border-radius: 6px;
+    font-family: var(--display); font-weight: 700; font-size: 30px; letter-spacing: -0.01em; line-height: 1.15;
+    color: inherit; background: var(--nav); outline: none; box-shadow: 0 0 0 4px var(--nav), 0 0 0 5px var(--accent-text);
   }
-  .title-input:focus { border-color: var(--accent-text); }
   .actions { display: flex; gap: 8px; align-items: center; flex-shrink: 0; margin-left: auto; }
   .switch-banner {
     display: flex; align-items: center; gap: 12px; padding: 10px 12px 10px 14px; border-radius: 10px;
