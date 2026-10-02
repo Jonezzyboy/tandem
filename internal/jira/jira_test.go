@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 )
 
 func TestParse(t *testing.T) {
@@ -37,14 +38,28 @@ func TestIssue(t *testing.T) {
 			w.WriteHeader(http.StatusNotFound)
 			return
 		}
-		w.Write([]byte(`{"key":"DEV-1","fields":{"summary":"Price Decimal Formatting","status":{"name":"In Progress"},"issuetype":{"name":"Story"}}}`))
+		w.Write([]byte(`{"key":"DEV-1","fields":{"summary":"Price Decimal Formatting","status":{"name":"In Progress"},"issuetype":{"name":"Story"},
+			"priority":{"name":"High"},"assignee":{"displayName":"Sam Lee"},"reporter":null,"updated":"2026-10-02T11:04:05.123+0100",
+			"description":{"type":"doc","content":[
+				{"type":"paragraph","content":[{"type":"text","text":"Prices show "},{"type":"text","text":"two","marks":[{"type":"strong"}]},{"type":"text","text":" decimals."}]},
+				{"type":"bulletList","content":[
+					{"type":"listItem","content":[{"type":"paragraph","content":[{"type":"text","text":"Hosted page"}]}]},
+					{"type":"listItem","content":[{"type":"paragraph","content":[{"type":"text","text":"Ask "},{"type":"mention","attrs":{"text":"@Sam"}}]}]}]},
+				{"type":"paragraph","content":[{"type":"inlineCard","attrs":{"url":"https://example.com/spec"}}]}]}}}`))
 	}))
 	defer srv.Close()
 	ref := Ref{Site: srv.URL, Key: "DEV-1"}
 
 	got, err := Client{Email: "me@example.com", Token: "tok"}.Issue(context.Background(), ref)
-	if err != nil || got != (Issue{Key: "DEV-1", Summary: "Price Decimal Formatting", Type: "Story", Status: "In Progress"}) {
+	want := Issue{Key: "DEV-1", Summary: "Price Decimal Formatting", Type: "Story", Status: "In Progress", Priority: "High", Assignee: "Sam Lee",
+		Updated:     time.Date(2026, 10, 2, 10, 4, 5, 123e6, time.UTC),
+		Description: "Prices show two decimals.\n\n• Hosted page\n• Ask @Sam\n\nhttps://example.com/spec"}
+	if err != nil || !got.Updated.Equal(want.Updated) {
 		t.Fatalf("Issue = %+v, %v", got, err)
+	}
+	got.Updated = want.Updated
+	if got != want {
+		t.Fatalf("Issue = %#v\nwant    %#v", got, want)
 	}
 	for _, c := range []Client{{}, {Email: "me@example.com", Token: "wrong"}} {
 		if _, err := c.Issue(context.Background(), ref); !errors.Is(err, ErrNoAccess) {

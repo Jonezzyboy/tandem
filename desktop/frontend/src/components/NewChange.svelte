@@ -35,7 +35,7 @@
 
   async function readTicket(t: { key: string; url: string }) {
     const n = ++lookups
-    ticket = { ...t, summary: '', type: '', status: '', error: '', noAccess: false }
+    ticket = { ...t, summary: '', type: '', status: '', priority: '', assignee: '', reporter: '', updated: '', description: '', error: '', noAccess: false }
     reading = true
     try {
       const got = await api.jiraLookup(t.url)
