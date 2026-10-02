@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -388,6 +389,38 @@ func TestClean(t *testing.T) {
 	}
 	if _, err := os.Stat(cc.Dir); !os.IsNotExist(err) {
 		t.Errorf("change dir survived: %v", err)
+	}
+}
+
+func TestDiscard(t *testing.T) {
+	f := newFixture(t)
+	c := f.change()
+	f.pr("api", 2, "OPEN", "", green)
+	proto, _ := c.Leg("proto")
+	api, _ := c.Leg("api")
+	f.commit(*proto, "more.txt", "more")
+
+	cc, err := DiscardCandidate(context.Background(), f.store, "DEV-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []string{"proto: 1 commits not pushed are lost", "api: PR #2 stays open on GitHub"}
+	if !cc.Ready || !slices.Equal(cc.Warnings, want) || len(cc.Branches) != 2 || len(cc.Switches) != 2 {
+		t.Fatalf("discard candidate: %+v", cc)
+	}
+	if err := Clean(context.Background(), cc); err != nil {
+		t.Fatal(err)
+	}
+	for _, l := range []*change.Leg{proto, api} {
+		if got := run(t, l.Dir(), "git", "branch", "--show-current"); got != "main" {
+			t.Errorf("%s on %q after discard", l.Name(), got)
+		}
+		if out := run(t, l.Dir(), "git", "branch", "--list", "DEV-1"); out != "" {
+			t.Errorf("%s kept DEV-1", l.Name())
+		}
+	}
+	if f.store.Exists("DEV-1") {
+		t.Error("change survived discard")
 	}
 }
 

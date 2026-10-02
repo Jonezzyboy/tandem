@@ -22,6 +22,7 @@ export const api = {
   start: (id: string, title: string, repos: string[], worktrees = false) =>
     App.Start({ id, title, repos, worktrees } as never) as unknown as Promise<StartItem[]>,
   link: (id: string, up: string, down: string) => App.Link(id, up, down),
+  rename: (id: string, title: string) => App.Rename(id, title),
   openURL: (url: string) => App.OpenURL(url),
   openFolder: (path: string) => App.OpenFolder(path),
   openEditor: (path: string) => App.OpenEditor(path),
@@ -36,6 +37,8 @@ export const api = {
   cancelTrain: (id: string) => App.CancelTrain(id),
   cleanPlan: () => App.CleanPlan() as unknown as Promise<CleanItem[]>,
   clean: (ids: string[]) => App.Clean(ids) as unknown as Promise<CleanResult[]>,
+  discardPlan: (id: string) => App.DiscardPlan(id) as unknown as Promise<CleanItem>,
+  discard: (id: string) => App.Discard(id) as unknown as Promise<CleanResult>,
 }
 
 export function on<T>(event: string, fn: (data: T) => void): () => void {

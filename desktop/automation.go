@@ -218,6 +218,7 @@ type CleanItem struct {
 	Kept      []string `json:"kept"`
 	Files     []string `json:"files"`
 	Dir       string   `json:"dir"`
+	Warnings  []string `json:"warnings"`
 }
 
 // CleanPlan lists every change with exactly what cleaning it would remove.
@@ -228,24 +229,29 @@ func (a *App) CleanPlan() ([]CleanItem, error) {
 	}
 	out := make([]CleanItem, 0, len(cands))
 	for _, cc := range cands {
-		it := CleanItem{ID: cc.Change.ID, Title: cc.Change.Title, Ready: cc.Ready, Reason: cc.Reason, Dir: cc.Dir,
-			Switches: []string{}, Worktrees: []string{}, Branches: []string{}, Kept: []string{}, Files: []string{}}
-		for _, s := range cc.Switches {
-			it.Switches = append(it.Switches, s.Source+" → "+s.Base)
-		}
-		for _, w := range cc.Worktrees {
-			it.Worktrees = append(it.Worktrees, w.Path)
-		}
-		for _, b := range cc.Branches {
-			it.Branches = append(it.Branches, b.Branch+" in "+b.Source)
-		}
-		for _, b := range cc.Kept {
-			it.Kept = append(it.Kept, b.Branch+" in "+b.Source)
-		}
-		it.Files = append(it.Files, cc.Files...)
-		out = append(out, it)
+		out = append(out, cleanItem(cc))
 	}
 	return out, nil
+}
+
+func cleanItem(cc core.CleanCandidate) CleanItem {
+	it := CleanItem{ID: cc.Change.ID, Title: cc.Change.Title, Ready: cc.Ready, Reason: cc.Reason, Dir: cc.Dir,
+		Switches: []string{}, Worktrees: []string{}, Branches: []string{}, Kept: []string{}, Files: []string{}, Warnings: []string{}}
+	for _, s := range cc.Switches {
+		it.Switches = append(it.Switches, s.Source+" → "+s.Base)
+	}
+	for _, w := range cc.Worktrees {
+		it.Worktrees = append(it.Worktrees, w.Path)
+	}
+	for _, b := range cc.Branches {
+		it.Branches = append(it.Branches, b.Branch+" in "+b.Source)
+	}
+	for _, b := range cc.Kept {
+		it.Kept = append(it.Kept, b.Branch+" in "+b.Source)
+	}
+	it.Files = append(it.Files, cc.Files...)
+	it.Warnings = append(it.Warnings, cc.Warnings...)
+	return it
 }
 
 type CleanResult struct {
@@ -270,25 +276,50 @@ func (a *App) Clean(ids []string) ([]CleanResult, error) {
 		if !want[cc.Change.ID] {
 			continue
 		}
-		lock := a.opLock(cc.Change.ID)
-		lock.Lock()
-		err := core.Clean(a.ctx, cc)
-		lock.Unlock()
-		r := CleanResult{ID: cc.Change.ID, OK: err == nil, Message: "cleaned"}
-		if err != nil {
-			r.Message = strings.ReplaceAll(err.Error(), "\n", "; ")
-		} else {
-			a.mu.Lock()
-			delete(a.views, cc.Change.ID)
-			if a.focus == cc.Change.ID {
-				a.focus = ""
-			}
-			a.mu.Unlock()
-		}
-		out = append(out, r)
+		out = append(out, a.clean(cc, "cleaned"))
 	}
 	a.emit("changes", a.Changes())
 	return out, nil
+}
+
+func (a *App) clean(cc core.CleanCandidate, done string) CleanResult {
+	lock := a.opLock(cc.Change.ID)
+	lock.Lock()
+	err := core.Clean(a.ctx, cc)
+	lock.Unlock()
+	r := CleanResult{ID: cc.Change.ID, OK: err == nil, Message: done}
+	if err != nil {
+		r.Message = strings.ReplaceAll(err.Error(), "\n", "; ")
+		return r
+	}
+	a.mu.Lock()
+	delete(a.views, cc.Change.ID)
+	if a.focus == cc.Change.ID {
+		a.focus = ""
+	}
+	a.mu.Unlock()
+	return r
+}
+
+// DiscardPlan lists what deleting change id now would remove, and the
+// unlanded work that goes with it.
+func (a *App) DiscardPlan(id string) (CleanItem, error) {
+	cc, err := core.DiscardCandidate(a.ctx, a.store, id)
+	if err != nil {
+		return CleanItem{}, err
+	}
+	return cleanItem(cc), nil
+}
+
+// Discard deletes change id whether or not its work landed.
+func (a *App) Discard(id string) (CleanResult, error) {
+	cc, err := core.DiscardCandidate(a.ctx, a.store, id)
+	if err != nil {
+		return CleanResult{}, err
+	}
+	r := a.clean(cc, "deleted")
+	a.emit("changes", a.Changes())
+	return r, nil
 }
 
 // Switch checks out the change's branch in every leg (toBase: each leg's base

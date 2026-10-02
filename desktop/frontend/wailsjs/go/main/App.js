@@ -42,6 +42,14 @@ export function CommitPins(arg1) {
   return window['go']['main']['App']['CommitPins'](arg1);
 }
 
+export function Discard(arg1) {
+  return window['go']['main']['App']['Discard'](arg1);
+}
+
+export function DiscardPlan(arg1) {
+  return window['go']['main']['App']['DiscardPlan'](arg1);
+}
+
 export function Editors() {
   return window['go']['main']['App']['Editors']();
 }
@@ -88,6 +96,10 @@ export function Refresh(arg1) {
 
 export function RemoveLeg(arg1, arg2) {
   return window['go']['main']['App']['RemoveLeg'](arg1, arg2);
+}
+
+export function Rename(arg1, arg2) {
+  return window['go']['main']['App']['Rename'](arg1, arg2);
 }
 
 export function Repos() {
