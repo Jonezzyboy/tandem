@@ -216,6 +216,7 @@ export interface CleanItem {
   kept: string[]
   files: string[]
   dir: string
+  warnings: string[]
 }
 
 export interface CleanResult {

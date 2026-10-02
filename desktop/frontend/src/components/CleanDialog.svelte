@@ -4,16 +4,18 @@
   import type { CleanItem, CleanResult } from '@lib/types'
   import Icon from './Icon.svelte'
 
-  let { items, onclose }: { items: CleanItem[]; onclose: () => void } = $props()
+  // discard deletes the one change in items whether or not its work landed.
+  let { items, discard = false, onclose }: { items: CleanItem[]; discard?: boolean; onclose: () => void } = $props()
 
   let busy = $state(false)
   let results = $state<CleanResult[] | null>(null)
+  const warnings = $derived(items.flatMap((it) => it.warnings ?? []))
   const count = $derived(items.reduce((n, it) => n + it.switches.length + it.worktrees.length + it.branches.length + it.files.length, 0))
 
   async function clean() {
     busy = true
     try {
-      results = await api.clean(items.map((it) => it.id))
+      results = discard ? [await api.discard(items[0].id)] : await api.clean(items.map((it) => it.id))
       loadCleanPlan()
     } catch (e) {
       fail(e)
@@ -33,8 +35,11 @@
 <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="clean-title">
   <div class="top">
     <div>
-      <div class="mono muted small">housekeeping</div>
-      <h2 id="clean-title">{results ? 'Cleaned up' : `Clean up ${items.length} landed change${items.length === 1 ? '' : 's'}`}</h2>
+      <div class="mono muted small">{discard ? 'delete change' : 'housekeeping'}</div>
+      <h2 id="clean-title">
+        {#if discard}{results ? 'Deleted' : `Delete ${items[0].id}`}
+        {:else}{results ? 'Cleaned up' : `Clean up ${items.length} landed change${items.length === 1 ? '' : 's'}`}{/if}
+      </h2>
     </div>
     <button class="icon-btn" aria-label="Close" disabled={busy} onclick={onclose}><Icon name="close" /></button>
   </div>
@@ -49,7 +54,13 @@
         </div>
       {/each}
     {:else}
-      <p class="muted small">Exactly what is listed happens. A repo still on the change’s branch moves to its base first; git refuses if that would lose work, and the change stays.</p>
+      {#if warnings.length}
+        <div class="warnings">
+          <div class="warn-head"><Icon name="alert" color="var(--warn)" />This change has work that hasn’t landed</div>
+          <ul>{#each warnings as w}<li>{w}</li>{/each}</ul>
+        </div>
+      {/if}
+      <p class="muted small">{#if discard}Pushed branches and PRs on GitHub stay. {/if}Exactly what is listed happens. A repo still on the change’s branch moves to its base first; git refuses if that would lose work, and the change stays.</p>
       {#each items as it (it.id)}
         <section>
           <div class="head"><span class="mono accent">{it.id}</span><span>{it.title}</span></div>
@@ -72,7 +83,11 @@
     {:else}
       <button class="btn" disabled={busy} onclick={onclose}>Cancel</button>
       <button class="btn danger" disabled={busy} onclick={clean}>
-        <Icon name="close" spin={busy} />Clean up {count} items
+        {#if discard}
+          <Icon name="trash" spin={busy} />{warnings.length ? 'Delete anyway' : 'Delete change'}
+        {:else}
+          <Icon name="close" spin={busy} />Clean up {count} items
+        {/if}
       </button>
     {/if}
   </div>
@@ -96,6 +111,10 @@
   ul { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--text-2); }
   li { display: grid; grid-template-columns: 72px minmax(0, 1fr); gap: 8px; word-break: break-all; }
   .verb { color: var(--muted); }
+  .warnings { padding: 12px 16px; border-radius: 12px; background: var(--warn-row); border: 1px solid var(--warn-border); color: var(--warn-text); font-size: 13px; }
+  .warn-head { display: flex; gap: 8px; align-items: center; font-weight: 600; }
+  .warnings ul { margin-top: 8px; padding-left: 24px; list-style: disc; display: block; font-size: 13px; color: inherit; }
+  .warnings li { display: list-item; margin-top: 3px; word-break: normal; }
   .result { display: flex; gap: 10px; align-items: center; padding: 10px 14px; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; font-size: 13px; }
   .foot { display: flex; justify-content: space-between; align-items: center; padding: 14px 24px 20px; border-top: 1px solid var(--line); }
   .danger { background: var(--danger); border-color: var(--danger); color: var(--on-accent); }

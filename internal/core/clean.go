@@ -46,6 +46,8 @@ type CleanCandidate struct {
 	Worktrees []WorktreeRef
 	Files     []string
 	Dir       string
+	// Warnings is work a discard throws away or leaves behind.
+	Warnings []string
 }
 
 // CleanCandidates checks every change. A change is ready when each leg's PR
@@ -61,6 +63,47 @@ func CleanCandidates(ctx context.Context, store change.Store) ([]CleanCandidate,
 		out = append(out, candidate(ctx, store, c))
 	}
 	return out, nil
+}
+
+// DiscardCandidate is the change id cleaned whether or not its work landed:
+// every leg's local branch goes, and Warnings lists what that costs.
+func DiscardCandidate(ctx context.Context, store change.Store, id string) (CleanCandidate, error) {
+	c, err := store.Load(id)
+	if err != nil {
+		return CleanCandidate{}, err
+	}
+	cc := CleanCandidate{Change: c, Dir: store.Dir(c.ID), Ready: true}
+	for _, s := range Snapshot(ctx, c, true) {
+		l := s.Leg
+		if s.StatusErr != nil {
+			cc.Warnings = append(cc.Warnings, l.Name()+": can't read git status, so its branch is left alone")
+			continue
+		}
+		if s.PRErr != nil {
+			cc.Warnings = append(cc.Warnings, l.Name()+": couldn't read its PR from GitHub")
+		}
+		if s.OnBranch() && s.Status.Dirty > 0 {
+			cc.Warnings = append(cc.Warnings, fmt.Sprintf("%s: %d uncommitted files, carried onto %s (git refuses if they clash, and nothing is deleted)", l.Name(), s.Status.Dirty, l.Base))
+		}
+		switch n := unpushed(ctx, c, l); {
+		case n > 0:
+			cc.Warnings = append(cc.Warnings, fmt.Sprintf("%s: %d commits not pushed are lost", l.Name(), n))
+		case s.PR == nil && s.Status.Ahead > 0 && gitx.RefExists(ctx, l.Dir(), "refs/heads/"+c.Branch) &&
+			!gitx.RefExists(ctx, l.Dir(), "refs/remotes/origin/"+c.Branch):
+			cc.Warnings = append(cc.Warnings, fmt.Sprintf("%s: %d commits never pushed are lost", l.Name(), s.Status.Ahead))
+		}
+		if s.PR != nil && s.PR.State == "OPEN" {
+			cc.Warnings = append(cc.Warnings, l.Name()+": PR #"+strconv.Itoa(s.PR.Number)+" stays open on GitHub")
+		}
+		if l.Worktree != "" {
+			cc.Worktrees = append(cc.Worktrees, WorktreeRef{Path: l.Worktree, Source: l.Source})
+		} else if s.OnBranch() {
+			cc.Switches = append(cc.Switches, SwitchRef{Repo: l.Repo, Source: l.Source, Base: l.Base})
+		}
+		cc.Branches = append(cc.Branches, BranchRef{Repo: l.Repo, Source: l.Source, Branch: c.Branch})
+	}
+	cc.Files = changeFiles(cc)
+	return cc, nil
 }
 
 func candidate(ctx context.Context, store change.Store, c *change.Change) CleanCandidate {
@@ -102,18 +145,24 @@ func candidate(ctx context.Context, store change.Store, c *change.Change) CleanC
 	if len(why) > 0 {
 		cc.Ready, cc.Reason = false, strings.Join(why, "; ")
 	}
+	cc.Files = changeFiles(cc)
+	return cc
+}
+
+func changeFiles(cc CleanCandidate) []string {
 	legDirs := map[string]bool{}
 	for _, w := range cc.Worktrees {
 		legDirs[filepath.Clean(w.Path)] = true
 	}
+	var files []string
 	entries, _ := os.ReadDir(cc.Dir)
 	for _, e := range entries {
 		p := filepath.Join(cc.Dir, e.Name())
 		if !e.IsDir() && !legDirs[p] {
-			cc.Files = append(cc.Files, p)
+			files = append(files, p)
 		}
 	}
-	return cc
+	return files
 }
 
 func unpushed(ctx context.Context, c *change.Change, l *change.Leg) int {

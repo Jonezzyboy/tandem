@@ -32,12 +32,51 @@
   const cleanItem = $derived((app.cleanPlan ?? []).find((c) => c.id === id))
   // Held apart from the plan, which drops the change as soon as it's cleaned.
   let cleaning = $state<CleanItem | null>(null)
+  let discarding = $state(false)
   $effect(() => {
     if (landed) loadCleanPlan()
   })
   function closeClean() {
     cleaning = null
+    discarding = false
     if (!app.changes.some((c) => c.id === id)) navigate({ name: 'inbox' })
+  }
+
+  let planningDiscard = $state(false)
+  async function planDiscard() {
+    planningDiscard = true
+    try {
+      cleaning = await api.discardPlan(id)
+      discarding = true
+    } catch (e) {
+      fail(e)
+    } finally {
+      planningDiscard = false
+    }
+  }
+
+  let titleDraft = $state<string | null>(null)
+  function editTitle() {
+    titleDraft = view?.title ?? ''
+  }
+  async function saveTitle() {
+    if (titleDraft === null) return
+    const next = titleDraft.trim()
+    titleDraft = null
+    if (next === (view?.title ?? '')) return
+    try {
+      await api.rename(id, next)
+    } catch (e) {
+      fail(e)
+    }
+  }
+  function titleKey(e: KeyboardEvent) {
+    if (e.key === 'Enter') saveTitle()
+    else if (e.key === 'Escape') titleDraft = null
+  }
+  function selectAll(el: HTMLInputElement) {
+    el.focus()
+    el.select()
   }
 
   const offBranch = $derived(landed ? [] : (view?.legs ?? []).filter((l) => !l.onBranch))
@@ -222,9 +261,17 @@
             {/if}
           {/if}
         </div>
-        <h1 title={view.title}>{view.title || 'Untitled change'}</h1>
+        {#if titleDraft !== null}
+          <input class="title-input" bind:value={titleDraft} use:selectAll onkeydown={titleKey} onblur={saveTitle}
+            placeholder="Untitled change" aria-label="Change title" style="--wails-draggable: no-drag" />
+        {:else}
+          <h1><button class="title-btn" class:untitled={!view.title} onclick={editTitle} title="Rename" style="--wails-draggable: no-drag">{view.title || 'Untitled change'}</button></h1>
+        {/if}
       </div>
       <div class="actions" style="--wails-draggable: no-drag">
+        <button class="icon-btn" aria-label="Delete this change" title="Delete change" disabled={planningDiscard} onclick={planDiscard}>
+          <Icon name="trash" spin={planningDiscard} />
+        </button>
         <button class="icon-btn" aria-label="Refresh from GitHub" title="Refresh (⌘R)" onclick={() => api.refresh(id)}>
           <Icon name="refresh" />
         </button>
@@ -443,7 +490,7 @@
     <EdgesDialog {view} onclose={() => (edgesOpen = false)} />
   {/if}
   {#if cleaning}
-    <CleanDialog items={[cleaning]} onclose={closeClean} />
+    <CleanDialog items={[cleaning]} discard={discarding} onclose={closeClean} />
   {/if}
   {#if app.trainOpen}
     <TrainDialog {view} onclose={() => (app.trainOpen = false)} />
@@ -460,6 +507,15 @@
   .meta > :last-child { overflow: hidden; text-overflow: ellipsis; }
   .accent { color: var(--accent-text); }
   h1 { margin: 0; font-family: var(--display); font-weight: 700; font-size: 30px; letter-spacing: -0.01em; line-height: 1.15; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .title-btn { all: unset; cursor: text; max-width: 100%; overflow: hidden; text-overflow: ellipsis; border-radius: 6px; }
+  .title-btn:hover { box-shadow: 0 0 0 4px var(--panel); background: var(--panel); }
+  .title-btn:focus-visible { outline: 2px solid var(--accent-text); outline-offset: 2px; }
+  .untitled { color: var(--muted); }
+  .title-input {
+    margin: 0; padding: 0 4px; margin-left: -5px; font-family: var(--display); font-weight: 700; font-size: 30px; letter-spacing: -0.01em;
+    line-height: 1.15; color: inherit; background: var(--nav); border: 1px solid var(--line-2); border-radius: 6px; outline: none; width: 100%;
+  }
+  .title-input:focus { border-color: var(--accent-text); }
   .actions { display: flex; gap: 8px; align-items: center; flex-shrink: 0; margin-left: auto; }
   .switch-banner {
     display: flex; align-items: center; gap: 12px; padding: 10px 12px 10px 14px; border-radius: 10px;

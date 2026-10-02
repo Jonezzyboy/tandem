@@ -24,6 +24,10 @@ export function CleanPlan():Promise<Array<main.CleanItem>>;
 
 export function CommitPins(arg1:string):Promise<Array<main.LegResult>>;
 
+export function Discard(arg1:string):Promise<main.CleanResult>;
+
+export function DiscardPlan(arg1:string):Promise<main.CleanItem>;
+
 export function Editors():Promise<Array<main.EditorApp>>;
 
 export function Focus(arg1:string):Promise<void>;
@@ -47,6 +51,8 @@ export function PublishPRs(arg1:string,arg2:main.PRRequest):Promise<main.PRPrevi
 export function Refresh(arg1:string):Promise<void>;
 
 export function RemoveLeg(arg1:string,arg2:string):Promise<string>;
+
+export function Rename(arg1:string,arg2:string):Promise<void>;
 
 export function Repos():Promise<Array<main.RepoInfo>>;
 

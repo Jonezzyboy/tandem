@@ -817,6 +817,24 @@ func (a *App) Link(id, upstream, downstream string) error {
 	return nil
 }
 
+// Rename sets change id's title; a leading change ID is dropped, as PR titles
+// add it back.
+func (a *App) Rename(id, title string) error {
+	lock := a.opLock(id)
+	lock.Lock()
+	defer lock.Unlock()
+	c, err := a.store.Load(id)
+	if err != nil {
+		return err
+	}
+	c.Title = strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(title), c.ID))
+	if err := a.store.Save(c); err != nil {
+		return err
+	}
+	go a.refresh(id, false)
+	return nil
+}
+
 func (a *App) OpenURL(url string) error {
 	if !strings.HasPrefix(url, "https://") {
 		return fmt.Errorf("refusing to open %q", url)

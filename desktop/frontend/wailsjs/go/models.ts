@@ -318,6 +318,7 @@ export namespace main {
 	    kept: string[];
 	    files: string[];
 	    dir: string;
+	    warnings: string[];
 	
 	    static createFrom(source: any = {}) {
 	        return new CleanItem(source);
@@ -335,6 +336,7 @@ export namespace main {
 	        this.kept = source["kept"];
 	        this.files = source["files"];
 	        this.dir = source["dir"];
+	        this.warnings = source["warnings"];
 	    }
 	}
 	export class CleanResult {
