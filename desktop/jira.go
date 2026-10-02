@@ -75,11 +75,17 @@ func (a *App) SaveJira(email, token string) (JiraAccount, error) {
 }
 
 type JiraTicket struct {
-	Key     string `json:"key"`
-	URL     string `json:"url"`
-	Summary string `json:"summary"`
-	Type    string `json:"type"`
-	Status  string `json:"status"`
+	Key      string `json:"key"`
+	URL      string `json:"url"`
+	Summary  string `json:"summary"`
+	Type     string `json:"type"`
+	Status   string `json:"status"`
+	Priority string `json:"priority"`
+	Assignee string `json:"assignee"`
+	Reporter string `json:"reporter"`
+	// Updated is RFC 3339, or empty when Jira didn't say.
+	Updated     string `json:"updated"`
+	Description string `json:"description"`
 	// Error says why the issue couldn't be read; Key and URL are still set.
 	Error    string `json:"error"`
 	NoAccess bool   `json:"noAccess"`
@@ -100,7 +106,11 @@ func (a *App) JiraLookup(link string) (JiraTicket, error) {
 		t.Error, t.NoAccess = err.Error(), errors.Is(err, jira.ErrNoAccess)
 		return t, nil
 	}
-	t.Summary, t.Type, t.Status = is.Summary, is.Type, is.Status
+	t.Summary, t.Type, t.Status, t.Priority, t.Assignee, t.Reporter, t.Description =
+		is.Summary, is.Type, is.Status, is.Priority, is.Assignee, is.Reporter, is.Description
+	if !is.Updated.IsZero() {
+		t.Updated = is.Updated.Format(time.RFC3339)
+	}
 	return t, nil
 }
 

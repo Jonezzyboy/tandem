@@ -492,6 +492,11 @@ export namespace main {
 	    summary: string;
 	    type: string;
 	    status: string;
+	    priority: string;
+	    assignee: string;
+	    reporter: string;
+	    updated: string;
+	    description: string;
 	    error: string;
 	    noAccess: boolean;
 	
@@ -506,6 +511,11 @@ export namespace main {
 	        this.summary = source["summary"];
 	        this.type = source["type"];
 	        this.status = source["status"];
+	        this.priority = source["priority"];
+	        this.assignee = source["assignee"];
+	        this.reporter = source["reporter"];
+	        this.updated = source["updated"];
+	        this.description = source["description"];
 	        this.error = source["error"];
 	        this.noAccess = source["noAccess"];
 	    }

@@ -56,11 +56,20 @@
   }
 
   let jira = $state<JiraTicket | null>(null)
-  // A primitive, so the lookup reruns only when the link changes, not on every view refresh.
+  let ticketOpen = $state(false)
+  // Primitives, so Jira is reread when the link changes or GitHub is reread (Refresh, ⌘R, the minute
+  // poll), not on every local view update.
   const ticketLink = $derived(view?.ticket ?? '')
+  const remoteAt = $derived(view?.remoteAt ?? '')
+  let jiraFor = ''
   $effect(() => {
     const link = ticketLink
-    jira = null
+    void remoteAt
+    // A reread keeps the details on screen; a new link clears the old ticket's.
+    if (link !== jiraFor) {
+      jira = null
+      jiraFor = link
+    }
     if (!link) return
     let live = true
     api.jiraLookup(link).then((t) => { if (live) jira = t }).catch(() => {})
@@ -139,6 +148,10 @@
   let now = $state(Date.now())
   const tick = setInterval(() => (now = Date.now()), 1000)
   onDestroy(() => clearInterval(tick))
+  const jiraFacts = $derived(jira && !jira.error
+    ? [['Status', jira.status], ['Type', jira.type], ['Priority', jira.priority], ['Assignee', jira.assignee || 'Unassigned'], ['Reporter', jira.reporter],
+       ['Updated', jira.updated ? `${ago(jira.updated, now)} ago` : '']].filter(([, v]) => v)
+    : [])
 
   // Change-scoped shortcuts arrive from App's keymap as tandem:command events.
   function onCommand(e: Event) {
@@ -340,8 +353,23 @@
           <button class="btn small primary" onclick={saveTicket}>Save</button>
         {:else}
           <button class="link mono" onclick={() => api.openURL(view.ticket)}>{view.ticket.replace('https://', '')}</button>
-          <span class="muted grow-text">Shown in every PR’s description.</span>
+          <span class="muted grow-text">{jira?.error ? jira.error : jira?.summary || 'Shown in every PR’s description.'}</span>
+          {#if jira && !jira.error}
+            <button class="btn small" aria-expanded={ticketOpen} onclick={() => (ticketOpen = !ticketOpen)}>{ticketOpen ? 'Hide details' : 'Details'}</button>
+          {/if}
           <button class="btn small" onclick={() => (ticketDraft = view.ticket)}>Change link</button>
+        {/if}
+        {#if ticketOpen && jira && !jira.error && ticketDraft === null}
+          <div class="ticket-details">
+            <dl>
+              {#each jiraFacts as [label, value] (label)}<div><dt class="eyebrow">{label}</dt><dd>{value}</dd></div>{/each}
+            </dl>
+            {#if jira.description}
+              <div class="ticket-desc selectable">{jira.description}</div>
+            {:else}
+              <p class="muted small">No description.</p>
+            {/if}
+          </div>
         {/if}
       </div>
     {/if}
@@ -570,9 +598,15 @@
   .actions { display: flex; gap: 8px; align-items: center; flex-shrink: 0; margin-left: auto; }
   .ticket-id { display: inline-flex; align-items: center; gap: 4px; }
   .ticket-strip {
-    display: flex; align-items: center; gap: 14px; padding: 10px 12px 10px 16px; border-radius: 12px;
+    display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; padding: 10px 12px 10px 16px; border-radius: 12px;
     background: var(--panel); border: 1px solid var(--line); font-size: 13px;
   }
+  .ticket-strip > .grow-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .ticket-details { flex-basis: 100%; display: flex; flex-direction: column; gap: 14px; padding: 12px 4px 6px 0; border-top: 1px solid var(--line); }
+  .ticket-details dl { display: flex; flex-wrap: wrap; gap: 10px 32px; margin: 0; }
+  .ticket-details dt { margin-bottom: 3px; }
+  .ticket-details dd { margin: 0; color: var(--text); }
+  .ticket-desc { white-space: pre-wrap; line-height: 1.55; color: var(--text-2); max-height: 320px; overflow: auto; }
   .ticket-input { flex: 1; min-height: 30px; }
   .switch-banner {
     display: flex; align-items: center; gap: 12px; padding: 10px 12px 10px 14px; border-radius: 10px;

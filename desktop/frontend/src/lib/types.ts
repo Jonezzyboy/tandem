@@ -232,6 +232,12 @@ export interface JiraTicket {
   summary: string
   type: string
   status: string
+  priority: string
+  assignee: string
+  reporter: string
+  // RFC 3339, or empty when Jira didn't say.
+  updated: string
+  description: string
   // Why the issue couldn't be read; key and url are still set.
   error: string
   noAccess: boolean
