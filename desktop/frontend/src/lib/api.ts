@@ -23,6 +23,7 @@ export const api = {
     App.Start({ id, title, repos, worktrees, ticket } as never) as unknown as Promise<StartItem[]>,
   link: (id: string, up: string, down: string) => App.Link(id, up, down),
   rename: (id: string, title: string) => App.Rename(id, title),
+  reorder: (ids: string[]) => App.Reorder(ids),
   setTicket: (id: string, link: string) => App.SetTicket(id, link),
   jiraLookup: (link: string) => App.JiraLookup(link) as unknown as Promise<JiraTicket>,
   jiraAccount: () => App.JiraAccount() as unknown as Promise<JiraAccount>,

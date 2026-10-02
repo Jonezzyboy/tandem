@@ -166,11 +166,16 @@ func (s Store) Save(c *Change) error {
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return err
 	}
-	data, err := json.MarshalIndent(c, "", "  ")
+	return writeJSON(dir, file, c)
+}
+
+// writeJSON replaces dir/name in one rename, so a reader never sees half a file.
+func writeJSON(dir, name string, v any) error {
+	data, err := json.MarshalIndent(v, "", "  ")
 	if err != nil {
 		return err
 	}
-	tmp, err := os.CreateTemp(dir, ".change-*.json")
+	tmp, err := os.CreateTemp(dir, "."+name+"-*")
 	if err != nil {
 		return err
 	}
@@ -182,10 +187,31 @@ func (s Store) Save(c *Change) error {
 	if err := tmp.Close(); err != nil {
 		return err
 	}
-	return os.Rename(tmp.Name(), filepath.Join(dir, file))
+	return os.Rename(tmp.Name(), filepath.Join(dir, name))
 }
 
-// List returns every change, newest first.
+// orderFile at Home ranks changes, first to last, as the user arranged them.
+const orderFile = "order.json"
+
+// Order is the saved ranking of change IDs; it may name changes since cleaned.
+func (s Store) Order() []string {
+	var ids []string
+	data, err := os.ReadFile(filepath.Join(s.Home, orderFile))
+	if err == nil {
+		json.Unmarshal(data, &ids)
+	}
+	return ids
+}
+
+func (s Store) SetOrder(ids []string) error {
+	if err := os.MkdirAll(s.Home, 0o755); err != nil {
+		return err
+	}
+	return writeJSON(s.Home, orderFile, ids)
+}
+
+// List returns every change in the saved order. Changes it doesn't rank, such
+// as ones started since, come first, newest first.
 func (s Store) List() ([]*Change, error) {
 	entries, err := os.ReadDir(s.Home)
 	if errors.Is(err, fs.ErrNotExist) {
@@ -205,7 +231,23 @@ func (s Store) List() ([]*Change, error) {
 		}
 		out = append(out, c)
 	}
-	sort.Slice(out, func(i, j int) bool { return out[i].Created.After(out[j].Created) })
+	rank := map[string]int{}
+	for i, id := range s.Order() {
+		if _, dup := rank[id]; !dup {
+			rank[id] = i
+		}
+	}
+	sort.Slice(out, func(i, j int) bool {
+		ri, iok := rank[out[i].ID]
+		rj, jok := rank[out[j].ID]
+		if iok != jok {
+			return !iok
+		}
+		if iok {
+			return ri < rj
+		}
+		return out[i].Created.After(out[j].Created)
+	})
 	return out, nil
 }
 

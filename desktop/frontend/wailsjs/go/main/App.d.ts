@@ -58,6 +58,8 @@ export function RemoveLeg(arg1:string,arg2:string):Promise<string>;
 
 export function Rename(arg1:string,arg2:string):Promise<void>;
 
+export function Reorder(arg1:Array<string>):Promise<void>;
+
 export function Repos():Promise<Array<main.RepoInfo>>;
 
 export function SaveJira(arg1:string,arg2:string):Promise<main.JiraAccount>;
