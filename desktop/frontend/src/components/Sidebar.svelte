@@ -9,9 +9,14 @@
 
   const reviewCount = $derived(app.inbox?.review?.length ?? 0)
 
-  let dragging = $state<string | null>(null)
-  // The gap the dragged change would land in: 0 is above the first, n below the last.
-  let gap = $state<number | null>(null)
+  // Pointer-driven rather than HTML5 drag-and-drop: the row follows the pointer, the others slide aside
+  // live, and releasing anywhere commits, so there are no dead gaps between drop targets.
+  const ROW_GAP = 2
+  const THRESHOLD = 4
+  interface Drag { id: string; from: number; to: number; startY: number; dy: number; tops: number[]; heights: number[]; moved: boolean; el: HTMLElement }
+  let drag = $state<Drag | null>(null)
+  let listEl = $state<HTMLElement>()
+  let justDragged = false
 
   async function move(id: string, to: number) {
     const ids = app.changes.map((c) => c.id)
@@ -29,18 +34,74 @@
     }
   }
 
-  function onDragOver(e: DragEvent, i: number) {
-    if (!dragging) return
-    e.preventDefault()
-    e.dataTransfer!.dropEffect = 'move'
-    const r = (e.currentTarget as HTMLElement).getBoundingClientRect()
-    gap = e.clientY < r.top + r.height / 2 ? i : i + 1
+  function shift(i: number): string | null {
+    if (!drag?.moved) return null
+    const { from, to, dy, heights } = drag
+    if (i === from) return `translateY(${dy}px)`
+    const room = heights[from] + ROW_GAP
+    if (from < to && i > from && i <= to) return `translateY(${-room}px)`
+    if (to < from && i >= to && i < from) return `translateY(${room}px)`
+    return null
   }
 
-  function onDrop(e: DragEvent) {
-    e.preventDefault()
-    if (dragging !== null && gap !== null) move(dragging, gap)
-    dragging = gap = null
+  // Where row i sits while dragging, so its ⌘ shortcut previews the order it would land in.
+  function slot(i: number): number {
+    if (!drag?.moved) return i
+    const { from, to } = drag
+    if (i === from) return to
+    if (from < to && i > from && i <= to) return i - 1
+    if (to < from && i >= to && i < from) return i + 1
+    return i
+  }
+
+  function onPointerDown(e: PointerEvent, id: string, i: number) {
+    if (e.button !== 0 || (e.target as HTMLElement).closest('.quick-switch') || !listEl) return
+    const rects = [...listEl.querySelectorAll<HTMLElement>(':scope > .change-wrap')].map((w) => w.getBoundingClientRect())
+    drag = { id, from: i, to: i, startY: e.clientY, dy: 0, tops: rects.map((r) => r.top), heights: rects.map((r) => r.height), moved: false, el: e.currentTarget as HTMLElement }
+    window.addEventListener('pointermove', onPointerMove)
+    window.addEventListener('pointerup', onPointerUp)
+    window.addEventListener('pointercancel', onPointerUp)
+  }
+
+  function onPointerMove(e: PointerEvent) {
+    if (!drag) return
+    const { from, tops, heights } = drag
+    const dy = e.clientY - drag.startY
+    if (!drag.moved && Math.abs(dy) < THRESHOLD) return
+    drag.moved = true
+    const last = tops.length - 1
+    const top = Math.min(Math.max(tops[from] + dy, tops[0]), tops[last] + heights[last] - heights[from])
+    drag.dy = top - tops[from]
+    const centre = top + heights[from] / 2
+    drag.to = tops.filter((t, j) => j !== from && t + heights[j] / 2 < centre).length
+  }
+
+  async function onPointerUp(e: PointerEvent) {
+    window.removeEventListener('pointermove', onPointerMove)
+    window.removeEventListener('pointerup', onPointerUp)
+    window.removeEventListener('pointercancel', onPointerUp)
+    const d = drag
+    if (!d?.moved) {
+      drag = null
+      return
+    }
+    // The click that follows a drag must not open the change.
+    justDragged = true
+    setTimeout(() => (justDragged = false))
+    // Rows drop their slide offsets as the list reorders under them; animating that would double the move.
+    const rows = [...listEl!.querySelectorAll<HTMLElement>(':scope > .change-wrap')]
+    for (const r of rows) r.style.transition = 'none'
+    const before = d.el.getBoundingClientRect().top
+    drag = null
+    if (e.type === 'pointerup' && d.to !== d.from) move(d.id, d.to > d.from ? d.to + 1 : d.to)
+    await tick()
+    // Then glide the dropped row from where it was let go into its slot.
+    d.el.style.transform = `translateY(${before - d.el.getBoundingClientRect().top}px)`
+    d.el.getBoundingClientRect()
+    requestAnimationFrame(() => {
+      for (const r of rows) r.style.transition = ''
+      d.el.style.transform = ''
+    })
   }
 
   async function onKey(e: KeyboardEvent, id: string, i: number) {
@@ -70,17 +131,15 @@
 
   <div class="group changes grow-list">
     <div class="eyebrow label" id="my-changes">My changes</div>
-    <div class="list" role="list" aria-labelledby="my-changes">
+    <div class="list" role="list" aria-labelledby="my-changes" bind:this={listEl} class:dragging={drag?.moved}>
     {#each app.changes as c, i (c.id)}
-      <div class="change-wrap" role="listitem" draggable="true"
-        class:dragging={dragging === c.id} class:drop-before={gap === i} class:drop-after={gap === i + 1 && i === app.changes.length - 1}
-        ondragstart={(e) => { dragging = c.id; e.dataTransfer!.effectAllowed = 'move'; e.dataTransfer!.setData('text/plain', c.id) }}
-        ondragover={(e) => onDragOver(e, i)} ondrop={onDrop} ondragend={() => (dragging = gap = null)}>
+      <div class="change-wrap" role="listitem" class:lifted={drag?.moved && drag.id === c.id} class:sliding={drag?.moved && drag.id !== c.id}
+        style:transform={shift(i)} onpointerdown={(e) => onPointerDown(e, c.id, i)}>
         <button
           class="change"
           data-change={c.id}
           class:active={app.route.name === 'change' && app.route.id === c.id}
-          onclick={() => navigate({ name: 'change', id: c.id })}
+          onclick={() => { if (!justDragged) navigate({ name: 'change', id: c.id }) }}
           onkeydown={(e) => onKey(e, c.id, i)}
           title="Drag, or ⌥↑ ⌥↓, to reorder"
         >
@@ -89,7 +148,7 @@
               <span class="mono id">{c.id}</span>
               {#if c.checkedOut}<span class="live" title="Checked out in every repo" aria-label="checked out"></span>{/if}
             </span>
-            {#if i < 9}<Kbd keys={['⌘', String(i + 1)]} />{/if}
+            {#if slot(i) < 9}<Kbd keys={['⌘', String(slot(i) + 1)]} />{/if}
           </span>
           <span class="title">{c.title || 'Untitled change'}</span>
           <span class="headline {c.tone}">{c.headline}</span>
@@ -172,13 +231,17 @@
   .change { flex-direction: column; gap: 2px; padding: 9px 10px; width: 100%; }
   .list { display: flex; flex-direction: column; gap: 2px; }
   .change-wrap { position: relative; }
-  .change-wrap.dragging { opacity: 0.4; }
-  /* The drop line sits in the 2px gap between rows, so showing it moves nothing. */
-  .change-wrap.drop-before::before, .change-wrap.drop-after::after {
-    content: ''; position: absolute; left: 6px; right: 6px; height: 2px; border-radius: 1px; background: var(--accent-text); pointer-events: none;
+  .change-wrap { transition: transform 0.18s cubic-bezier(0.2, 0.8, 0.2, 1); touch-action: none; }
+  .list.dragging, .list.dragging .change { cursor: grabbing; }
+  .change-wrap.lifted {
+    z-index: 2; transition: none; border-radius: 8px; background: var(--raised);
+    box-shadow: 0 0 0 1px var(--line-2), 0 10px 24px var(--shadow);
   }
-  .change-wrap.drop-before::before { top: -2px; }
-  .change-wrap.drop-after::after { bottom: -2px; }
+  .change-wrap.lifted .change { background: transparent; }
+  /* The lift itself: on the inner button, since the row's own transform tracks the pointer. */
+  .change-wrap .change { transition: transform 0.15s ease-out; }
+  .change-wrap.lifted .change { transform: scale(1.025); }
+  .change-wrap.lifted { transition: box-shadow 0.15s ease-out, background 0.15s ease-out; }
   .quick-switch {
     position: absolute; right: 6px; bottom: 7px; width: 26px; height: 26px;
     background: var(--raised); border: 1px solid var(--line-2); opacity: 0; transition: opacity 0.12s;
@@ -195,7 +258,8 @@
   .headline.warn { color: var(--warn-text); }
   .headline.ok { color: var(--ok-text); }
   .empty { margin: 0; padding: 0 10px; font-size: 13px; color: var(--muted); line-height: 1.5; }
-  .grow-list { flex: 1; min-height: 0; overflow-y: auto; }
+  /* Bleeds into nav's padding so a lifted row's scale and shadow have room without a sideways scrollbar. */
+  .grow-list { flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; margin: 0 -12px; padding: 0 12px 12px; }
   .account {
     display: flex; align-items: center; gap: 4px; margin: 0 -12px -16px; padding: 10px 12px 12px;
     border-top: 1px solid var(--line); background: var(--nav);
