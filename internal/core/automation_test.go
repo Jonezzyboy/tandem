@@ -362,12 +362,14 @@ func TestClean(t *testing.T) {
 	}
 
 	f.pr("api", 2, "MERGED", "", green)
-	write(t, filepath.Join(api.Dir(), "wip.txt"), "wip", 0o644)
+	write(t, filepath.Join(api.Dir(), "work.txt"), "wip", 0o644)
 	cands, _ = CleanCandidates(context.Background(), f.store)
 	if cands[0].Ready || !strings.Contains(cands[0].Reason, "api: 1 uncommitted files on DEV-1") {
 		t.Fatalf("uncommitted work should block: %+v", cands[0])
 	}
-	os.Remove(filepath.Join(api.Dir(), "wip.txt"))
+	run(t, api.Dir(), "git", "checkout", "--", "work.txt")
+	// Untracked files, like an IDE's folder, don't count as work.
+	write(t, filepath.Join(api.Dir(), ".idea", "vcs.xml"), "<project/>", 0o644)
 
 	// A repo already moved off the change needs no switch back.
 	run(t, proto.Dir(), "git", "switch", "--quiet", "main")
@@ -428,7 +430,7 @@ func TestStartLeavesDirtyRepoOnItsBranch(t *testing.T) {
 	f := newFixture(t)
 	proto := f.repo("proto", "module example.com/proto\n\ngo 1.26\n")
 	api := f.repo("api", "module example.com/api\n\ngo 1.26\n")
-	write(t, filepath.Join(api.Path, "wip.txt"), "wip", 0o644)
+	write(t, filepath.Join(api.Path, "go.mod"), "module example.com/api\n\ngo 1.26\n// wip\n", 0o644)
 
 	c, results, err := Start(context.Background(), f.store, "DEV-2", "", []workspace.Repo{proto, api}, StartOptions{})
 	if err != nil {
@@ -447,7 +449,7 @@ func TestStartLeavesDirtyRepoOnItsBranch(t *testing.T) {
 		t.Errorf("legs = %d, want both recorded", len(c.Legs))
 	}
 
-	os.Remove(filepath.Join(api.Path, "wip.txt"))
+	run(t, api.Path, "git", "checkout", "--", "go.mod")
 	for _, r := range Switch(context.Background(), c, false) {
 		if r.Err != nil {
 			t.Errorf("switch %s: %v", r.Leg.Name(), r.Err)

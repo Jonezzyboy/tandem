@@ -99,10 +99,11 @@ type Status struct {
 }
 
 // StatusOf compares branch (not HEAD) with baseRef, so it stays right while
-// the checkout is on another branch.
+// the checkout is on another branch. Dirty counts tracked files only:
+// untracked ones (IDE folders, scratch) follow any switch untouched.
 func StatusOf(ctx context.Context, dir, branch, baseRef string) (Status, error) {
 	var s Status
-	out, err := Run(ctx, dir, "status", "--porcelain")
+	out, err := Run(ctx, dir, "status", "--porcelain", "--untracked-files=no")
 	if err != nil {
 		return s, err
 	}
@@ -143,13 +144,13 @@ func CurrentBranch(ctx context.Context, dir string) string {
 	return out
 }
 
-// Switch checks out branch, refusing a checkout with uncommitted files so
-// work never silently follows a switch to another branch.
+// Switch checks out branch, refusing a checkout with uncommitted changes to
+// tracked files so work never silently follows a switch to another branch.
 func Switch(ctx context.Context, dir, branch string) error {
 	if CurrentBranch(ctx, dir) == branch {
 		return nil
 	}
-	out, err := Run(ctx, dir, "status", "--porcelain")
+	out, err := Run(ctx, dir, "status", "--porcelain", "--untracked-files=no")
 	if err != nil {
 		return err
 	}
