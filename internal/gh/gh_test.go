@@ -19,15 +19,3 @@ func TestRollup(t *testing.T) {
 		t.Errorf("rollup = %+v", r)
 	}
 }
-
-func TestRef(t *testing.T) {
-	cases := map[string]string{
-		"https://github.com/acme/proto/pull/412": "acme/proto#412",
-		"https://github.com/a/b/issues/3":        "https://github.com/a/b/issues/3",
-	}
-	for in, want := range cases {
-		if got := Ref(in); got != want {
-			t.Errorf("Ref(%q) = %q, want %q", in, got, want)
-		}
-	}
-}

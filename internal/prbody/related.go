@@ -3,7 +3,9 @@
 package prbody
 
 import (
-	"sort"
+	"cmp"
+	"fmt"
+	"slices"
 	"strconv"
 	"strings"
 )
@@ -14,27 +16,36 @@ const (
 )
 
 type Entry struct {
-	Level int
-	Ref   string
+	Level  int
+	Repo   string
+	Number int
+	URL    string
 }
 
-// Block lists the PRs in merge order; PRs sharing a level can merge in either order.
-func Block(entries []Entry) string {
-	byLevel := map[int][]string{}
-	var levels []int
-	for _, e := range entries {
-		if _, ok := byLevel[e.Level]; !ok {
-			levels = append(levels, e.Level)
-		}
-		byLevel[e.Level] = append(byLevel[e.Level], e.Ref)
-	}
-	sort.Ints(levels)
+// Block renders the PRs as a table in merge order, marking self (a PR URL).
+// Links are explicit so GitHub doesn't expand each into the shared title.
+func Block(entries []Entry, self string) string {
+	sorted := slices.Clone(entries)
+	slices.SortFunc(sorted, func(a, b Entry) int {
+		return cmp.Or(cmp.Compare(a.Level, b.Level), cmp.Compare(a.Repo, b.Repo))
+	})
 	var b strings.Builder
-	b.WriteString(startMarker + "\n### Related PRs — merge in this order\n")
-	for i, l := range levels {
-		refs := byLevel[l]
-		sort.Strings(refs)
-		b.WriteString(strconv.Itoa(i+1) + ". " + strings.Join(refs, " · ") + "\n")
+	b.WriteString(startMarker + "\n### Related PRs — merge in this order\n\n| Step | Repo | PR |\n| :-: | --- | --- |\n")
+	step, shared := 0, false
+	for i, e := range sorted {
+		if i == 0 || e.Level != sorted[i-1].Level {
+			step++
+		} else {
+			shared = true
+		}
+		pr := "[#" + strconv.Itoa(e.Number) + "](" + e.URL + ")"
+		if e.URL == self {
+			pr = "**" + pr + " (this PR)**"
+		}
+		fmt.Fprintf(&b, "| %d | `%s` | %s |\n", step, e.Repo, pr)
+	}
+	if shared {
+		b.WriteString("\nPRs sharing a step can merge in either order.\n")
 	}
 	b.WriteString(endMarker)
 	return b.String()

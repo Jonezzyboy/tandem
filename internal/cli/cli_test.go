@@ -170,7 +170,10 @@ func TestEndToEnd(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if !strings.HasPrefix(string(body), "Adds retries.") || !strings.Contains(string(body), "1. acme/proto#1\n2. acme/api#2\n") {
+		self := map[string]string{"proto": "1", "api": "2"}[repo]
+		if !strings.HasPrefix(string(body), "Adds retries.") ||
+			!strings.Contains(string(body), "| 1 | `acme/proto` |") || !strings.Contains(string(body), "| 2 | `acme/api` |") ||
+			!strings.Contains(string(body), "/pull/"+self+") (this PR)**") {
 			t.Errorf("%s body:\n%s", repo, body)
 		}
 	}
