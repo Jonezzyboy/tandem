@@ -34,6 +34,10 @@ export function Focus(arg1:string):Promise<void>;
 
 export function Inbox(arg1:boolean):Promise<main.Inbox>;
 
+export function JiraAccount():Promise<main.JiraAccount>;
+
+export function JiraLookup(arg1:string):Promise<main.JiraTicket>;
+
 export function Link(arg1:string,arg2:string,arg3:string):Promise<void>;
 
 export function OpenEditor(arg1:string):Promise<void>;
@@ -56,7 +60,11 @@ export function Rename(arg1:string,arg2:string):Promise<void>;
 
 export function Repos():Promise<Array<main.RepoInfo>>;
 
+export function SaveJira(arg1:string,arg2:string):Promise<main.JiraAccount>;
+
 export function SaveSettings(arg1:main.Settings):Promise<main.Settings>;
+
+export function SetTicket(arg1:string,arg2:string):Promise<void>;
 
 export function Settings():Promise<main.Settings>;
 

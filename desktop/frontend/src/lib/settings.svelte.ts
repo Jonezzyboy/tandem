@@ -11,6 +11,8 @@ export interface Settings {
   mergeMethod: 'squash' | 'merge' | 'rebase'
   draftPRs: boolean
   triage: TriageSettings
+  // The Atlassian account; its API token is in the Keychain, never here.
+  jira: { email: string }
 }
 
 export interface TriageSettings {
@@ -87,6 +89,7 @@ export const prefs = $state({
   settings: {
     theme: 'graphite', keys: {}, editors: {}, mergeMethod: 'squash', draftPRs: true,
     triage: { enabled: false, url: 'http://localhost:11434', model: 'nimble', minConfidence: 0.85, retries: 1 },
+    jira: { email: '' },
   } as Settings,
   account: null as Account | null,
   editorApps: [] as EditorApp[],

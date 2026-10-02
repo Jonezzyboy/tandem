@@ -1,7 +1,7 @@
 import * as App from '@wailsjs/go/main/App'
 import { EventsOn } from '@wailsjs/runtime/runtime'
 import type {
-  BranchInfo, ChangeSummary, ChangeView, CheckEvent, CleanItem, CleanResult, Inbox, LegResult, PinItem, PRPreview, PRRequest,
+  BranchInfo, ChangeSummary, ChangeView, CheckEvent, CleanItem, CleanResult, Inbox, JiraAccount, JiraTicket, LegResult, PinItem, PRPreview, PRRequest,
   RepoInfo, StartItem, TrainPlan,
 } from './types'
 
@@ -19,10 +19,14 @@ export const api = {
   inbox: (force = false) => App.Inbox(force) as unknown as Promise<Inbox>,
   repos: () => App.Repos() as unknown as Promise<RepoInfo[]>,
   branchRepos: (branch: string) => App.BranchRepos(branch) as unknown as Promise<BranchInfo[]>,
-  start: (id: string, title: string, repos: string[], worktrees = false) =>
-    App.Start({ id, title, repos, worktrees } as never) as unknown as Promise<StartItem[]>,
+  start: (id: string, title: string, repos: string[], worktrees = false, ticket = '') =>
+    App.Start({ id, title, repos, worktrees, ticket } as never) as unknown as Promise<StartItem[]>,
   link: (id: string, up: string, down: string) => App.Link(id, up, down),
   rename: (id: string, title: string) => App.Rename(id, title),
+  setTicket: (id: string, link: string) => App.SetTicket(id, link),
+  jiraLookup: (link: string) => App.JiraLookup(link) as unknown as Promise<JiraTicket>,
+  jiraAccount: () => App.JiraAccount() as unknown as Promise<JiraAccount>,
+  saveJira: (email: string, token: string) => App.SaveJira(email, token) as unknown as Promise<JiraAccount>,
   openURL: (url: string) => App.OpenURL(url),
   openFolder: (path: string) => App.OpenFolder(path),
   openEditor: (path: string) => App.OpenEditor(path),

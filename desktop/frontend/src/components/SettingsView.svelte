@@ -4,7 +4,8 @@
     actions, keycaps, languages, prefs, problem, saveSettings, shortcutFor, shortcutFromEvent, themes, type ThemeId, type TriageSettings,
   } from '@lib/settings.svelte'
   import * as App from '@wailsjs/go/main/App'
-  import { errorText } from '@lib/api'
+  import { api, errorText } from '@lib/api'
+  import type { JiraAccount } from '@lib/types'
   import Avatar from './Avatar.svelte'
   import Kbd from './Kbd.svelte'
 
@@ -99,6 +100,24 @@
     prefs.recording = false
   })
 
+  let jiraAccount = $state<JiraAccount | null>(null)
+  let jiraEmail = $state(untrack(() => prefs.settings.jira?.email ?? ''))
+  let jiraToken = $state('')
+  let jiraNote = $state<{ ok: boolean; text: string }>({ ok: false, text: '' })
+  api.jiraAccount().then((a) => (jiraAccount = a))
+
+  async function saveJira() {
+    try {
+      jiraAccount = await api.saveJira(jiraEmail, jiraToken)
+      // SaveJira writes settings itself; keep the copy here in step so later saves don't revert it.
+      prefs.settings = { ...prefs.settings, jira: { email: jiraAccount.email } }
+      jiraToken = ''
+      jiraNote = { ok: true, text: 'Saved' }
+    } catch (e) {
+      jiraNote = { ok: false, text: errorText(e) }
+    }
+  }
+
   const customised = $derived(Object.keys(prefs.settings.keys).length)
 </script>
 
@@ -128,6 +147,31 @@
           <span class="warn small">{prefs.account?.error ?? 'Checking gh…'}</span>
         </div>
       {/if}
+    </div>
+  </section>
+
+  <section aria-labelledby="s-jira">
+    <h2 id="s-jira">Jira</h2>
+    <div class="card general">
+      <p class="muted small intro">Lets a pasted ticket link fill in the change’s title and show the ticket’s status. Without it, the link is still kept.</p>
+      <label class="setting">
+        <span>Atlassian account email</span>
+        <input class="input" type="email" placeholder="you@company.com" bind:value={jiraEmail} autocomplete="off" />
+      </label>
+      <label class="setting">
+        <span>API token <span class="muted small">· kept in the Keychain</span></span>
+        <input class="input mono" type="password" bind:value={jiraToken} autocomplete="off"
+          placeholder={jiraAccount?.hasToken ? 'Saved; paste a new one to replace it' : 'Paste a token'} />
+      </label>
+      <div class="triage-test">
+        <button class="btn small" disabled={!jiraEmail.trim()} onclick={saveJira}>Save</button>
+        <button class="link small" onclick={() => api.openURL('https://id.atlassian.com/manage-profile/security/api-tokens')}>Create a token</button>
+        {#if jiraNote.text}
+          <span class="small" class:ok={jiraNote.ok} class:warn={!jiraNote.ok} role="status">{jiraNote.text}</span>
+        {:else if jiraAccount && !jiraAccount.hasToken}
+          <span class="small muted">No token saved</span>
+        {/if}
+      </div>
     </div>
   </section>
 
@@ -362,6 +406,9 @@
   .choice { display: flex; align-items: center; gap: 8px; font-size: 14px; cursor: pointer; }
   .choice input { accent-color: var(--accent); width: 16px; height: 16px; }
 
+  .intro { margin: 0; line-height: 1.5; }
+  .link { border: 0; background: none; padding: 0; color: var(--accent-text); cursor: pointer; }
+  .link:hover { color: var(--link-hover); }
   .about { display: flex; flex-direction: column; gap: 8px; font-size: 13px; }
   .about div { display: grid; grid-template-columns: 180px minmax(0, 1fr); gap: 12px; }
 </style>

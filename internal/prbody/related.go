@@ -22,15 +22,25 @@ type Entry struct {
 	URL    string
 }
 
+// Ticket is the issue tracker link shown above the table; empty URL omits it.
+type Ticket struct {
+	Label string
+	URL   string
+}
+
 // Block renders the PRs as a table in merge order, marking self (a PR URL).
 // Links are explicit so GitHub doesn't expand each into the shared title.
-func Block(entries []Entry, self string) string {
+func Block(entries []Entry, self string, ticket Ticket) string {
 	sorted := slices.Clone(entries)
 	slices.SortFunc(sorted, func(a, b Entry) int {
 		return cmp.Or(cmp.Compare(a.Level, b.Level), cmp.Compare(a.Repo, b.Repo))
 	})
 	var b strings.Builder
-	b.WriteString(startMarker + "\n### Related PRs — merge in this order\n\n| Step | Repo | PR |\n| :-: | --- | --- |\n")
+	b.WriteString(startMarker + "\n")
+	if ticket.URL != "" {
+		b.WriteString("Jira: [" + ticket.Label + "](" + ticket.URL + ")\n\n")
+	}
+	b.WriteString("### Related PRs — merge in this order\n\n| Step | Repo | PR |\n| :-: | --- | --- |\n")
 	step, shared := 0, false
 	for i, e := range sorted {
 		if i == 0 || e.Level != sorted[i-1].Level {

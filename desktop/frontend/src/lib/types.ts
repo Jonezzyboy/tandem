@@ -50,6 +50,7 @@ export interface EdgeView {
 export interface ChangeView {
   id: string
   title: string
+  ticket: string
   branch: string
   body: string
   reviewers: string[] | null
@@ -223,4 +224,20 @@ export interface CleanResult {
   id: string
   ok: boolean
   message: string
+}
+
+export interface JiraTicket {
+  key: string
+  url: string
+  summary: string
+  type: string
+  status: string
+  // Why the issue couldn't be read; key and url are still set.
+  error: string
+  noAccess: boolean
+}
+
+export interface JiraAccount {
+  email: string
+  hasToken: boolean
 }

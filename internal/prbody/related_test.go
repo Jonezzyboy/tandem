@@ -16,8 +16,10 @@ func TestBlockOrdersByLevel(t *testing.T) {
 		pr(2, "acme/orchestrator", 1873),
 		pr(1, "acme/proto", 412),
 		pr(2, "acme/connector", 88),
-	}, "https://github.com/acme/connector/pull/88")
+	}, "https://github.com/acme/connector/pull/88", Ticket{Label: "DEV-1 · Retries", URL: "https://acme.atlassian.net/browse/DEV-1"})
 	want := startMarker + `
+Jira: [DEV-1 · Retries](https://acme.atlassian.net/browse/DEV-1)
+
 ### Related PRs — merge in this order
 
 | Step | Repo | PR |
@@ -35,13 +37,13 @@ PRs sharing a step can merge in either order.
 }
 
 func TestBlockOmitsNoteWhenStepsAreDistinct(t *testing.T) {
-	if got := Block([]Entry{pr(1, "a/b", 1), pr(2, "c/d", 2)}, ""); strings.Contains(got, "either order") {
-		t.Errorf("note without a shared step:\n%s", got)
+	if got := Block([]Entry{pr(1, "a/b", 1), pr(2, "c/d", 2)}, "", Ticket{}); strings.Contains(got, "either order") || strings.Contains(got, "Jira:") {
+		t.Errorf("note or ticket line without cause:\n%s", got)
 	}
 }
 
 func TestApply(t *testing.T) {
-	block := Block([]Entry{pr(1, "a/b", 1)}, "")
+	block := Block([]Entry{pr(1, "a/b", 1)}, "", Ticket{})
 	if got := Apply("", block); got != block {
 		t.Errorf("empty body: %q", got)
 	}
@@ -52,7 +54,7 @@ func TestApply(t *testing.T) {
 	if twice := Apply(once, block); twice != once {
 		t.Errorf("not idempotent: %q", twice)
 	}
-	newer := Block([]Entry{pr(1, "a/b", 1), pr(2, "c/d", 2)}, "")
+	newer := Block([]Entry{pr(1, "a/b", 1), pr(2, "c/d", 2)}, "", Ticket{})
 	edited := Apply(once+"\n\nTrailing note", newer)
 	if strings.Count(edited, startMarker) != 1 || !strings.Contains(edited, "c/d/pull/2") || !strings.HasSuffix(edited, "Trailing note") {
 		t.Errorf("replace: %q", edited)

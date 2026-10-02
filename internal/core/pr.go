@@ -10,6 +10,7 @@ import (
 	"github.com/jonezzyboy/tandem/internal/change"
 	"github.com/jonezzyboy/tandem/internal/gh"
 	"github.com/jonezzyboy/tandem/internal/gitx"
+	"github.com/jonezzyboy/tandem/internal/jira"
 	"github.com/jonezzyboy/tandem/internal/prbody"
 )
 
@@ -99,6 +100,13 @@ func PublishPRs(ctx context.Context, c *change.Change, plans []*PRPlan, title st
 	}
 	wg.Wait()
 
+	var ticket prbody.Ticket
+	if r, ok := jira.Parse(c.Ticket); ok {
+		ticket = prbody.Ticket{Label: r.Key, URL: r.URL()}
+		if c.Title != "" {
+			ticket.Label += " · " + c.Title
+		}
+	}
 	var entries []prbody.Entry
 	for _, p := range plans {
 		if p.State.PR != nil && p.State.PR.State != "CLOSED" {
@@ -110,7 +118,7 @@ func PublishPRs(ctx context.Context, c *change.Change, plans []*PRPlan, title st
 			continue
 		}
 		wg.Go(func() {
-			updated := prbody.Apply(p.State.PR.Body, prbody.Block(entries, p.State.PR.URL))
+			updated := prbody.Apply(p.State.PR.Body, prbody.Block(entries, p.State.PR.URL, ticket))
 			if updated == p.State.PR.Body {
 				return
 			}

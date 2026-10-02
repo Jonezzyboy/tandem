@@ -18,6 +18,7 @@ import (
 	"github.com/jonezzyboy/tandem/internal/checks"
 	"github.com/jonezzyboy/tandem/internal/core"
 	"github.com/jonezzyboy/tandem/internal/gh"
+	"github.com/jonezzyboy/tandem/internal/jira"
 	"github.com/jonezzyboy/tandem/internal/workspace"
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
@@ -731,6 +732,8 @@ type StartRequest struct {
 	Repos []string `json:"repos"`
 	// Worktrees makes a new change use a worktree per repo.
 	Worktrees bool `json:"worktrees"`
+	// Ticket is a Jira issue link to keep on the change.
+	Ticket string `json:"ticket"`
 }
 
 type StartItem struct {
@@ -748,6 +751,14 @@ func (a *App) Start(req StartRequest) ([]StartItem, error) {
 	if len(req.Repos) == 0 {
 		return nil, errors.New("pick at least one repo")
 	}
+	var ticket string
+	if strings.TrimSpace(req.Ticket) != "" {
+		r, ok := jira.Parse(req.Ticket)
+		if !ok {
+			return nil, errors.New("not a Jira issue link")
+		}
+		ticket = r.URL()
+	}
 	var repos []workspace.Repo
 	for _, name := range req.Repos {
 		r, err := workspace.Resolve(a.roots, name)
@@ -756,7 +767,7 @@ func (a *App) Start(req StartRequest) ([]StartItem, error) {
 		}
 		repos = append(repos, r)
 	}
-	_, results, err := core.Start(a.ctx, a.store, id, strings.TrimSpace(req.Title), repos, core.StartOptions{Worktrees: req.Worktrees})
+	_, results, err := core.Start(a.ctx, a.store, id, strings.TrimSpace(req.Title), repos, core.StartOptions{Worktrees: req.Worktrees, Ticket: ticket})
 	if err != nil {
 		return nil, err
 	}
