@@ -159,6 +159,7 @@
           {/each}
           <div class="related mono">
             <div class="muted">Kept in every PR · numbers fill in as they open</div>
+            {#if view.ticket}<div>Jira: {view.ticket.split('/').pop()}{view.title ? ` · ${view.title}` : ''}</div>{/if}
             <div>### Related PRs — merge in this order</div>
             <table>
               <thead><tr><th>Step</th><th>Repo</th><th>PR</th></tr></thead>

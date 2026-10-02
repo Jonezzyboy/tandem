@@ -47,8 +47,10 @@ type Edge struct {
 }
 
 type Change struct {
-	ID        string    `json:"id"`
-	Title     string    `json:"title,omitempty"`
+	ID    string `json:"id"`
+	Title string `json:"title,omitempty"`
+	// Ticket is the Jira browse link the change was started from.
+	Ticket    string    `json:"ticket,omitempty"`
 	Branch    string    `json:"branch"`
 	Body      string    `json:"body,omitempty"`
 	Reviewers []string  `json:"reviewers,omitempty"`

@@ -4,7 +4,7 @@
   import { ago, reviewLabel } from '@lib/format'
   import { app, checkOut, fail, loadCleanPlan, log, navigate, switching as switchingIds } from '@lib/state.svelte'
   import { editorLabel } from '@lib/settings.svelte'
-  import type { CleanItem, LegView } from '@lib/types'
+  import type { CleanItem, JiraTicket, LegView } from '@lib/types'
   import Composer from './Composer.svelte'
   import TrainDialog from './TrainDialog.svelte'
   import AddReposDialog from './AddReposDialog.svelte'
@@ -53,6 +53,34 @@
     } finally {
       planningDiscard = false
     }
+  }
+
+  let jira = $state<JiraTicket | null>(null)
+  // A primitive, so the lookup reruns only when the link changes, not on every view refresh.
+  const ticketLink = $derived(view?.ticket ?? '')
+  $effect(() => {
+    const link = ticketLink
+    jira = null
+    if (!link) return
+    let live = true
+    api.jiraLookup(link).then((t) => { if (live) jira = t }).catch(() => {})
+    return () => { live = false }
+  })
+  const ticketKey = $derived(view?.ticket ? view.ticket.split('/').pop() : '')
+
+  let ticketDraft = $state<string | null>(null)
+  async function saveTicket() {
+    if (ticketDraft === null) return
+    try {
+      await api.setTicket(id, ticketDraft.trim())
+      ticketDraft = null
+    } catch (e) {
+      fail(e)
+    }
+  }
+  function ticketKeydown(e: KeyboardEvent) {
+    if (e.key === 'Enter') saveTicket()
+    else if (e.key === 'Escape') ticketDraft = null
   }
 
   let titleDraft = $state<string | null>(null)
@@ -238,7 +266,13 @@
     <header style="--wails-draggable: drag">
       <div class="heading">
         <div class="meta mono">
-          <span class="accent">{view.id}</span><span>·</span>
+          {#if view.ticket}
+            <button class="link ticket-id" onclick={() => api.openURL(view.ticket)} title="Open {ticketKey} in Jira" style="--wails-draggable: no-drag">{view.id}<Icon name="external" size={11} /></button><span>·</span>
+            {#if jira?.status}<span>Jira: {jira.status}</span><span>·</span>{/if}
+          {:else}
+            <span class="accent">{view.id}</span><span>·</span>
+            {#if ticketDraft === null}<button class="link" onclick={() => (ticketDraft = '')} style="--wails-draggable: no-drag">link Jira</button><span>·</span>{/if}
+          {/if}
           {#if view.branch !== view.id}<span>branch {view.branch}</span><span>·</span>{/if}
           <span title="Local git state is watched every few seconds; GitHub is read every minute">
             {view.remote ? `GitHub ${ago(view.remoteAt, now)} ago` : 'GitHub not read yet'}
@@ -295,6 +329,22 @@
         {/if}
       </div>
     </header>
+
+    {#if view.ticket || ticketDraft !== null}
+      <div class="ticket-strip">
+        <span class="eyebrow">Ticket</span>
+        {#if ticketDraft !== null}
+          <input class="input mono ticket-input" bind:value={ticketDraft} use:selectAll onkeydown={ticketKeydown}
+            placeholder="Paste a Jira link; leave empty to unlink" aria-label="Jira ticket link" />
+          <button class="btn small" onclick={() => (ticketDraft = null)}>Cancel</button>
+          <button class="btn small primary" onclick={saveTicket}>Save</button>
+        {:else}
+          <button class="link mono" onclick={() => api.openURL(view.ticket)}>{view.ticket.replace('https://', '')}</button>
+          <span class="muted grow-text">Shown in every PR’s description.</span>
+          <button class="btn small" onclick={() => (ticketDraft = view.ticket)}>Change link</button>
+        {/if}
+      </div>
+    {/if}
 
     {#if landed}
       <div class="landed-banner">
@@ -518,6 +568,12 @@
     color: inherit; background: var(--nav); outline: none; box-shadow: 0 0 0 4px var(--nav), 0 0 0 5px var(--accent-text);
   }
   .actions { display: flex; gap: 8px; align-items: center; flex-shrink: 0; margin-left: auto; }
+  .ticket-id { display: inline-flex; align-items: center; gap: 4px; }
+  .ticket-strip {
+    display: flex; align-items: center; gap: 14px; padding: 10px 12px 10px 16px; border-radius: 12px;
+    background: var(--panel); border: 1px solid var(--line); font-size: 13px;
+  }
+  .ticket-input { flex: 1; min-height: 30px; }
   .switch-banner {
     display: flex; align-items: center; gap: 12px; padding: 10px 12px 10px 14px; border-radius: 10px;
     background: var(--warn-row); border: 1px solid var(--warn-border); color: var(--warn-text); font-size: 13px;

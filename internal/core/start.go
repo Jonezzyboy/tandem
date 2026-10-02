@@ -31,6 +31,8 @@ type StartOptions struct {
 	// Worktrees applies when the change is created: each leg becomes a worktree
 	// under the change's directory, leaving the clones' checkouts alone.
 	Worktrees bool
+	// Ticket, when set, replaces the change's Jira link.
+	Ticket string
 }
 
 // Start loads or creates change id and, per repo concurrently, creates the
@@ -51,6 +53,9 @@ func Start(ctx context.Context, store change.Store, id, title string, repos []wo
 	}
 	if title != "" {
 		c.Title = title
+	}
+	if o.Ticket != "" {
+		c.Ticket = o.Ticket
 	}
 
 	names := map[string]string{}

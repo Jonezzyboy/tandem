@@ -62,6 +62,14 @@ export function Inbox(arg1) {
   return window['go']['main']['App']['Inbox'](arg1);
 }
 
+export function JiraAccount() {
+  return window['go']['main']['App']['JiraAccount']();
+}
+
+export function JiraLookup(arg1) {
+  return window['go']['main']['App']['JiraLookup'](arg1);
+}
+
 export function Link(arg1, arg2, arg3) {
   return window['go']['main']['App']['Link'](arg1, arg2, arg3);
 }
@@ -106,8 +114,16 @@ export function Repos() {
   return window['go']['main']['App']['Repos']();
 }
 
+export function SaveJira(arg1, arg2) {
+  return window['go']['main']['App']['SaveJira'](arg1, arg2);
+}
+
 export function SaveSettings(arg1) {
   return window['go']['main']['App']['SaveSettings'](arg1);
+}
+
+export function SetTicket(arg1, arg2) {
+  return window['go']['main']['App']['SetTicket'](arg1, arg2);
 }
 
 export function Settings() {

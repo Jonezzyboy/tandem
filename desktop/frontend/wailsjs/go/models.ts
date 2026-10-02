@@ -135,6 +135,7 @@ export namespace core {
 	export class ChangeView {
 	    id: string;
 	    title: string;
+	    ticket: string;
 	    branch: string;
 	    body: string;
 	    reviewers: string[];
@@ -157,6 +158,7 @@ export namespace core {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.id = source["id"];
 	        this.title = source["title"];
+	        this.ticket = source["ticket"];
 	        this.branch = source["branch"];
 	        this.body = source["body"];
 	        this.reviewers = source["reviewers"];
@@ -458,6 +460,56 @@ export namespace main {
 		}
 	}
 	
+	export class JiraAccount {
+	    email: string;
+	    hasToken: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new JiraAccount(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.email = source["email"];
+	        this.hasToken = source["hasToken"];
+	    }
+	}
+	export class JiraSettings {
+	    email: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new JiraSettings(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.email = source["email"];
+	    }
+	}
+	export class JiraTicket {
+	    key: string;
+	    url: string;
+	    summary: string;
+	    type: string;
+	    status: string;
+	    error: string;
+	    noAccess: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new JiraTicket(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.key = source["key"];
+	        this.url = source["url"];
+	        this.summary = source["summary"];
+	        this.type = source["type"];
+	        this.status = source["status"];
+	        this.error = source["error"];
+	        this.noAccess = source["noAccess"];
+	    }
+	}
 	export class LegResult {
 	    leg: string;
 	    ok: boolean;
@@ -599,6 +651,7 @@ export namespace main {
 	    mergeMethod: string;
 	    draftPRs: boolean;
 	    triage: triage.Config;
+	    jira: JiraSettings;
 	
 	    static createFrom(source: any = {}) {
 	        return new Settings(source);
@@ -613,6 +666,7 @@ export namespace main {
 	        this.mergeMethod = source["mergeMethod"];
 	        this.draftPRs = source["draftPRs"];
 	        this.triage = this.convertValues(source["triage"], triage.Config);
+	        this.jira = this.convertValues(source["jira"], JiraSettings);
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
@@ -656,6 +710,7 @@ export namespace main {
 	    title: string;
 	    repos: string[];
 	    worktrees: boolean;
+	    ticket: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new StartRequest(source);
@@ -667,6 +722,7 @@ export namespace main {
 	        this.title = source["title"];
 	        this.repos = source["repos"];
 	        this.worktrees = source["worktrees"];
+	        this.ticket = source["ticket"];
 	    }
 	}
 	export class TrainLeg {

@@ -1,7 +1,7 @@
 <script lang="ts">
   type Name =
     | 'check' | 'x' | 'clock' | 'running' | 'alert' | 'refresh' | 'sync' | 'play'
-    | 'folder' | 'code' | 'external' | 'plus' | 'inbox' | 'branch' | 'send' | 'close' | 'settings' | 'trash'
+    | 'folder' | 'code' | 'external' | 'plus' | 'inbox' | 'branch' | 'send' | 'close' | 'settings' | 'trash' | 'link'
 
   let { name, size = 16, color = 'currentColor', spin = false }: { name: Name; size?: number; color?: string; spin?: boolean } = $props()
 
@@ -44,6 +44,8 @@
     <path d="M14 2L7 9M14 2l-4.5 12L7 9 2 6.5z" />
   {:else if shown === 'settings'}
     <circle cx="8" cy="8" r="2.2" /><path d="M8 1.8v1.6M8 12.6v1.6M1.8 8h1.6M12.6 8h1.6M3.6 3.6l1.1 1.1M11.3 11.3l1.1 1.1M3.6 12.4l1.1-1.1M11.3 4.7l1.1-1.1" /><circle cx="8" cy="8" r="4.6" />
+  {:else if shown === 'link'}
+    <path d="M6.8 9.2a2.6 2.6 0 0 0 3.7 0l2.2-2.2a2.6 2.6 0 0 0-3.7-3.7l-.9.9M9.2 6.8a2.6 2.6 0 0 0-3.7 0L3.3 9a2.6 2.6 0 0 0 3.7 3.7l.9-.9" />
   {:else if shown === 'trash'}
     <path d="M2.5 4.5h11M6.5 4.5V3a1 1 0 0 1 1-1h1a1 1 0 0 1 1 1v1.5M4 4.5l.7 8.6a1 1 0 0 0 1 .9h4.6a1 1 0 0 0 1-.9l.7-8.6M6.8 7v4.5M9.2 7v4.5" />
   {:else if shown === 'close'}

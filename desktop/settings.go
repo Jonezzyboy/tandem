@@ -36,6 +36,12 @@ type Settings struct {
 	MergeMethod string        `json:"mergeMethod"`
 	DraftPRs    bool          `json:"draftPRs"`
 	Triage      triage.Config `json:"triage"`
+	Jira        JiraSettings  `json:"jira"`
+}
+
+// JiraSettings holds the Atlassian account; its API token is in the Keychain.
+type JiraSettings struct {
+	Email string `json:"email"`
 }
 
 // theme is a theme's window background and whether macOS should draw it dark.

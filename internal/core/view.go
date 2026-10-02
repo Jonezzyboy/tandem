@@ -13,6 +13,7 @@ import (
 type ChangeView struct {
 	ID         string     `json:"id"`
 	Title      string     `json:"title"`
+	Ticket     string     `json:"ticket"`
 	Branch     string     `json:"branch"`
 	Body       string     `json:"body"`
 	Reviewers  []string   `json:"reviewers"`
@@ -86,7 +87,7 @@ func NewPRView(pr *gh.PR) *PRView {
 func BuildView(c *change.Change, g Graph, graphErr error, states []LegState, remote bool) ChangeView {
 	SortByLevel(states, g.Levels)
 	v := ChangeView{
-		ID: c.ID, Title: c.Title, Branch: c.Branch, Body: c.Body, Reviewers: c.Reviewers, Worktrees: c.UsesWorktrees(),
+		ID: c.ID, Title: c.Title, Ticket: c.Ticket, Branch: c.Branch, Body: c.Body, Reviewers: c.Reviewers, Worktrees: c.UsesWorktrees(),
 		Legs: make([]LegView, 0, len(states)), Edges: []EdgeView{}, Remote: remote, CheckedAt: time.Now(),
 	}
 	if remote {
