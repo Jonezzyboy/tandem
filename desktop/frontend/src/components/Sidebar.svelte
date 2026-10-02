@@ -83,6 +83,14 @@
     window.addEventListener('pointercancel', onPointerUp)
   }
 
+  // Where the card is drawn: under the pointer, but never past the window's edge.
+  function cardAt(d: Drag): { left: number; top: number } {
+    return {
+      left: Math.min(Math.max(d.x - d.grabX, 0), Math.max(window.innerWidth - d.width, 0)),
+      top: Math.min(Math.max(d.y - d.grabY, 0), Math.max(window.innerHeight - d.heights[d.from], 0)),
+    }
+  }
+
   function overList(d: Drag): boolean {
     const r = listEl!.getBoundingClientRect()
     const last = d.tops.length - 1
@@ -92,6 +100,10 @@
   function onPointerMove(e: PointerEvent) {
     if (!drag) return
     if (!drag.moved && Math.hypot(e.clientX - drag.startX, e.clientY - drag.startY) < THRESHOLD) return
+    if (!drag.moved) {
+      // Keeps moves and the release coming while the pointer is outside the window.
+      try { drag.el.setPointerCapture(e.pointerId) } catch {}
+    }
     drag.moved = true
     drag.x = e.clientX
     drag.y = e.clientY
@@ -125,7 +137,7 @@
     // Rows drop their offsets as the list reorders under them; animating that would double the move.
     const rows = [...listEl!.querySelectorAll<HTMLElement>(':scope > .change-wrap')]
     for (const r of rows) r.style.transition = 'none'
-    landing = { id: d.id, left: d.x - d.grabX, top: d.y - d.grabY }
+    landing = { id: d.id, ...cardAt(d) }
     drag = null
     if (to !== d.from) move(d.id, to > d.from ? to + 1 : to)
     await tick()
@@ -206,7 +218,7 @@
   </div>
   {#if (drag?.moved || landing) && app.changes.find((c) => c.id === (drag?.id ?? landing?.id))}
     {@const c = app.changes.find((x) => x.id === (drag?.id ?? landing?.id))!}
-    {@const at = drag?.moved ? { left: drag.x - drag.grabX, top: drag.y - drag.grabY } : landing!}
+    {@const at = drag?.moved ? cardAt(drag) : landing!}
     <div class="card" class:landing={!drag?.moved} aria-hidden="true"
       style:width="{drag?.width ?? listEl?.querySelector('.change-wrap')?.getBoundingClientRect().width}px"
       style:transform="translate({at.left}px, {at.top}px)">
