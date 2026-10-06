@@ -427,12 +427,12 @@
     {#if pinLegs.length > 0}
       <div class="pin-banner">
         <Icon name="sync" />
-        <div class="grow-text">
+        <div class="grow-text pin-text">
           <div><span class="mono">{mergedUpstreams.join(', ')}</span> merged. Downstream go.mod now points at the merge commit; commit and push it so those PRs can be reviewed and tested:</div>
           {#each pinLegs as l (l.repo)}
             {#each l.pins! as p (p.dir + p.module)}
               {@const st = pinState(l, p)}
-              <div class="pin-line mono small">
+              <div class="pin-line mono small" title="{l.name} ← {p.module}@{p.rev.slice(0, 12)} · {st.text}">
                 {l.name} ← {p.module}@{p.rev.slice(0, 12)}
                 <span class:warn={st.warn} class:muted={!st.warn}>· {st.text}</span>
               </div>
@@ -638,7 +638,8 @@
     display: flex; align-items: center; gap: 12px; padding: 10px 12px 10px 14px; border-radius: 10px;
     background: var(--ok-bg); border: 1px solid var(--ok-border); font-size: 13px;
   }
-  .pin-line { margin-top: 3px; }
+  .pin-text { min-width: 0; }
+  .pin-line { margin-top: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .banner { padding: 10px 14px; border-radius: 10px; background: var(--warn-bg); border: 1px solid var(--warn-border); font-size: 13px; }
 
   .order {
