@@ -1,6 +1,7 @@
 package main
 
 import (
+	"maps"
 	"os"
 	"path/filepath"
 	"strings"
@@ -38,6 +39,14 @@ func TestMergePath(t *testing.T) {
 	got := mergePath("/a:/b", "/b:/c::/a:/d")
 	if got != "/a:/b:/c:/d" {
 		t.Errorf("mergePath = %q", got)
+	}
+}
+
+func TestShellVars(t *testing.T) {
+	got := shellVars("GOPRIVATE=github.com/x\x00MULTI=a\nb=c\x00PWD=/tmp\x00SHLVL=2\x00_=/usr/bin/env\x00junk\x00")
+	want := map[string]string{"GOPRIVATE": "github.com/x", "MULTI": "a\nb=c"}
+	if !maps.Equal(got, want) {
+		t.Errorf("shellVars = %q, want %q", got, want)
 	}
 }
 

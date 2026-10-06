@@ -16,7 +16,7 @@ import (
 var assets embed.FS
 
 func main() {
-	adoptShellPath()
+	adoptShellEnv()
 	app := NewApp(change.Store{Home: workspace.Home()}, workspace.Roots())
 	app.settings = loadSettings()
 	bg, appearance := windowLook(app.settings)
