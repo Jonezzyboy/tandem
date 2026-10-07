@@ -10,7 +10,7 @@
   const readyCount = $derived(tester.queue?.items.length ?? 0)
 
   async function backToMain() {
-    if (await finish('')) navigate({ name: 'ready' })
+    if (await finish()) navigate({ name: 'ready' })
   }
 </script>
 

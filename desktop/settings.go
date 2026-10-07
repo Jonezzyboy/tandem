@@ -1,7 +1,6 @@
 package main
 
 import (
-	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
@@ -10,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 
@@ -51,12 +51,13 @@ type JiraSettings struct {
 	Site string `json:"site"`
 }
 
-// TesterSettings name the Jira statuses tester mode reads and sets.
+// TesterSettings are the Jira statuses whose tickets are ready to test; the
+// verdicts are each ticket's own transitions out of them.
 type TesterSettings struct {
-	ReadyStatus  string `json:"readyStatus"`
-	PassStatus   string `json:"passStatus"`
-	FailStatus   string `json:"failStatus"`
-	CloneMissing bool   `json:"cloneMissing"`
+	Statuses     []string `json:"statuses"`
+	CloneMissing bool     `json:"cloneMissing"`
+	// ReadyStatus is the single status of 0.19, read only to migrate it.
+	ReadyStatus string `json:"readyStatus,omitempty"`
 }
 
 // theme is a theme's window background and whether macOS should draw it dark.
@@ -143,9 +144,20 @@ func normalize(s Settings) Settings {
 		s.Jira.Site = "https://" + s.Jira.Site
 	}
 	t := &s.Tester
-	t.ReadyStatus = cmp.Or(strings.TrimSpace(t.ReadyStatus), "Ready for Test")
-	t.PassStatus = cmp.Or(strings.TrimSpace(t.PassStatus), "Ready to Merge")
-	t.FailStatus = cmp.Or(strings.TrimSpace(t.FailStatus), "Failed Testing")
+	if r := strings.TrimSpace(t.ReadyStatus); r != "" && len(t.Statuses) == 0 {
+		t.Statuses = []string{r}
+	}
+	t.ReadyStatus = ""
+	var statuses []string
+	for _, st := range t.Statuses {
+		if st = strings.TrimSpace(st); st != "" && !slices.Contains(statuses, st) {
+			statuses = append(statuses, st)
+		}
+	}
+	if statuses == nil {
+		statuses = []string{}
+	}
+	t.Statuses = statuses
 	return s
 }
 

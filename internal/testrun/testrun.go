@@ -27,22 +27,47 @@ type Session struct {
 	URL     string    `json:"url"`
 	Started time.Time `json:"started"`
 	Repos   []Repo    `json:"repos"`
+	// Verdict is the result recorded on the ticket, before the repos go back.
+	Verdict *Verdict `json:"verdict,omitempty"`
+}
+
+// Verdict is the move a tester made on the ticket. Outcome is "passed",
+// "failed" or "moved" (neither, such as on to another stage).
+type Verdict struct {
+	Name    string `json:"name"`
+	To      string `json:"to"`
+	Outcome string `json:"outcome"`
 }
 
 type Repo struct {
 	Name string `json:"name"`
 	Dir  string `json:"dir"`
+	// Branch is the change's branch in this repo: the ticket key, or a name
+	// starting with it such as DEV-12-fix-prices.
+	Branch string `json:"branch,omitempty"`
 	// Stash is the commit of the stash holding work set aside to switch.
 	Stash string `json:"stash,omitempty"`
 }
 
-// Record is a finished test, newest first in State.History.
+// Record is a finished test, newest first in State.History. Result is the
+// verdict's outcome, or "stopped" when there was none.
 type Record struct {
-	Key    string    `json:"key"`
-	Title  string    `json:"title"`
-	URL    string    `json:"url"`
-	Result string    `json:"result"`
-	At     time.Time `json:"at"`
+	Key     string    `json:"key"`
+	Title   string    `json:"title"`
+	URL     string    `json:"url"`
+	Result  string    `json:"result"`
+	Verdict string    `json:"verdict,omitempty"`
+	To      string    `json:"to,omitempty"`
+	At      time.Time `json:"at"`
+}
+
+// Record is the history entry for s, finished now.
+func (s *Session) Record() Record {
+	r := Record{Key: s.Key, Title: s.Title, URL: s.URL, Result: "stopped", At: time.Now().UTC()}
+	if s.Verdict != nil {
+		r.Result, r.Verdict, r.To = s.Verdict.Outcome, s.Verdict.Name, s.Verdict.To
+	}
+	return r
 }
 
 type State struct {
@@ -90,10 +115,21 @@ func (s Store) Save(st State) error {
 	return os.Rename(tmp, s.Path)
 }
 
-// Target is a repo with the change's branch; Dir is empty when it isn't cloned.
+// Target is a repo with the change's branch; Dir is empty when it isn't cloned,
+// and Branch empty means the branch is named after the key.
 type Target struct {
-	Name string
-	Dir  string
+	Name   string
+	Dir    string
+	Branch string
+}
+
+// branch is r's branch for the change keyed key, for sessions saved before
+// repos recorded their own.
+func (r Repo) branch(key string) string {
+	if r.Branch != "" {
+		return r.Branch
+	}
+	return key
 }
 
 // Step is one repo's progress or outcome; Done is false while it's under way.
@@ -147,7 +183,8 @@ func begin(ctx context.Context, key string, t Target, o Options, report func(Ste
 		step.Message = msg
 		return nil, step
 	}
-	r := Repo{Name: t.Name, Dir: t.Dir}
+	r := Repo{Name: t.Name, Dir: t.Dir, Branch: t.Branch}
+	branch := r.branch(key)
 	var notes []string
 	if r.Dir == "" {
 		if o.CloneRoot == "" {
@@ -166,7 +203,7 @@ func begin(ctx context.Context, key string, t Target, o Options, report func(Ste
 		}
 		notes = append(notes, "fetched")
 	}
-	if dirty := uncommitted(ctx, r.Dir); dirty > 0 && gitx.CurrentBranch(ctx, r.Dir) != key {
+	if dirty := uncommitted(ctx, r.Dir); dirty > 0 && gitx.CurrentBranch(ctx, r.Dir) != branch {
 		if !o.SetAside {
 			return fail(fmt.Sprintf("%d uncommitted files: commit or set them aside first", dirty))
 		}
@@ -177,14 +214,14 @@ func begin(ctx context.Context, key string, t Target, o Options, report func(Ste
 		r.Stash = sha
 		notes = append(notes, fmt.Sprintf("set aside %d uncommitted files", dirty))
 	}
-	warning, err := switchTo(ctx, r.Dir, key)
+	warning, err := switchTo(ctx, r.Dir, branch)
 	if err != nil {
 		if r.Stash != "" {
 			restore(ctx, r.Dir, r.Stash)
 		}
 		return fail(firstLine(err))
 	}
-	notes = append(notes, "switched to "+key)
+	notes = append(notes, "switched to "+branch)
 	if warning != "" {
 		notes = append(notes, warning)
 	}
@@ -218,6 +255,7 @@ func switchTo(ctx context.Context, dir, branch string) (string, error) {
 // RepoStatus is where a session's repo stands against origin.
 type RepoStatus struct {
 	Name     string `json:"name"`
+	Branch   string `json:"branch"`
 	OnBranch bool   `json:"onBranch"`
 	Current  string `json:"current"`
 	// Behind counts commits pushed to the branch since the checkout; New holds
@@ -238,11 +276,13 @@ func Status(ctx context.Context, s *Session) []RepoStatus {
 			if err := gitx.Fetch(ctx, r.Dir); err != nil {
 				st.Error = "fetching: " + firstLine(err)
 			}
+			branch := r.branch(s.Key)
+			st.Branch = branch
 			st.Current = gitx.CurrentBranch(ctx, r.Dir)
-			st.OnBranch = st.Current == s.Key
+			st.OnBranch = st.Current == branch
 			st.Dirty = uncommitted(ctx, r.Dir)
-			if st.OnBranch && gitx.RefExists(ctx, r.Dir, "refs/remotes/origin/"+s.Key) {
-				rng := "HEAD..origin/" + s.Key
+			if st.OnBranch && gitx.RefExists(ctx, r.Dir, "refs/remotes/origin/"+branch) {
+				rng := "HEAD..origin/" + branch
 				if n, err := gitx.Run(ctx, r.Dir, "rev-list", "--count", rng); err == nil {
 					st.Behind, _ = strconv.Atoi(n)
 				}
@@ -266,14 +306,15 @@ func Pull(ctx context.Context, s *Session) []Step {
 	for i, r := range s.Repos {
 		wg.Go(func() {
 			st := Step{Repo: r.Name, Done: true}
+			branch := r.branch(s.Key)
 			switch {
-			case gitx.CurrentBranch(ctx, r.Dir) != s.Key:
-				st.Message = "not on " + s.Key + ", left alone"
+			case gitx.CurrentBranch(ctx, r.Dir) != branch:
+				st.Message = "not on " + branch + ", left alone"
 			case gitx.Fetch(ctx, r.Dir) != nil:
 				st.Message = "couldn't fetch"
 			default:
 				before := short(ctx, r.Dir, "HEAD")
-				if _, err := gitx.Run(ctx, r.Dir, "merge", "--ff-only", "--quiet", "origin/"+s.Key); err != nil {
+				if _, err := gitx.Run(ctx, r.Dir, "merge", "--ff-only", "--quiet", "origin/"+branch); err != nil {
 					st.Message = firstLine(err)
 				} else {
 					st.OK, st.SHA = true, short(ctx, r.Dir, "HEAD")

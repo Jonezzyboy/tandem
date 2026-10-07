@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -84,12 +85,15 @@ func TestSearchMoveToAndComment(t *testing.T) {
 			w.Write([]byte(`{"issues":[{"key":"DEV-1","fields":{"summary":"One","status":{"name":"Ready for Test"},"issuetype":{"name":"Story"}}},
 				{"key":"DEV-2","fields":{"summary":"Two","status":{"name":"Ready for Test"},"issuetype":{"name":"Bug"}}}]}`))
 		case r.URL.Path == "/rest/api/3/issue/DEV-1/transitions" && r.Method == http.MethodGet:
-			w.Write([]byte(`{"transitions":[{"id":"11","name":"Fail","to":{"name":"Failed Testing"}},{"id":"21","name":"Pass","to":{"name":"Ready to Merge"}}]}`))
+			w.Write([]byte(`{"transitions":[{"id":"11","name":"Fix Failed","to":{"name":"Failed Test","statusCategory":{"key":"indeterminate"}}},
+				{"id":"21","name":"Confirmed","to":{"name":"Done","statusCategory":{"key":"done"}}}]}`))
 		case r.URL.Path == "/rest/api/3/issue/DEV-1/transitions":
 			var body struct{ Transition struct{ ID string } }
 			json.NewDecoder(r.Body).Decode(&body)
 			moved = body.Transition.ID
 			w.WriteHeader(http.StatusNoContent)
+		case r.URL.Path == "/rest/api/3/status":
+			w.Write([]byte(`[{"name":"Signoff"},{"name":"Confirm Fix"},{"name":"Signoff"}]`))
 		case r.URL.Path == "/rest/api/3/issue/DEV-1/comment":
 			data, _ := io.ReadAll(r.Body)
 			commented = string(data)
@@ -106,14 +110,21 @@ func TestSearchMoveToAndComment(t *testing.T) {
 	if err != nil || len(got) != 2 || got[0].Key != "DEV-1" || got[1].Type != "Bug" {
 		t.Fatalf("Search = %+v, %v", got, err)
 	}
+	if st, err := c.Statuses(context.Background(), srv.URL); err != nil || !slices.Equal(st, []string{"Confirm Fix", "Signoff"}) {
+		t.Errorf("Statuses = %v, %v", st, err)
+	}
+	if q := StatusJQL([]string{"Confirm Fix", "Signoff"}); q != `status in ("Confirm Fix", "Signoff") ORDER BY updated DESC` {
+		t.Errorf("StatusJQL = %s", q)
+	}
 	if _, err := c.Search(context.Background(), srv.URL, "nonsense"); err == nil || !strings.Contains(err.Error(), "bad jql") {
 		t.Errorf("bad jql err = %v", err)
 	}
-	if err := c.MoveTo(context.Background(), ref, "ready to merge"); err != nil || moved != "21" {
-		t.Errorf("MoveTo: moved %q, %v", moved, err)
+	ts, err := c.Transitions(context.Background(), ref)
+	if err != nil || len(ts) != 2 || ts[1] != (Transition{ID: "21", Name: "Confirmed", To: "Done", ToCategory: "done"}) {
+		t.Fatalf("Transitions = %+v, %v", ts, err)
 	}
-	if err := c.MoveTo(context.Background(), ref, "Done"); err == nil {
-		t.Error("moved to a status with no transition")
+	if err := c.Transition(context.Background(), ref, "21"); err != nil || moved != "21" {
+		t.Errorf("Transition: moved %q, %v", moved, err)
 	}
 	if err := c.Comment(context.Background(), ref, "Tested on Safari.\nPasses."); err != nil ||
 		!strings.Contains(commented, `"text":"Tested on Safari."`) || !strings.Contains(commented, `"text":"Passes."`) {

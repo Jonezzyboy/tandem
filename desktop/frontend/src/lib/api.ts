@@ -2,7 +2,7 @@ import * as App from '@wailsjs/go/main/App'
 import { EventsOn } from '@wailsjs/runtime/runtime'
 import type {
   BranchInfo, ChangeSummary, ChangeView, CheckEvent, CleanItem, CleanResult, Inbox, JiraAccount, JiraTicket, LegResult, PinItem, PRPreview, PRRequest,
-  TestFinish, TesterPlan, TesterQueue, TesterState, TestRepoStatus, TestStep,
+  TestFinish, TesterPlan, TesterQueue, TesterState, TestRepoStatus, TestStep, VerdictOption,
   RepoInfo, StartItem, TrainPlan,
 } from './types'
 
@@ -32,11 +32,14 @@ export const api = {
   testerQueue: (force = false) => App.TesterQueue(force) as unknown as Promise<TesterQueue>,
   testerPlan: (key: string) => App.TesterPlan(key) as unknown as Promise<TesterPlan>,
   testerState: () => App.TesterState() as unknown as Promise<TesterState>,
-  testerStart: (req: { key: string; title: string; url: string; repos: string[]; setAside: boolean }) =>
+  testerStart: (req: { key: string; title: string; url: string; repos: { name: string; branch: string }[]; setAside: boolean }) =>
     App.TesterStart(req as never) as unknown as Promise<TestStep[]>,
   testerStatus: () => App.TesterStatus() as unknown as Promise<TestRepoStatus[]>,
   testerPull: () => App.TesterPull() as unknown as Promise<TestStep[]>,
-  testerFinish: (result: '' | 'passed' | 'failed', note: string) => App.TesterFinish(result, note) as unknown as Promise<TestFinish>,
+  testerFinish: () => App.TesterFinish() as unknown as Promise<TestFinish>,
+  testerVerdicts: (key: string) => App.TesterVerdicts(key) as unknown as Promise<VerdictOption[]>,
+  testerVerdict: (id: string, note: string) => App.TesterVerdict(id, note),
+  jiraStatuses: () => App.JiraStatuses() as unknown as Promise<string[]>,
   openURL: (url: string) => App.OpenURL(url),
   openFolder: (path: string) => App.OpenFolder(path),
   openEditor: (path: string) => App.OpenEditor(path),

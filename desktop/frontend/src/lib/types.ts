@@ -252,6 +252,7 @@ export interface JiraAccount {
 
 export interface TestPR {
   repo: string
+  branch: string
   number: number
   url: string
   draft: boolean
@@ -268,7 +269,10 @@ export interface QueueItem {
   summary: string
   status: string
   assignee: string
+  updated: string
   prs: TestPR[]
+  // False until GitHub has been searched for the ticket's PRs.
+  prsLoaded: boolean
 }
 
 export interface TesterQueue {
@@ -276,10 +280,17 @@ export interface TesterQueue {
   // What's missing before the queue can be read; error is any other failure.
   setup: string
   error: string
+  statuses: string[]
+  // When Jira was read; loading is true while PRs are still being found.
+  at: string
+  loading: boolean
+  prError: string
 }
 
 export interface PlanRepo {
   name: string
+  // The change's branch in this repo: the key, or a name starting with it.
+  branch: string
   cloned: boolean
   current: string
   dirty: number
@@ -313,7 +324,9 @@ export interface TestRecord {
   key: string
   title: string
   url: string
-  result: 'passed' | 'failed' | 'stopped'
+  result: 'passed' | 'failed' | 'moved' | 'stopped'
+  verdict?: string
+  to?: string
   at: string
 }
 
@@ -324,6 +337,7 @@ export interface TesterState {
 
 export interface TestRepoStatus {
   name: string
+  branch: string
   onBranch: boolean
   current: string
   behind: number
@@ -334,7 +348,13 @@ export interface TestRepoStatus {
 
 export interface TestFinish {
   steps: TestStep[]
-  jira: string
-  jiraError: string
   done: boolean
+}
+
+// One of a ticket's transitions, offered as a test result.
+export interface VerdictOption {
+  id: string
+  name: string
+  to: string
+  outcome: 'passed' | 'failed' | 'moved'
 }

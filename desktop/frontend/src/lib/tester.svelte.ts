@@ -13,8 +13,9 @@ export const tester = $state({
   steps: {} as Record<string, TestStep>,
   pulling: false,
   finishing: false,
-  // The last finished test, shown on the home page until dismissed.
-  finished: null as { key: string; title: string; result: string; outcome: TestFinish } | null,
+  // The last finished test, shown on the home page until dismissed: the
+  // verdict recorded, if any, and how each repo went back.
+  finished: null as { key: string; verdict: string; outcome: TestFinish } | null,
 })
 
 export async function loadQueue(force = false) {
@@ -51,9 +52,9 @@ export async function loadStatus() {
   }
 }
 
-export async function startTest(key: string, title: string, url: string, repos: string[], setAside: boolean): Promise<TestStep[]> {
+export async function startTest(key: string, title: string, url: string, repos: { name: string; branch: string }[], setAside: boolean): Promise<TestStep[]> {
   tester.starting = key
-  tester.steps = Object.fromEntries(repos.map((r) => [r, { repo: r, done: false, ok: false, message: 'waiting…', sha: '' }]))
+  tester.steps = Object.fromEntries(repos.map((r) => [r.name, { repo: r.name, done: false, ok: false, message: 'waiting…', sha: '' }]))
   try {
     const steps = await api.testerStart({ key, title, url, repos, setAside })
     for (const s of steps) tester.steps[s.repo] = s
@@ -82,15 +83,29 @@ export async function pullLatest() {
   }
 }
 
-// finish records result on the ticket (none: just stop testing) and puts every
-// repo back on main. It returns whether every repo made it back.
-export async function finish(result: '' | 'passed' | 'failed', note = ''): Promise<boolean> {
+// verdict moves the ticket under test along the chosen transition, with note
+// as a comment. It returns what happened, or '' when it failed.
+export async function verdict(id: string, note: string): Promise<string> {
+  try {
+    const msg = await api.testerVerdict(id, note)
+    await loadState()
+    loadQueue(true)
+    return msg
+  } catch (e) {
+    fail(e)
+    return ''
+  }
+}
+
+// finish puts every repo back on main. verdictMsg is what was recorded on the
+// ticket, for the summary. It returns whether every repo made it back.
+export async function finish(verdictMsg = ''): Promise<boolean> {
   const current = tester.state.current
   if (!current) return true
   tester.finishing = true
   try {
-    const outcome = await api.testerFinish(result, note)
-    tester.finished = { key: current.key, title: current.title, result: result || 'stopped', outcome }
+    const outcome = await api.testerFinish()
+    tester.finished = { key: current.key, verdict: verdictMsg, outcome }
     await loadState()
     loadQueue(true)
     if (outcome.done) tester.status = []
@@ -109,4 +124,5 @@ export function initTester() {
   on<TestStep>('tester-step', (s) => {
     if (tester.starting) tester.steps[s.repo] = s
   })
+  on<TesterQueue>('tester-queue', (q) => { tester.queue = q })
 }

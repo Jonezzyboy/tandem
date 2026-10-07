@@ -22,7 +22,7 @@
             {#if r.url}<button class="link mono" onclick={() => api.openURL(r.url)}>{r.key}</button>{:else}<span class="mono">{r.key}</span>{/if}
             <span class="sub">{r.title}</span>
           </span>
-          <span class="small muted">{ago(r.at)} ago</span>
+          <span class="small muted">{r.verdict ? `${r.verdict} → ${r.to} · ` : ''}{ago(r.at)} ago</span>
         </div>
         <button class="btn small" onclick={() => navigate({ name: 'test', id: r.key })}>Open</button>
       </div>
@@ -44,6 +44,7 @@
   .stack { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
   .result { width: 64px; text-align: center; font-size: 11px; padding: 2px 0; border-radius: 6px; border: 1px solid var(--line-2); color: var(--muted); }
   .result.passed { color: var(--ok-text); border-color: var(--ok-border); background: var(--ok-bg); }
+  .result.moved { color: var(--accent-text); border-color: var(--accent); background: var(--accent-bg); }
   .result.failed { color: var(--warn-text); border-color: var(--warn-border); background: var(--warn-bg); }
   .link { border: 0; background: none; padding: 0; color: var(--accent-text); cursor: pointer; }
   .link:hover { color: var(--link-hover); }

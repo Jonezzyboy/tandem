@@ -70,6 +70,10 @@ export function JiraLookup(arg1) {
   return window['go']['main']['App']['JiraLookup'](arg1);
 }
 
+export function JiraStatuses() {
+  return window['go']['main']['App']['JiraStatuses']();
+}
+
 export function Link(arg1, arg2, arg3) {
   return window['go']['main']['App']['Link'](arg1, arg2, arg3);
 }
@@ -166,8 +170,8 @@ export function TestTriage(arg1) {
   return window['go']['main']['App']['TestTriage'](arg1);
 }
 
-export function TesterFinish(arg1, arg2) {
-  return window['go']['main']['App']['TesterFinish'](arg1, arg2);
+export function TesterFinish() {
+  return window['go']['main']['App']['TesterFinish']();
 }
 
 export function TesterPlan(arg1) {
@@ -192,6 +196,14 @@ export function TesterState() {
 
 export function TesterStatus() {
   return window['go']['main']['App']['TesterStatus']();
+}
+
+export function TesterVerdict(arg1, arg2) {
+  return window['go']['main']['App']['TesterVerdict'](arg1, arg2);
+}
+
+export function TesterVerdicts(arg1) {
+  return window['go']['main']['App']['TesterVerdicts'](arg1);
 }
 
 export function TrainPlan(arg1) {

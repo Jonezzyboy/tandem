@@ -1,7 +1,6 @@
 package main
 
 import (
-	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -27,6 +26,7 @@ const queueTTL = time.Minute
 
 type TestPR struct {
 	Repo    string `json:"repo"`
+	Branch  string `json:"branch"`
 	Number  int    `json:"number"`
 	URL     string `json:"url"`
 	Draft   bool   `json:"draft"`
@@ -43,15 +43,23 @@ type QueueItem struct {
 	Summary  string   `json:"summary"`
 	Status   string   `json:"status"`
 	Assignee string   `json:"assignee"`
+	Updated  string   `json:"updated"`
 	PRs      []TestPR `json:"prs"`
+	// PRsLoaded is false until GitHub has been searched for the ticket's PRs.
+	PRsLoaded bool `json:"prsLoaded"`
 }
 
 type TesterQueue struct {
-	Items []QueueItem `json:"items"`
+	Items    []QueueItem `json:"items"`
+	Statuses []string    `json:"statuses"`
 	// Setup names what's missing before the queue can be read; Error is any
 	// other failure.
 	Setup string `json:"setup"`
 	Error string `json:"error"`
+	// At is when Jira was read; Loading is true while PRs are still being found.
+	At      string `json:"at"`
+	Loading bool   `json:"loading"`
+	PRError string `json:"prError"`
 }
 
 func (a *App) jiraClient() jira.Client {
@@ -59,65 +67,144 @@ func (a *App) jiraClient() jira.Client {
 	return jira.Client{Email: email, Token: jiraToken(email)}
 }
 
-// owners are the GitHub owners cloned under the roots: PR searches are limited
-// to them so same-named branches elsewhere on GitHub don't show up.
-func (a *App) owners() map[string]bool {
-	out := map[string]bool{}
+// owners are the GitHub owners cloned under the roots: PRs are looked for in
+// them only, so same-named branches elsewhere on GitHub don't show up.
+func (a *App) owners() []string {
+	seen := map[string]bool{}
+	var out []string
 	for _, r := range workspace.List(a.roots) {
 		owner, _, _ := strings.Cut(r.Name, "/")
-		out[strings.ToLower(owner)] = true
+		if o := strings.ToLower(owner); !seen[o] {
+			seen[o] = true
+			out = append(out, owner)
+		}
 	}
 	return out
 }
 
-// prsFor finds key's open PRs in the given owners, with their CI.
-func (a *App) prsFor(ctx context.Context, key string, owners map[string]bool) ([]TestPR, error) {
-	found, err := gh.SearchHead(ctx, key, nil)
-	if err != nil {
-		return nil, err
+const openPRsTTL = time.Minute
+
+// openPRs lists the open PRs in every owner, one query per owner (a query
+// naming an owner GitHub doesn't know finds nothing at all), cached for a
+// minute. It fails only when no owner could be read.
+func (a *App) openPRs(ctx context.Context) ([]gh.OpenPR, error) {
+	a.mu.Lock()
+	if a.prs != nil && time.Since(a.prsAt) < openPRsTTL {
+		prs := a.prs
+		a.mu.Unlock()
+		return prs, nil
 	}
-	var out []TestPR
-	for _, p := range found {
-		owner, _, _ := strings.Cut(p.Repository.NameWithOwner, "/")
-		if owners[strings.ToLower(owner)] {
-			out = append(out, TestPR{Repo: p.Repository.NameWithOwner, Number: p.Number, URL: p.URL, Draft: p.IsDraft,
-				Author: p.Author.Login, Updated: p.UpdatedAt.Format(time.RFC3339)})
-		}
-	}
+	a.mu.Unlock()
+	owners := a.owners()
+	found := make([][]gh.OpenPR, len(owners))
+	errs := make([]error, len(owners))
+	sem := make(chan struct{}, 6)
 	var wg sync.WaitGroup
-	for i := range out {
+	for i, o := range owners {
 		wg.Go(func() {
-			if pr, err := gh.ViewIn(ctx, out[i].Repo, out[i].Number); err == nil {
-				r := pr.Rollup()
-				out[i].Pass, out[i].Fail, out[i].Pending = r.Pass, r.Fail, r.Pending
-			}
+			sem <- struct{}{}
+			defer func() { <-sem }()
+			found[i], errs[i] = gh.OpenPRs(ctx, o)
 		})
 	}
 	wg.Wait()
-	slices.SortFunc(out, func(x, y TestPR) int { return strings.Compare(x.Repo, y.Repo) })
-	return out, nil
+	all := []gh.OpenPR{}
+	failed := 0
+	for i := range owners {
+		all = append(all, found[i]...)
+		if errs[i] != nil {
+			failed++
+		}
+	}
+	if failed > 0 && failed == len(owners) {
+		return nil, errs[0]
+	}
+	a.mu.Lock()
+	a.prs, a.prsAt = all, time.Now()
+	a.mu.Unlock()
+	return all, nil
 }
 
-// TesterQueue lists tickets in the ready-to-test status with their PRs. It is
-// cached for a minute unless force is set.
+// mentions reports whether s names key on its own: DEV-12 in "DEV-12",
+// "DEV-12-fix-prices" or "feature/DEV-12", not in "DEV-120".
+func mentions(s, key string) bool {
+	s, key = strings.ToUpper(s), strings.ToUpper(key)
+	for i := 0; ; {
+		j := strings.Index(s[i:], key)
+		if j < 0 {
+			return false
+		}
+		start, end := i+j, i+j+len(key)
+		before := start == 0 || !isWordByte(s[start-1])
+		after := end == len(s) || !(s[end] >= '0' && s[end] <= '9')
+		if before && after {
+			return true
+		}
+		i = start + 1
+	}
+}
+
+func isWordByte(b byte) bool {
+	return b >= 'A' && b <= 'Z' || b >= 'a' && b <= 'z' || b >= '0' && b <= '9'
+}
+
+// prsFor picks key's PRs out of all: those whose branch or title names it.
+func prsFor(all []gh.OpenPR, key string) []TestPR {
+	out := []TestPR{}
+	for _, p := range all {
+		if !mentions(p.Branch, key) && !mentions(p.Title, key) {
+			continue
+		}
+		t := TestPR{Repo: p.Repo, Branch: p.Branch, Number: p.Number, URL: p.URL, Draft: p.Draft, Author: p.Author, Updated: p.Updated.Format(time.RFC3339)}
+		switch p.CI {
+		case "SUCCESS":
+			t.Pass = 1
+		case "FAILURE", "ERROR":
+			t.Fail = 1
+		case "PENDING", "EXPECTED":
+			t.Pending = 1
+		}
+		out = append(out, t)
+	}
+	slices.SortFunc(out, func(x, y TestPR) int { return strings.Compare(x.Repo, y.Repo) })
+	return out
+}
+
+// TesterQueue lists tickets in the statuses to test. Jira answers quickly, so
+// it returns those at once and finds their PRs in the background, emitting
+// "tester-queue" as each ticket's arrive. It is cached for a minute unless
+// force is set.
 func (a *App) TesterQueue(force bool) TesterQueue {
 	a.mu.Lock()
-	if !force && a.queue != nil && time.Since(a.queueAt) < queueTTL {
-		q := *a.queue
+	if !force && a.queue != nil && (a.queue.Loading || time.Since(a.queueAt) < queueTTL) {
+		q := cloneQueue(*a.queue)
 		a.mu.Unlock()
 		return q
 	}
+	a.queueGen++
+	gen := a.queueGen
 	a.mu.Unlock()
-	q := a.fetchQueue()
+	q := a.readTickets()
+	q.Loading = len(q.Items) > 0
 	a.mu.Lock()
-	a.queue, a.queueAt = &q, time.Now()
+	if gen == a.queueGen {
+		a.queue, a.queueAt = &q, time.Now()
+	}
 	a.mu.Unlock()
+	if q.Loading {
+		go a.fillPRs(gen)
+	}
+	return cloneQueue(q)
+}
+
+func cloneQueue(q TesterQueue) TesterQueue {
+	q.Items = slices.Clone(q.Items)
 	return q
 }
 
-func (a *App) fetchQueue() TesterQueue {
+func (a *App) readTickets() TesterQueue {
 	s := a.Settings()
-	q := TesterQueue{Items: []QueueItem{}}
+	q := TesterQueue{Items: []QueueItem{}, Statuses: s.Tester.Statuses, At: time.Now().Format(time.RFC3339)}
 	switch {
 	case s.Jira.Site == "":
 		q.Setup = "Add your Jira site in Settings to see tickets ready to test."
@@ -125,34 +212,75 @@ func (a *App) fetchQueue() TesterQueue {
 	case s.Jira.Email == "" || jiraToken(s.Jira.Email) == "":
 		q.Setup = "Connect Jira in Settings to see tickets ready to test."
 		return q
+	case len(s.Tester.Statuses) == 0:
+		q.Setup = "Choose which Jira statuses mean a ticket is ready to test, in Settings."
+		return q
 	}
-	ctx, cancel := context.WithTimeout(a.ctx, 45*time.Second)
+	ctx, cancel := context.WithTimeout(a.ctx, 30*time.Second)
 	defer cancel()
-	issues, err := a.jiraClient().Search(ctx, s.Jira.Site, fmt.Sprintf("status = %q ORDER BY updated DESC", s.Tester.ReadyStatus))
+	issues, err := a.jiraClient().Search(ctx, s.Jira.Site, jira.StatusJQL(s.Tester.Statuses))
 	if err != nil {
 		q.Error = err.Error()
 		return q
 	}
-	owners := a.owners()
-	q.Items = make([]QueueItem, len(issues))
-	sem := make(chan struct{}, 6)
-	var wg sync.WaitGroup
-	for i, is := range issues {
-		q.Items[i] = QueueItem{Key: is.Key, URL: jira.Ref{Site: s.Jira.Site, Key: is.Key}.URL(), Summary: is.Summary, Status: is.Status, Assignee: is.Assignee, PRs: []TestPR{}}
-		wg.Go(func() {
-			sem <- struct{}{}
-			defer func() { <-sem }()
-			if prs, err := a.prsFor(ctx, is.Key, owners); err == nil {
-				q.Items[i].PRs = prs
-			}
-		})
+	for _, is := range issues {
+		it := QueueItem{Key: is.Key, URL: jira.Ref{Site: s.Jira.Site, Key: is.Key}.URL(), Summary: is.Summary, Status: is.Status,
+			Assignee: is.Assignee, PRs: []TestPR{}}
+		if !is.Updated.IsZero() {
+			it.Updated = is.Updated.Format(time.RFC3339)
+		}
+		q.Items = append(q.Items, it)
 	}
-	wg.Wait()
 	return q
 }
 
+// fillPRs matches each ticket to its PRs and folds them into the cached
+// queue gen, unless a newer read has replaced it.
+func (a *App) fillPRs(gen int) {
+	ctx, cancel := context.WithTimeout(a.ctx, 2*time.Minute)
+	defer cancel()
+	all, err := a.openPRs(ctx)
+	a.updateQueue(gen, func(q *TesterQueue) {
+		q.Loading = false
+		if err != nil {
+			q.PRError = "Couldn't read PRs from GitHub: " + core.FirstLine(err.Error())
+			return
+		}
+		for i := range q.Items {
+			q.Items[i].PRs, q.Items[i].PRsLoaded = prsFor(all, q.Items[i].Key), true
+		}
+	})
+}
+
+func (a *App) updateQueue(gen int, fn func(*TesterQueue)) {
+	a.mu.Lock()
+	if gen != a.queueGen || a.queue == nil {
+		a.mu.Unlock()
+		return
+	}
+	q := cloneQueue(*a.queue)
+	fn(&q)
+	a.queue = &q
+	out := cloneQueue(q)
+	a.mu.Unlock()
+	a.emit("tester-queue", out)
+}
+
+// JiraStatuses lists the statuses on the Jira site, for choosing which to test.
+func (a *App) JiraStatuses() ([]string, error) {
+	site := a.Settings().Jira.Site
+	if site == "" {
+		return []string{}, errors.New("add your Jira site first")
+	}
+	ctx, cancel := context.WithTimeout(a.ctx, 20*time.Second)
+	defer cancel()
+	return a.jiraClient().Statuses(ctx, site)
+}
+
 type PlanRepo struct {
-	Name    string  `json:"name"`
+	Name string `json:"name"`
+	// Branch is the change's branch in this repo.
+	Branch  string  `json:"branch"`
 	Cloned  bool    `json:"cloned"`
 	Current string  `json:"current"`
 	Dirty   int     `json:"dirty"`
@@ -184,7 +312,10 @@ func (a *App) TesterPlan(key string) (TesterPlan, error) {
 	var prErr error
 	var local []core.BranchRepo
 	var wg sync.WaitGroup
-	wg.Go(func() { prs, prErr = a.prsFor(ctx, key, a.owners()) })
+	wg.Go(func() {
+		all, err := a.openPRs(ctx)
+		prs, prErr = prsFor(all, key), err
+	})
 	wg.Go(func() { local = core.FindBranch(ctx, workspace.List(a.roots), key) })
 	if s.Jira.Site != "" {
 		wg.Go(func() {
@@ -208,11 +339,14 @@ func (a *App) TesterPlan(key string) (TesterPlan, error) {
 		return r
 	}
 	for _, pr := range prs {
-		add(pr.Repo).PR = &pr
+		r := add(pr.Repo)
+		r.PR, r.Branch = &pr, pr.Branch
 	}
 	for _, b := range local {
 		if b.Remote {
-			add(b.Repo.Name)
+			if r := add(b.Repo.Name); r.Branch == "" {
+				r.Branch = key
+			}
 		}
 	}
 	for _, r := range byName {
@@ -250,11 +384,16 @@ func (a *App) TesterState() (testrun.State, error) {
 }
 
 type TestStartRequest struct {
-	Key      string   `json:"key"`
-	Title    string   `json:"title"`
-	URL      string   `json:"url"`
-	Repos    []string `json:"repos"`
-	SetAside bool     `json:"setAside"`
+	Key      string      `json:"key"`
+	Title    string      `json:"title"`
+	URL      string      `json:"url"`
+	Repos    []StartRepo `json:"repos"`
+	SetAside bool        `json:"setAside"`
+}
+
+type StartRepo struct {
+	Name   string `json:"name"`
+	Branch string `json:"branch"`
 }
 
 // TesterStart switches every repo in req to the change's branch, emitting
@@ -274,9 +413,9 @@ func (a *App) TesterStart(req TestStartRequest) ([]testrun.Step, error) {
 		return nil, errors.New("no repos have this change's branch")
 	}
 	targets := make([]testrun.Target, len(req.Repos))
-	for i, name := range req.Repos {
-		targets[i] = testrun.Target{Name: name}
-		if r, err := workspace.Resolve(a.roots, name); err == nil {
+	for i, sr := range req.Repos {
+		targets[i] = testrun.Target{Name: sr.Name, Branch: sr.Branch}
+		if r, err := workspace.Resolve(a.roots, sr.Name); err == nil {
 			targets[i].Dir = r.Path
 		}
 	}
@@ -330,18 +469,120 @@ func (a *App) TesterPull() ([]testrun.Step, error) {
 	return testrun.Pull(ctx, st.Current), nil
 }
 
-type TestFinish struct {
-	Steps []testrun.Step `json:"steps"`
-	// Jira says what happened to the ticket, JiraError why it didn't.
-	Jira      string `json:"jira"`
-	JiraError string `json:"jiraError"`
-	Done      bool   `json:"done"`
+// VerdictOption is one of the ticket's transitions offered as a test result.
+type VerdictOption struct {
+	ID      string `json:"id"`
+	Name    string `json:"name"`
+	To      string `json:"to"`
+	Outcome string `json:"outcome"`
 }
 
-// TesterFinish records result ("passed", "failed", or "" to just stop) on the
-// ticket with note as a comment, then puts every repo back on its base. Repos
-// that can't go back stay in the session for another try.
-func (a *App) TesterFinish(result, note string) (TestFinish, error) {
+// failWords mark a transition that sends a ticket back, whatever its target's
+// category says.
+var failWords = []string{"fail", "reject", "require change", "reopen", "back to"}
+
+func outcomeOf(t jira.Transition) string {
+	text := strings.ToLower(t.Name + " " + t.To)
+	for _, w := range failWords {
+		if strings.Contains(text, w) {
+			return "failed"
+		}
+	}
+	if t.ToCategory == "done" {
+		return "passed"
+	}
+	return "moved"
+}
+
+func (a *App) ticketRef(key, url string) (jira.Ref, error) {
+	if r, ok := jira.Parse(url); ok {
+		return r, nil
+	}
+	if site := a.Settings().Jira.Site; site != "" {
+		return jira.Ref{Site: site, Key: key}, nil
+	}
+	return jira.Ref{}, errors.New("add your Jira site in Settings to record results")
+}
+
+// TesterVerdicts lists the moves key's workflow allows from its status now,
+// passes first, as the results a tester can record.
+func (a *App) TesterVerdicts(key string) ([]VerdictOption, error) {
+	ref, err := a.ticketRef(key, "")
+	if err != nil {
+		return nil, err
+	}
+	ctx, cancel := context.WithTimeout(a.ctx, 20*time.Second)
+	defer cancel()
+	ts, err := a.jiraClient().Transitions(ctx, ref)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]VerdictOption, len(ts))
+	for i, t := range ts {
+		out[i] = VerdictOption{ID: t.ID, Name: t.Name, To: t.To, Outcome: outcomeOf(t)}
+	}
+	rank := map[string]int{"passed": 0, "failed": 1, "moved": 2}
+	slices.SortStableFunc(out, func(x, y VerdictOption) int { return rank[x.Outcome] - rank[y.Outcome] })
+	return out, nil
+}
+
+// TesterVerdict moves the ticket under test along transition id, adds note as
+// a comment, and records the verdict for the history.
+func (a *App) TesterVerdict(id, note string) (string, error) {
+	a.testMu.Lock()
+	defer a.testMu.Unlock()
+	st, err := a.testStore().Load()
+	if err != nil {
+		return "", err
+	}
+	s := st.Current
+	if s == nil {
+		return "", errors.New("nothing is being tested")
+	}
+	ref, err := a.ticketRef(s.Key, s.URL)
+	if err != nil {
+		return "", err
+	}
+	ctx, cancel := context.WithTimeout(a.ctx, 30*time.Second)
+	defer cancel()
+	c := a.jiraClient()
+	ts, err := c.Transitions(ctx, ref)
+	if err != nil {
+		return "", err
+	}
+	i := slices.IndexFunc(ts, func(t jira.Transition) bool { return t.ID == id })
+	if i < 0 {
+		return "", fmt.Errorf("%s can't make that move any more: its status may have changed", s.Key)
+	}
+	t := ts[i]
+	if err := c.Transition(ctx, ref, id); err != nil {
+		return "", err
+	}
+	s.Verdict = &testrun.Verdict{Name: t.Name, To: t.To, Outcome: outcomeOf(t)}
+	if err := a.testStore().Save(st); err != nil {
+		return "", err
+	}
+	a.mu.Lock()
+	a.queue = nil
+	a.mu.Unlock()
+	msg := s.Key + " moved to " + t.To
+	if strings.TrimSpace(note) != "" {
+		if err := c.Comment(ctx, ref, note); err != nil {
+			return msg + ", but your note wasn't added: " + err.Error(), nil
+		}
+		msg += ", with your note"
+	}
+	return msg, nil
+}
+
+type TestFinish struct {
+	Steps []testrun.Step `json:"steps"`
+	Done  bool           `json:"done"`
+}
+
+// TesterFinish puts every repo under test back on its base. Repos that can't
+// go back stay in the session for another try.
+func (a *App) TesterFinish() (TestFinish, error) {
 	a.testMu.Lock()
 	defer a.testMu.Unlock()
 	st, err := a.testStore().Load()
@@ -351,21 +592,15 @@ func (a *App) TesterFinish(result, note string) (TestFinish, error) {
 	if st.Current == nil {
 		return TestFinish{}, errors.New("nothing is being tested")
 	}
-	s := st.Current
 	ctx, cancel := context.WithTimeout(a.ctx, 5*time.Minute)
 	defer cancel()
-	out := TestFinish{}
-	if result != "" {
-		out.Jira, out.JiraError = a.recordResult(ctx, s, result, note)
-	}
-	steps, left := testrun.End(ctx, s)
-	out.Steps = steps
-	if len(left) == 0 {
-		out.Done = true
+	steps, left := testrun.End(ctx, st.Current)
+	out := TestFinish{Steps: steps, Done: len(left) == 0}
+	if out.Done {
+		st.History = append([]testrun.Record{st.Current.Record()}, st.History...)
 		st.Current = nil
-		st.History = append([]testrun.Record{{Key: s.Key, Title: s.Title, URL: s.URL, Result: cmp.Or(result, "stopped"), At: time.Now().UTC()}}, st.History...)
 	} else {
-		s.Repos = left
+		st.Current.Repos = left
 	}
 	if err := a.testStore().Save(st); err != nil {
 		return out, err
@@ -374,27 +609,4 @@ func (a *App) TesterFinish(result, note string) (TestFinish, error) {
 	a.queue = nil
 	a.mu.Unlock()
 	return out, nil
-}
-
-func (a *App) recordResult(ctx context.Context, s *testrun.Session, result, note string) (string, string) {
-	ref, ok := jira.Parse(s.URL)
-	if !ok {
-		return "", "no Jira link to update"
-	}
-	t := a.Settings().Tester
-	to := t.PassStatus
-	if result == "failed" {
-		to = t.FailStatus
-	}
-	c := a.jiraClient()
-	if err := c.MoveTo(ctx, ref, to); err != nil {
-		return "", err.Error()
-	}
-	if strings.TrimSpace(note) != "" {
-		if err := c.Comment(ctx, ref, note); err != nil {
-			return "moved to " + to, "the note wasn't added: " + err.Error()
-		}
-		return "moved to " + to + ", with your note", ""
-	}
-	return "moved to " + to, ""
 }

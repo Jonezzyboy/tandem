@@ -8,6 +8,7 @@
   import type { JiraAccount } from '@lib/types'
   import Avatar from './Avatar.svelte'
   import Kbd from './Kbd.svelte'
+  import Icon from './Icon.svelte'
 
   let recording = $state<string | null>(null)
   let pending = $state('')
@@ -122,6 +123,19 @@
     saveSettings({ tester: { ...prefs.settings.tester, ...next } })
   }
 
+  let jiraStatuses = $state<string[] | null>(null)
+  let jiraStatusesError = $state('')
+  let statusFilter = $state('')
+  $effect(() => {
+    if (prefs.settings.mode !== 'tester' || !prefs.settings.jira.site) return
+    jiraStatusesError = ''
+    api.jiraStatuses().then((s) => (jiraStatuses = s)).catch((e) => { jiraStatuses = []; jiraStatusesError = errorText(e) })
+  })
+  function toggleStatus(st: string) {
+    const cur = prefs.settings.tester.statuses
+    saveTester({ statuses: cur.includes(st) ? cur.filter((s) => s !== st) : [...cur, st] })
+  }
+
   const customised = $derived(Object.keys(prefs.settings.keys).length)
 </script>
 
@@ -156,12 +170,31 @@
     </fieldset>
     {#if prefs.settings.mode === 'tester'}
       <div class="card general tester">
-        <label class="setting"><span>Jira status that means ready to test</span>
-          <input class="input" value={prefs.settings.tester.readyStatus} onchange={(e) => saveTester({ readyStatus: e.currentTarget.value })} /></label>
-        <label class="setting"><span>Move to when it passes</span>
-          <input class="input" value={prefs.settings.tester.passStatus} onchange={(e) => saveTester({ passStatus: e.currentTarget.value })} /></label>
-        <label class="setting"><span>Move to when it fails</span>
-          <input class="input" value={prefs.settings.tester.failStatus} onchange={(e) => saveTester({ failStatus: e.currentTarget.value })} /></label>
+        <div class="statuses">
+          <div class="stack">
+            <span>Statuses that mean a ticket is ready to test</span>
+            <span class="small muted">Tickets in any of these show under Ready to test. The verdicts offered are each ticket's own moves out of its status.</span>
+          </div>
+          <div class="picked">
+            {#each prefs.settings.tester.statuses as st (st)}
+              <button class="chip on" onclick={() => toggleStatus(st)} aria-label="Stop testing tickets in {st}">{st}<Icon name="close" size={12} /></button>
+            {:else}
+              <span class="small warn">None chosen yet: pick from your Jira's statuses below.</span>
+            {/each}
+          </div>
+          {#if jiraStatuses === null}
+            <span class="small muted">{prefs.settings.jira.site ? 'Reading statuses from Jira…' : 'Add your Jira site below to choose from its statuses.'}</span>
+          {:else if jiraStatusesError}
+            <span class="small warn">Couldn't read Jira's statuses: {jiraStatusesError}</span>
+          {:else}
+            <input class="input" bind:value={statusFilter} placeholder="Filter {jiraStatuses.length} statuses" aria-label="Filter statuses" />
+            <div class="pool">
+              {#each jiraStatuses.filter((s) => !prefs.settings.tester.statuses.includes(s) && s.toLowerCase().includes(statusFilter.toLowerCase())) as st (st)}
+                <button class="chip" onclick={() => toggleStatus(st)}><Icon name="plus" size={12} />{st}</button>
+              {/each}
+            </div>
+          {/if}
+        </div>
         <label class="choice">
           <input type="checkbox" checked={prefs.settings.tester.cloneMissing} onchange={(e) => saveTester({ cloneMissing: e.currentTarget.checked })} />
           Clone a change's repos that aren't on this machine yet
@@ -460,6 +493,16 @@
   .mode input { width: 16px; height: 16px; margin: 3px 0 0; accent-color: var(--accent); }
   .mode-name { font-weight: 500; font-size: 14px; }
   .mode .small { line-height: 1.5; }
+  .statuses { display: flex; flex-direction: column; gap: 10px; font-size: 14px; }
+  .statuses .input { max-width: 320px; }
+  .picked, .pool { display: flex; flex-wrap: wrap; gap: 6px; }
+  .pool { max-height: 150px; overflow: auto; }
+  .chip {
+    display: inline-flex; align-items: center; gap: 6px; padding: 4px 9px; border-radius: 7px; font-size: 13px;
+    border: 1px solid var(--line-2); background: var(--raised); color: var(--text-2); cursor: pointer;
+  }
+  .chip:hover { color: var(--text); }
+  .chip.on { border-color: var(--accent); background: var(--accent-bg); color: var(--accent-text); }
   .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
   .about { display: flex; flex-direction: column; gap: 8px; font-size: 13px; }
   .about div { display: grid; grid-template-columns: 180px minmax(0, 1fr); gap: 12px; }
