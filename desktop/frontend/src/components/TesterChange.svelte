@@ -2,8 +2,8 @@
   import { onDestroy, onMount } from 'svelte'
   import { api, errorText } from '@lib/api'
   import { navigate } from '@lib/state.svelte'
-  import { finish, loadStatus, pullLatest, startTest, tester } from '@lib/tester.svelte'
-  import type { PlanRepo, TesterPlan, TestPR, TestStep } from '@lib/types'
+  import { finish, loadStatus, pullLatest, startTest, tester, verdict } from '@lib/tester.svelte'
+  import type { PlanRepo, TesterPlan, TestPR, TestStep, VerdictOption } from '@lib/types'
   import Icon from './Icon.svelte'
 
   let { id }: { id: string } = $props()
@@ -28,7 +28,7 @@
 
   const usable = $derived(plan ? plan.repos.filter((r) => r.cloned || plan!.cloneRoot) : [])
   const uncloneable = $derived(plan ? plan.repos.filter((r) => !r.cloned && !plan!.cloneRoot) : [])
-  const dirty = $derived(usable.filter((r) => r.cloned && r.dirty > 0 && r.current !== id))
+  const dirty = $derived(usable.filter((r) => r.cloned && r.dirty > 0 && r.current !== r.branch))
   let setAside = $state(true)
 
   const title = $derived(plan?.ticket.summary || session?.title || '')
@@ -37,7 +37,7 @@
   async function test() {
     if (!plan) return
     lastSteps = null
-    const steps = await startTest(id, title, url, usable.map((r) => r.name), setAside && dirty.length > 0)
+    const steps = await startTest(id, title, url, usable.map((r) => ({ name: r.name, branch: r.branch })), setAside && dirty.length > 0)
     if (steps.some((s) => !s.ok)) lastSteps = steps
     load()
   }
@@ -52,9 +52,32 @@
   const status = $derived(Object.fromEntries(tester.status.map((s) => [s.name, s])))
   const behind = $derived(tester.status.filter((s) => s.behind > 0))
 
+  async function backToMain(verdictMsg = '') {
+    if (await finish(verdictMsg)) navigate({ name: 'ready' })
+  }
+
+  // The ticket's own transitions, offered as the test result.
+  let verdicts = $state<VerdictOption[] | null>(null)
+  let verdictsError = $state('')
+  $effect(() => {
+    if (!session || verdicts) return
+    api.testerVerdicts(id).then((v) => (verdicts = v)).catch((e) => (verdictsError = errorText(e)))
+  })
+  let choice = $state<VerdictOption | null>(null)
   let note = $state('')
-  async function done(result: '' | 'passed' | 'failed') {
-    if (await finish(result, note)) navigate({ name: 'ready' })
+  let thenBack = $state(true)
+  let recording = $state(false)
+  let recorded = $state('')
+  const noteLabel = $derived(choice?.outcome === 'failed' ? 'What went wrong?' : choice?.outcome === 'passed' ? 'What did you check? (optional)' : 'Note (optional)')
+  const canRecord = $derived(!!choice && (choice.outcome !== 'failed' || note.trim() !== ''))
+  async function record() {
+    if (!choice || !canRecord) return
+    recording = true
+    const msg = await verdict(choice.id, note)
+    recording = false
+    if (!msg) return
+    if (thenBack) await backToMain(msg)
+    else recorded = msg
   }
 
   function prText(pr: TestPR | null): { text: string; tone: string } {
@@ -70,7 +93,7 @@
     const parts = [r.current ? `on ${r.current}` : 'detached HEAD']
     if (r.dirty) parts.push(`${r.dirty} uncommitted file${r.dirty === 1 ? '' : 's'}`)
     else parts.push('clean')
-    return { text: parts.join(' · '), tone: r.dirty && r.current !== id ? 'warn' : 'muted' }
+    return { text: parts.join(' · '), tone: r.dirty && r.current !== r.branch ? 'warn' : 'muted' }
   }
 
   const progress = $derived(lastSteps ?? Object.values(tester.steps))
@@ -94,7 +117,7 @@
     </div>
     <div class="actions" style="--wails-draggable: no-drag">
       {#if session && !starting && !lastSteps}
-        <button class="btn" disabled={tester.finishing} onclick={() => done('')}>
+        <button class="btn" disabled={tester.finishing} onclick={() => backToMain(recorded)}>
           <Icon name="refresh" spin={tester.finishing} />Back to main
         </button>
       {:else if !session && !starting && !lastSteps}
@@ -135,7 +158,7 @@
     {#if lastSteps}
       <div class="row-actions">
         {#if session}<button class="btn primary" onclick={() => (lastSteps = null)}>Test with the repos that switched</button>{/if}
-        <button class="btn" disabled={tester.finishing} onclick={() => { lastSteps = null; done('') }}>Back to main</button>
+        <button class="btn" disabled={tester.finishing} onclick={() => { lastSteps = null; backToMain() }}>Back to main</button>
       </div>
     {/if}
   {:else if session}
@@ -167,25 +190,55 @@
             {:else if st.error}
               <span class="warn">{st.error}</span>
             {:else if !st.onBranch}
-              <span class="warn">on {st.current || 'a detached HEAD'}, not {id}</span>
+              <span class="warn">on {st.current || 'a detached HEAD'}, not {st.branch}</span>
             {:else if st.behind}
-              <span class="warn">on {id} · {st.behind} commit{st.behind === 1 ? '' : 's'} behind</span>
+              <span class="warn">on {st.branch} · {st.behind} commit{st.behind === 1 ? '' : 's'} behind</span>
             {:else}
-              <span class="ok-text">on {id} · up to date{st.dirty ? ` · ${st.dirty} edited` : ''}</span>
+              <span class="ok-text">on {st.branch} · up to date{st.dirty ? ` · ${st.dirty} edited` : ''}</span>
             {/if}
           </div>
         {/each}
       </section>
-      <section class="panel" aria-label="Finish testing">
-        <span class="eyebrow">When you're done</span>
-        <p class="small sub">Record the result on the Jira ticket, then put every repo back on main.</p>
-        <label class="small sub" for="t-note">Note for the developer (optional)</label>
-        <textarea id="t-note" class="input" rows="3" bind:value={note} placeholder="What you tried, what broke"></textarea>
-        <div class="verdict">
-          <button class="btn pass" disabled={tester.finishing} onclick={() => done('passed')}>Passed</button>
-          <button class="btn fail" disabled={tester.finishing} onclick={() => done('failed')}>Failed</button>
-        </div>
-        <span class="small muted">Moves {id} on in Jira, with your note as a comment.</span>
+      <section class="panel" aria-label="Your verdict">
+        <span class="eyebrow">Your verdict</span>
+        {#if recorded}
+          <div class="recorded"><Icon name="check" color="var(--ok)" /><span>{recorded}.</span></div>
+          <button class="btn primary" disabled={tester.finishing} onclick={() => backToMain(recorded)}>
+            <Icon name="refresh" spin={tester.finishing} />Back to main
+          </button>
+        {:else if verdictsError}
+          <p class="small warn">Couldn't read the ticket's workflow: {verdictsError}</p>
+          <p class="small muted">Record the result in Jira, then go back to main.</p>
+        {:else if !verdicts}
+          <p class="small muted">Reading {id}'s workflow…</p>
+        {:else if verdicts.length === 0}
+          <p class="small muted">{id} has no moves from its current status. Record the result in Jira, then go back to main.</p>
+        {:else}
+          <fieldset class="choices">
+            <legend class="small sub">How did {id} go? Each choice is a move in its Jira workflow.</legend>
+            {#each verdicts as v (v.id)}
+              <label class="choice {v.outcome}" class:on={choice?.id === v.id}>
+                <input type="radio" name="verdict" checked={choice?.id === v.id} onchange={() => (choice = v)} />
+                <Icon name={v.outcome === 'passed' ? 'check' : v.outcome === 'failed' ? 'x' : 'send'} />
+                <span class="stack"><span class="choice-name">{v.name}</span><span class="small muted">moves it to {v.to}</span></span>
+              </label>
+            {/each}
+          </fieldset>
+          {#if choice}
+            <label class="small sub" for="t-note">{noteLabel}</label>
+            <textarea id="t-note" class="input" rows="3" bind:value={note}
+              placeholder={choice.outcome === 'failed' ? 'Steps to reproduce, what you expected, what happened' : 'Browsers, pages or cases you covered'}></textarea>
+            <label class="then">
+              <input type="checkbox" bind:checked={thenBack} />
+              Then put every repo back on main
+            </label>
+            <button class="btn record {choice.outcome}" disabled={!canRecord || recording || tester.finishing} onclick={record}>
+              <Icon name={recording || tester.finishing ? 'running' : choice.outcome === 'failed' ? 'x' : 'check'} spin={recording || tester.finishing} />
+              {choice.name}: move to {choice.to}{thenBack ? ' and go back' : ''}
+            </button>
+            <span class="small muted">{note.trim() ? 'Your note is added to the ticket as a comment.' : choice.outcome === 'failed' ? 'Add what went wrong so the developer can fix it.' : 'No comment is added without a note.'}</span>
+          {/if}
+        {/if}
       </section>
     </div>
   {:else}
@@ -194,10 +247,10 @@
         <button class="btn small" onclick={() => navigate({ name: 'test', id: other.key })}>Open {other.key}</button></div>
     {:else if plan && usable.length}
       <div class="note"><Icon name="alert" color="var(--accent-text)" />
-        <span>Testing switches {usable.length === 1 ? 'the repo' : `the ${usable.length} repos`} below to <span class="mono">{id}</span> with the latest pushed commits. One click puts {usable.length === 1 ? 'it' : 'them all'} back on main when you're done.</span>
+        <span>Testing switches {usable.length === 1 ? 'the repo' : `the ${usable.length} repos`} below to {id}'s branch{usable.length === 1 ? '' : 'es'} with the latest pushed commits. One click puts {usable.length === 1 ? 'it' : 'them all'} back on main when you're done.</span>
       </div>
     {:else if plan}
-      <div class="note"><Icon name="alert" color="var(--warn)" /><span>No repo has a <span class="mono">{id}</span> branch with an open PR, or on origin in your clones.</span></div>
+      <div class="note"><Icon name="alert" color="var(--warn)" /><span>No open PR names {id} in its branch or title, and none of your clones has a <span class="mono">{id}</span> branch on origin. If it's already merged, test it on main.</span></div>
     {/if}
     {#if plan?.error}<div class="small warn">{plan.error}</div>{/if}
     <div class="cols">
@@ -210,7 +263,7 @@
           {@const ci = prText(r.pr)}
           {@const m = machine(r)}
           <div class="row" class:warnrow={!r.cloned}>
-            <span class="mono">{r.name}</span>
+            <span class="stack"><span class="mono">{r.name}</span>{#if r.branch && r.branch !== id}<span class="mono small muted">{r.branch}</span>{/if}</span>
             <div>{#if r.pr}<button class="link mono" onclick={() => api.openURL(r.pr!.url)}>#{r.pr.number}</button> {/if}<span class={ci.tone}>{r.pr ? '· ' : ''}{ci.text}</span></div>
             <span class={m.tone}>{m.text}</span>
           </div>
@@ -282,10 +335,26 @@
   .panel-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
   .desc { white-space: pre-wrap; line-height: 1.55; color: var(--text-2); max-height: 360px; overflow: auto; font-size: 13.5px; }
   textarea.input { width: 100%; font-size: 13px; }
-  .verdict { display: flex; gap: 8px; }
-  .verdict .btn { flex: 1; justify-content: center; }
-  .pass { border-color: var(--ok-border); background: var(--ok-bg); color: var(--ok-text); }
-  .fail { border-color: var(--warn-border); background: var(--warn-bg); color: var(--warn-text); }
+  .choices { border: 0; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+  .choices legend { margin-bottom: 8px; padding: 0; }
+  .choice {
+    display: grid; grid-template-columns: 16px 16px minmax(0, 1fr); gap: 10px; align-items: center; padding: 10px 12px;
+    border-radius: 10px; border: 1px solid var(--line-2); background: var(--raised); cursor: pointer;
+  }
+  .choice input { margin: 0; accent-color: var(--accent); }
+  .choice-name { font-weight: 500; font-size: 14px; }
+  .choice.passed :global(svg) { color: var(--ok); }
+  .choice.failed :global(svg) { color: var(--warn); }
+  .choice.on.passed { border-color: var(--ok-border); background: var(--ok-bg); }
+  .choice.on.failed { border-color: var(--warn-border); background: var(--warn-bg); }
+  .choice.on.moved { border-color: var(--accent); background: var(--accent-bg); }
+  .then { display: flex; gap: 8px; align-items: center; font-size: 13px; cursor: pointer; }
+  .then input { width: 16px; height: 16px; margin: 0; accent-color: var(--accent); }
+  .record { justify-content: center; min-height: 40px; white-space: normal; text-align: center; }
+  .record.passed { border-color: var(--ok-border); background: var(--ok-bg); color: var(--ok-text); }
+  .record.failed { border-color: var(--warn-border); background: var(--warn-bg); color: var(--warn-text); }
+  .record.moved { border-color: var(--accent); background: var(--accent); color: var(--on-accent); }
+  .recorded { display: flex; gap: 10px; align-items: center; font-size: 14px; }
   .progress { max-width: 760px; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
   .progress-head { display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; background: var(--panel); }
   .bar { width: 220px; height: 6px; border-radius: 3px; background: var(--line); overflow: hidden; }

@@ -184,3 +184,26 @@ func TestStoreKeepsRecentHistory(t *testing.T) {
 		t.Errorf("load = %+v (%d history) %v", got.Current, len(got.History), err)
 	}
 }
+
+func TestBeginUsesEachRepoBranch(t *testing.T) {
+	f := newFixture(t)
+	ctx := context.Background()
+	_, dev, api := f.repo("api")
+	git(t, dev, "switch", "--quiet", "-c", "DEV-1-price-fix")
+	f.commit(dev, "fix.txt", "fix\n", "Price fix")
+	git(t, dev, "push", "--quiet", "-u", "origin", "DEV-1-price-fix")
+
+	s, steps := Begin(ctx, "DEV-1", "", "", []Target{{Name: "acme/api", Dir: api, Branch: "DEV-1-price-fix"}}, Options{})
+	if !steps[0].OK || !strings.Contains(steps[0].Message, "switched to DEV-1-price-fix") {
+		t.Fatalf("steps = %+v", steps)
+	}
+	if got := git(t, api, "branch", "--show-current"); got != "DEV-1-price-fix" {
+		t.Errorf("on %q", got)
+	}
+	if st := Status(ctx, s); !st[0].OnBranch || st[0].Branch != "DEV-1-price-fix" {
+		t.Errorf("status = %+v", st[0])
+	}
+	if _, left := End(ctx, s); len(left) != 0 {
+		t.Errorf("left = %+v", left)
+	}
+}

@@ -39,6 +39,8 @@ export function JiraAccount():Promise<main.JiraAccount>;
 
 export function JiraLookup(arg1:string):Promise<main.JiraTicket>;
 
+export function JiraStatuses():Promise<Array<string>>;
+
 export function Link(arg1:string,arg2:string,arg3:string):Promise<void>;
 
 export function OpenEditor(arg1:string):Promise<void>;
@@ -87,7 +89,7 @@ export function TandemHome():Promise<string>;
 
 export function TestTriage(arg1:triage.Config):Promise<string>;
 
-export function TesterFinish(arg1:string,arg2:string):Promise<main.TestFinish>;
+export function TesterFinish():Promise<main.TestFinish>;
 
 export function TesterPlan(arg1:string):Promise<main.TesterPlan>;
 
@@ -100,6 +102,10 @@ export function TesterStart(arg1:main.TestStartRequest):Promise<Array<testrun.St
 export function TesterState():Promise<testrun.State>;
 
 export function TesterStatus():Promise<Array<testrun.RepoStatus>>;
+
+export function TesterVerdict(arg1:string,arg2:string):Promise<string>;
+
+export function TesterVerdicts(arg1:string):Promise<Array<main.VerdictOption>>;
 
 export function TrainPlan(arg1:string):Promise<main.TrainPlan>;
 

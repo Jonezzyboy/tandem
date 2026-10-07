@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"net/url"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -101,28 +102,71 @@ func (c Client) Search(ctx context.Context, site, jql string) ([]Issue, error) {
 	return out, nil
 }
 
-// MoveTo transitions the issue to the status named to, if its workflow allows
-// that from where it is.
-func (c Client) MoveTo(ctx context.Context, r Ref, to string) error {
+// Transition is a move the issue's workflow allows from where it is now.
+type Transition struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+	To   string `json:"to"`
+	// ToCategory is the target status's category: "new", "indeterminate" or "done".
+	ToCategory string `json:"toCategory"`
+}
+
+func (c Client) Transitions(ctx context.Context, r Ref) ([]Transition, error) {
 	var body struct {
 		Transitions []struct {
 			ID   string `json:"id"`
 			Name string `json:"name"`
 			To   struct {
-				Name string `json:"name"`
+				Name           string `json:"name"`
+				StatusCategory struct {
+					Key string `json:"key"`
+				} `json:"statusCategory"`
 			} `json:"to"`
 		} `json:"transitions"`
 	}
-	base := r.Site + "/rest/api/3/issue/" + url.PathEscape(r.Key) + "/transitions"
-	if err := c.do(ctx, http.MethodGet, base, nil, &body); err != nil {
-		return err
+	if err := c.do(ctx, http.MethodGet, r.Site+"/rest/api/3/issue/"+url.PathEscape(r.Key)+"/transitions", nil, &body); err != nil {
+		return nil, err
 	}
-	for _, t := range body.Transitions {
-		if strings.EqualFold(t.To.Name, to) || strings.EqualFold(t.Name, to) {
-			return c.do(ctx, http.MethodPost, base, map[string]any{"transition": map[string]string{"id": t.ID}}, nil)
+	out := make([]Transition, len(body.Transitions))
+	for i, t := range body.Transitions {
+		out[i] = Transition{ID: t.ID, Name: t.Name, To: t.To.Name, ToCategory: t.To.StatusCategory.Key}
+	}
+	return out, nil
+}
+
+// Transition moves the issue along the transition with id.
+func (c Client) Transition(ctx context.Context, r Ref, id string) error {
+	return c.do(ctx, http.MethodPost, r.Site+"/rest/api/3/issue/"+url.PathEscape(r.Key)+"/transitions",
+		map[string]any{"transition": map[string]string{"id": id}}, nil)
+}
+
+// Statuses lists every status name on site, once each, alphabetically.
+func (c Client) Statuses(ctx context.Context, site string) ([]string, error) {
+	var body []struct {
+		Name string `json:"name"`
+	}
+	if err := c.do(ctx, http.MethodGet, strings.TrimRight(site, "/")+"/rest/api/3/status", nil, &body); err != nil {
+		return nil, err
+	}
+	seen := map[string]bool{}
+	var out []string
+	for _, s := range body {
+		if !seen[s.Name] {
+			seen[s.Name] = true
+			out = append(out, s.Name)
 		}
 	}
-	return fmt.Errorf("%s can't move to %q from where it is", r.Key, to)
+	slices.Sort(out)
+	return out, nil
+}
+
+// StatusJQL matches issues in any of statuses, most recently updated first.
+func StatusJQL(statuses []string) string {
+	quoted := make([]string, len(statuses))
+	for i, s := range statuses {
+		quoted[i] = strconv.Quote(s)
+	}
+	return "status in (" + strings.Join(quoted, ", ") + ") ORDER BY updated DESC"
 }
 
 // Comment adds text to the issue as a plain comment, a paragraph per line.

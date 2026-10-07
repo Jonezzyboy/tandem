@@ -228,34 +228,111 @@ func Search(ctx context.Context, qualifiers ...string) ([]SearchPR, error) {
 	return prs, nil
 }
 
-// SearchHead finds open PRs whose head branch is branch, in repos owned by
-// any of owners (all of GitHub when there are none).
-func SearchHead(ctx context.Context, branch string, owners []string) ([]SearchPR, error) {
-	q := []string{"--head", branch, "--state", "open"}
-	for _, o := range owners {
-		q = append(q, "--owner", o)
-	}
-	return Search(ctx, q...)
-}
-
-// ViewIn looks up PR number in repo (owner/name) without needing a clone.
-func ViewIn(ctx context.Context, repo string, number int) (*PR, error) {
-	out, err := run(ctx, "", "", "pr", "view", strconv.Itoa(number), "--repo", repo, "--json", viewFields)
-	if err != nil {
-		return nil, err
-	}
-	var pr PR
-	if err := json.Unmarshal([]byte(out), &pr); err != nil {
-		return nil, fmt.Errorf("parse gh pr view: %w", err)
-	}
-	return &pr, nil
-}
-
 // Clone clones repo (owner/name) into dir with gh, so it uses gh's sign-in
 // and protocol.
 func Clone(ctx context.Context, repo, dir string) error {
 	_, err := run(ctx, "", "", "repo", "clone", repo, dir, "--", "--quiet")
 	return err
+}
+
+// OpenPR is an open pull request with its head branch and CI state.
+type OpenPR struct {
+	Repo    string
+	Number  int
+	URL     string
+	Title   string
+	Draft   bool
+	Author  string
+	Updated time.Time
+	Branch  string
+	// CI is the head commit's rollup: SUCCESS, FAILURE, ERROR, PENDING,
+	// EXPECTED, or "" when it has no checks.
+	CI string
+}
+
+const openPRsQuery = `query($q: String!, $after: String) {
+  search(query: $q, type: ISSUE, first: 100, after: $after) {
+    pageInfo { hasNextPage endCursor }
+    nodes { ... on PullRequest {
+      number url title isDraft updatedAt headRefName
+      author { login }
+      repository { nameWithOwner }
+      commits(last: 1) { nodes { commit { statusCheckRollup { state } } } }
+    } }
+  }
+}`
+
+// openPRPages caps one owner's listing at 500 PRs.
+const openPRPages = 5
+
+// OpenPRs lists every open PR in repos owned by owner, in one GraphQL search
+// per 100: far cheaper on GitHub's search limit than a search per branch.
+func OpenPRs(ctx context.Context, owner string) ([]OpenPR, error) {
+	var out []OpenPR
+	after := ""
+	for range openPRPages {
+		args := []string{"api", "graphql", "-f", "query=" + openPRsQuery, "-f", "q=is:pr is:open archived:false user:" + owner}
+		if after != "" {
+			args = append(args, "-f", "after="+after)
+		}
+		data, err := run(ctx, "", "", args...)
+		if err != nil {
+			return out, err
+		}
+		var body struct {
+			Data struct {
+				Search struct {
+					PageInfo struct {
+						HasNextPage bool   `json:"hasNextPage"`
+						EndCursor   string `json:"endCursor"`
+					} `json:"pageInfo"`
+					Nodes []struct {
+						Number      int       `json:"number"`
+						URL         string    `json:"url"`
+						Title       string    `json:"title"`
+						IsDraft     bool      `json:"isDraft"`
+						UpdatedAt   time.Time `json:"updatedAt"`
+						HeadRefName string    `json:"headRefName"`
+						Author      struct {
+							Login string `json:"login"`
+						} `json:"author"`
+						Repository struct {
+							NameWithOwner string `json:"nameWithOwner"`
+						} `json:"repository"`
+						Commits struct {
+							Nodes []struct {
+								Commit struct {
+									StatusCheckRollup *struct {
+										State string `json:"state"`
+									} `json:"statusCheckRollup"`
+								} `json:"commit"`
+							} `json:"nodes"`
+						} `json:"commits"`
+					} `json:"nodes"`
+				} `json:"search"`
+			} `json:"data"`
+		}
+		if err := json.Unmarshal([]byte(data), &body); err != nil {
+			return out, fmt.Errorf("parse open PRs: %w", err)
+		}
+		for _, n := range body.Data.Search.Nodes {
+			if n.Number == 0 {
+				continue
+			}
+			pr := OpenPR{Repo: n.Repository.NameWithOwner, Number: n.Number, URL: n.URL, Title: n.Title, Draft: n.IsDraft,
+				Author: n.Author.Login, Updated: n.UpdatedAt, Branch: n.HeadRefName}
+			if c := n.Commits.Nodes; len(c) > 0 && c[0].Commit.StatusCheckRollup != nil {
+				pr.CI = c[0].Commit.StatusCheckRollup.State
+			}
+			out = append(out, pr)
+		}
+		page := body.Data.Search.PageInfo
+		if !page.HasNextPage {
+			break
+		}
+		after = page.EndCursor
+	}
+	return out, nil
 }
 
 type User struct {
