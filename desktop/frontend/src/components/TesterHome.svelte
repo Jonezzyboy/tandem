@@ -88,6 +88,7 @@
     </button>
   </div>
   <div class="bar" class:on={busy} aria-hidden="true"><div></div></div>
+  <div class="scroll">
 
   {#if done}
     <section class="done" class:bad={!done.outcome.done} aria-label="Testing finished">
@@ -157,10 +158,14 @@
       {/each}
     </section>
   {/each}
+  </div>
 </div>
 
 <style>
-  .page { padding: 0 32px 32px; display: flex; flex-direction: column; gap: 16px; }
+  /* The header stays put; only the list below it scrolls. */
+  .page { height: 100%; box-sizing: border-box; padding: 0 32px; display: flex; flex-direction: column; gap: 16px; overflow: hidden; }
+  .page > :not(.scroll) { flex-shrink: 0; }
+  .scroll { flex: 1; min-height: 0; overflow-y: auto; margin: 0 -32px; padding: 0 32px 32px; display: flex; flex-direction: column; gap: 16px; }
   header { padding-top: 28px; display: flex; justify-content: space-between; align-items: flex-end; gap: 24px; }
   .heading { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
   h1 { margin: 0; font-family: var(--display); font-weight: 700; font-size: 30px; line-height: 1.15; }

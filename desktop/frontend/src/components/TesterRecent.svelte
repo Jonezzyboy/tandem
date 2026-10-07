@@ -13,6 +13,7 @@
     <div class="mono muted small">The last {tester.state.history.length || 'few'} changes you tested on this machine</div>
     <h1>Recently tested</h1>
   </header>
+  <div class="scroll">
   <section class="list" aria-label="Recently tested">
     {#each tester.state.history as r, i (r.key + r.at + i)}
       <div class="item">
@@ -30,10 +31,14 @@
       <p class="muted">Changes you test show up here once you go back to main.</p>
     {/each}
   </section>
+  </div>
 </div>
 
 <style>
-  .page { padding: 0 32px 32px; display: flex; flex-direction: column; gap: 18px; }
+  /* The header stays put; only the list below it scrolls. */
+  .page { height: 100%; box-sizing: border-box; padding: 0 32px; display: flex; flex-direction: column; gap: 18px; overflow: hidden; }
+  .page > :not(.scroll) { flex-shrink: 0; }
+  .scroll { flex: 1; min-height: 0; overflow-y: auto; margin: 0 -32px; padding: 0 32px 32px; display: flex; flex-direction: column; gap: 18px; }
   header { padding-top: 28px; display: flex; flex-direction: column; gap: 4px; }
   h1 { margin: 0; font-family: var(--display); font-weight: 700; font-size: 30px; line-height: 1.15; }
   .small { font-size: 12px; }
