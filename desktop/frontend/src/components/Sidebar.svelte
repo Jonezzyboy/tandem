@@ -219,7 +219,7 @@
   {#if (drag?.moved || landing) && app.changes.find((c) => c.id === (drag?.id ?? landing?.id))}
     {@const c = app.changes.find((x) => x.id === (drag?.id ?? landing?.id))!}
     {@const at = drag?.moved ? cardAt(drag) : landing!}
-    <div class="card" class:landing={!drag?.moved} aria-hidden="true"
+    <div class="drag-card" class:landing={!drag?.moved} aria-hidden="true"
       style:width="{drag?.width ?? listEl?.querySelector('.change-wrap')?.getBoundingClientRect().width}px"
       style:transform="translate({at.left}px, {at.top}px)">
       <div class="change">{@render rowBody(c, drag?.moved ? drag.to : app.changes.indexOf(c))}</div>
@@ -295,15 +295,16 @@
   /* WebKit leaves rows unpainted mid-slide inside the scrolling list unless each has its own layer. */
   .list.dragging .change-wrap { will-change: transform; }
   .change-wrap.placeholder { visibility: hidden; }
-  :global(body:has(.card)) { cursor: grabbing; }
-  .card {
+  /* Only while a change is carried; the landing glide gets the normal cursor back. */
+  :global(body:has(.drag-card:not(.landing))), :global(body:has(.drag-card:not(.landing)) *) { cursor: grabbing !important; }
+  .drag-card {
     position: fixed; top: 0; left: 0; z-index: 50; pointer-events: none; border-radius: 8px; background: var(--raised);
     scale: 1.03; box-shadow: 0 0 0 1px var(--line-2), 0 14px 32px var(--shadow);
     transition: scale 0.15s ease-out, box-shadow 0.15s ease-out;
   }
-  @starting-style { .card { scale: 1; box-shadow: 0 0 0 1px var(--line-2); } }
-  .card .change { cursor: grabbing; background: transparent; }
-  .card.landing {
+  @starting-style { .drag-card { scale: 1; box-shadow: 0 0 0 1px var(--line-2); } }
+  .drag-card .change { cursor: grabbing; background: transparent; }
+  .drag-card.landing {
     scale: 1; box-shadow: 0 0 0 1px var(--line-2);
     transition: transform 0.18s cubic-bezier(0.2, 0.8, 0.2, 1), scale 0.18s ease-out, box-shadow 0.18s ease-out;
   }
