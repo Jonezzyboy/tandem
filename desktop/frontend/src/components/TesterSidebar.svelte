@@ -60,14 +60,13 @@
       <span class="who-text">
         {#if prefs.account && !prefs.account.error}
           <span class="who-name">{prefs.account.name || prefs.account.login}</span>
-          <span class="who-login mono">@{prefs.account.login}</span>
+          <span class="who-login mono"><span class="mode">Tester</span> · @{prefs.account.login}</span>
         {:else}
           <span class="who-name">Not signed in</span>
-          <span class="who-login warn">{prefs.account?.error ? 'run gh auth login' : 'checking gh…'}</span>
+          <span class="who-login"><span class="mode mono">Tester</span> · <span class="warn">{prefs.account?.error ? 'run gh auth login' : 'checking gh…'}</span></span>
         {/if}
       </span>
     </button>
-    <span class="mode mono">Tester</span>
     <button class="icon-btn gear" class:active={app.route.name === 'settings'} onclick={() => navigate({ name: 'settings' })}
       aria-label="Settings" title="Settings ({keycaps(shortcutFor('settings')).join('')})">
       <Icon name="settings" />
@@ -106,7 +105,7 @@
   .now-title { font-size: 14px; line-height: 1.3; }
   .back { justify-content: center; }
   .account {
-    margin: auto -12px -16px; padding: 10px 12px 12px; display: flex; align-items: center; gap: 6px;
+    margin: auto -12px -16px; padding: 10px 12px 12px; display: flex; align-items: center; gap: 4px;
     border-top: 1px solid var(--line); background: var(--nav);
   }
   .who {
@@ -118,7 +117,7 @@
   .who-name, .who-login { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .who-name { font-size: 13px; font-weight: 500; }
   .who-login { font-size: 11.5px; color: var(--muted); }
-  .mode { font-size: 11px; padding: 2px 7px; border-radius: 6px; color: var(--ok-text); background: var(--ok-bg); border: 1px solid var(--ok-border); }
+  .mode { color: var(--ok-text); }
   .gear { width: 34px; height: 34px; }
   .gear.active { background: var(--selected); color: var(--text); }
 </style>
