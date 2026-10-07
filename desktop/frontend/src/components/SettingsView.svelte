@@ -8,6 +8,7 @@
   import type { JiraAccount } from '@lib/types'
   import Avatar from './Avatar.svelte'
   import Kbd from './Kbd.svelte'
+  import StatusPicker from './StatusPicker.svelte'
   import Icon from './Icon.svelte'
 
   let recording = $state<string | null>(null)
@@ -125,16 +126,11 @@
 
   let jiraStatuses = $state<string[] | null>(null)
   let jiraStatusesError = $state('')
-  let statusFilter = $state('')
   $effect(() => {
     if (prefs.settings.mode !== 'tester' || !prefs.settings.jira.site) return
     jiraStatusesError = ''
     api.jiraStatuses().then((s) => (jiraStatuses = s)).catch((e) => { jiraStatuses = []; jiraStatusesError = errorText(e) })
   })
-  function toggleStatus(st: string) {
-    const cur = prefs.settings.tester.statuses
-    saveTester({ statuses: cur.includes(st) ? cur.filter((s) => s !== st) : [...cur, st] })
-  }
 
   const customised = $derived(Object.keys(prefs.settings.keys).length)
 </script>
@@ -175,24 +171,14 @@
             <span>Statuses that mean a ticket is ready to test</span>
             <span class="small muted">Tickets in any of these show under Ready to test. The verdicts offered are each ticket's own moves out of its status.</span>
           </div>
-          <div class="picked">
-            {#each prefs.settings.tester.statuses as st (st)}
-              <button class="chip on" onclick={() => toggleStatus(st)} aria-label="Stop testing tickets in {st}">{st}<Icon name="close" size={12} /></button>
-            {:else}
-              <span class="small warn">None chosen yet: pick from your Jira's statuses below.</span>
-            {/each}
-          </div>
-          {#if jiraStatuses === null}
-            <span class="small muted">{prefs.settings.jira.site ? 'Reading statuses from Jira…' : 'Add your Jira site below to choose from its statuses.'}</span>
+          <StatusPicker selected={prefs.settings.tester.statuses} options={jiraStatuses}
+            onchange={(next) => saveTester({ statuses: next })} />
+          {#if !prefs.settings.jira.site}
+            <span class="small muted">Add your Jira site below to choose from its statuses.</span>
           {:else if jiraStatusesError}
             <span class="small warn">Couldn't read Jira's statuses: {jiraStatusesError}</span>
-          {:else}
-            <input class="input" bind:value={statusFilter} placeholder="Filter {jiraStatuses.length} statuses" aria-label="Filter statuses" />
-            <div class="pool">
-              {#each jiraStatuses.filter((s) => !prefs.settings.tester.statuses.includes(s) && s.toLowerCase().includes(statusFilter.toLowerCase())) as st (st)}
-                <button class="chip" onclick={() => toggleStatus(st)}><Icon name="plus" size={12} />{st}</button>
-              {/each}
-            </div>
+          {:else if !prefs.settings.tester.statuses.length}
+            <span class="small warn">None chosen yet, so nothing shows under Ready to test.</span>
           {/if}
         </div>
         <label class="choice">
@@ -494,15 +480,6 @@
   .mode-name { font-weight: 500; font-size: 14px; }
   .mode .small { line-height: 1.5; }
   .statuses { display: flex; flex-direction: column; gap: 10px; font-size: 14px; }
-  .statuses .input { max-width: 320px; }
-  .picked, .pool { display: flex; flex-wrap: wrap; gap: 6px; }
-  .pool { max-height: 150px; overflow: auto; }
-  .chip {
-    display: inline-flex; align-items: center; gap: 6px; padding: 4px 9px; border-radius: 7px; font-size: 13px;
-    border: 1px solid var(--line-2); background: var(--raised); color: var(--text-2); cursor: pointer;
-  }
-  .chip:hover { color: var(--text); }
-  .chip.on { border-color: var(--accent); background: var(--accent-bg); color: var(--accent-text); }
   .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
   .about { display: flex; flex-direction: column; gap: 8px; font-size: 13px; }
   .about div { display: grid; grid-template-columns: 180px minmax(0, 1fr); gap: 12px; }
