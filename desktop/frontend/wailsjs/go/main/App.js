@@ -166,6 +166,34 @@ export function TestTriage(arg1) {
   return window['go']['main']['App']['TestTriage'](arg1);
 }
 
+export function TesterFinish(arg1, arg2) {
+  return window['go']['main']['App']['TesterFinish'](arg1, arg2);
+}
+
+export function TesterPlan(arg1) {
+  return window['go']['main']['App']['TesterPlan'](arg1);
+}
+
+export function TesterPull() {
+  return window['go']['main']['App']['TesterPull']();
+}
+
+export function TesterQueue(arg1) {
+  return window['go']['main']['App']['TesterQueue'](arg1);
+}
+
+export function TesterStart(arg1) {
+  return window['go']['main']['App']['TesterStart'](arg1);
+}
+
+export function TesterState() {
+  return window['go']['main']['App']['TesterState']();
+}
+
+export function TesterStatus() {
+  return window['go']['main']['App']['TesterStatus']();
+}
+
 export function TrainPlan(arg1) {
   return window['go']['main']['App']['TrainPlan'](arg1);
 }

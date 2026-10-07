@@ -7,20 +7,32 @@
   import InboxView from './components/InboxView.svelte'
   import NewChange from './components/NewChange.svelte'
   import SettingsView from './components/SettingsView.svelte'
+  import TesterSidebar from './components/TesterSidebar.svelte'
+  import TesterHome from './components/TesterHome.svelte'
+  import TesterChange from './components/TesterChange.svelte'
+  import TesterRecent from './components/TesterRecent.svelte'
+  import { initTester } from './lib/tester.svelte'
   import Icon from './components/Icon.svelte'
 
-  onMount(() => {
-    initSettings()
+  const testerMode = $derived(prefs.settings.mode === 'tester')
+
+  onMount(async () => {
+    await initSettings()
     init()
-    navigate({ name: 'inbox' })
+    initTester()
+    navigate(home())
   })
+
+  function home() {
+    return prefs.settings.mode === 'tester' ? { name: 'ready' as const } : { name: 'inbox' as const }
+  }
 
   function run(id: string) {
     switch (id) {
       case 'newChange':
         return navigate({ name: 'new' })
       case 'inbox':
-        return navigate({ name: 'inbox' })
+        return navigate(home())
       case 'settings':
         return navigate({ name: 'settings' })
       case 'refresh':
@@ -63,14 +75,22 @@
 <svelte:window onkeydown={onKey} />
 
 <div class="shell">
-  <Sidebar />
+  {#if testerMode}<TesterSidebar />{:else}<Sidebar />{/if}
   <main>
-    {#if app.route.name === 'inbox'}
+    {#if app.route.name === 'settings'}
+      <SettingsView />
+    {:else if testerMode}
+      {#if app.route.name === 'test'}
+        {#key app.route.id}<TesterChange id={app.route.id} />{/key}
+      {:else if app.route.name === 'recent'}
+        <TesterRecent />
+      {:else}
+        <TesterHome />
+      {/if}
+    {:else if app.route.name === 'inbox' || app.route.name === 'ready' || app.route.name === 'test' || app.route.name === 'recent'}
       <InboxView />
     {:else if app.route.name === 'new'}
       <NewChange />
-    {:else if app.route.name === 'settings'}
-      <SettingsView />
     {:else}
       {#key app.route.id}
         <ChangeView id={app.route.id} />

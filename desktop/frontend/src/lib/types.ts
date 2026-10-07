@@ -164,7 +164,9 @@ export interface Activity {
   tone: 'ok' | 'warn' | 'muted'
 }
 
-export type Route = { name: 'inbox' } | { name: 'change'; id: string } | { name: 'new' } | { name: 'settings' }
+export type Route =
+  | { name: 'inbox' } | { name: 'change'; id: string } | { name: 'new' } | { name: 'settings' }
+  | { name: 'ready' } | { name: 'test'; id: string } | { name: 'recent' }
 
 export interface PinItem {
   leg: string
@@ -246,4 +248,93 @@ export interface JiraTicket {
 export interface JiraAccount {
   email: string
   hasToken: boolean
+}
+
+export interface TestPR {
+  repo: string
+  number: number
+  url: string
+  draft: boolean
+  author: string
+  updated: string
+  pass: number
+  fail: number
+  pending: number
+}
+
+export interface QueueItem {
+  key: string
+  url: string
+  summary: string
+  status: string
+  assignee: string
+  prs: TestPR[]
+}
+
+export interface TesterQueue {
+  items: QueueItem[]
+  // What's missing before the queue can be read; error is any other failure.
+  setup: string
+  error: string
+}
+
+export interface PlanRepo {
+  name: string
+  cloned: boolean
+  current: string
+  dirty: number
+  pr: TestPR | null
+}
+
+export interface TesterPlan {
+  ticket: JiraTicket
+  repos: PlanRepo[]
+  cloneRoot: string
+  error: string
+}
+
+export interface TestStep {
+  repo: string
+  done: boolean
+  ok: boolean
+  message: string
+  sha: string
+}
+
+export interface TestSession {
+  key: string
+  title: string
+  url: string
+  started: string
+  repos: { name: string; dir: string; stash?: string }[]
+}
+
+export interface TestRecord {
+  key: string
+  title: string
+  url: string
+  result: 'passed' | 'failed' | 'stopped'
+  at: string
+}
+
+export interface TesterState {
+  current: TestSession | null
+  history: TestRecord[]
+}
+
+export interface TestRepoStatus {
+  name: string
+  onBranch: boolean
+  current: string
+  behind: number
+  new: string[]
+  dirty: number
+  error: string
+}
+
+export interface TestFinish {
+  steps: TestStep[]
+  jira: string
+  jiraError: string
+  done: boolean
 }

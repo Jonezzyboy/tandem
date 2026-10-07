@@ -58,6 +58,10 @@ type App struct {
 	account  *Account
 
 	restoreOnce sync.Once
+	// testMu serialises tester-mode switches, so two can't race on the repos.
+	testMu  sync.Mutex
+	queue   *TesterQueue
+	queueAt time.Time
 }
 
 func NewApp(store change.Store, roots []string) *App {

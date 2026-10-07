@@ -1,0 +1,112 @@
+import { api, on } from './api'
+import { fail } from './state.svelte'
+import type { TestFinish, TesterQueue, TesterState, TestRepoStatus, TestStep } from './types'
+
+export const tester = $state({
+  queue: null as TesterQueue | null,
+  queueLoading: false,
+  state: { current: null, history: [] } as TesterState,
+  status: [] as TestRepoStatus[],
+  statusLoading: false,
+  // The change whose repos are being switched, and each repo's progress.
+  starting: '',
+  steps: {} as Record<string, TestStep>,
+  pulling: false,
+  finishing: false,
+  // The last finished test, shown on the home page until dismissed.
+  finished: null as { key: string; title: string; result: string; outcome: TestFinish } | null,
+})
+
+export async function loadQueue(force = false) {
+  tester.queueLoading = true
+  try {
+    tester.queue = await api.testerQueue(force)
+  } catch (e) {
+    fail(e)
+  } finally {
+    tester.queueLoading = false
+  }
+}
+
+export async function loadState() {
+  try {
+    tester.state = await api.testerState()
+  } catch (e) {
+    fail(e)
+  }
+}
+
+export async function loadStatus() {
+  if (!tester.state.current) {
+    tester.status = []
+    return
+  }
+  tester.statusLoading = true
+  try {
+    tester.status = await api.testerStatus()
+  } catch (e) {
+    fail(e)
+  } finally {
+    tester.statusLoading = false
+  }
+}
+
+export async function startTest(key: string, title: string, url: string, repos: string[], setAside: boolean): Promise<TestStep[]> {
+  tester.starting = key
+  tester.steps = Object.fromEntries(repos.map((r) => [r, { repo: r, done: false, ok: false, message: 'waiting…', sha: '' }]))
+  try {
+    const steps = await api.testerStart({ key, title, url, repos, setAside })
+    for (const s of steps) tester.steps[s.repo] = s
+    await loadState()
+    loadStatus()
+    return steps
+  } catch (e) {
+    fail(e)
+    return []
+  } finally {
+    tester.starting = ''
+  }
+}
+
+export async function pullLatest() {
+  tester.pulling = true
+  try {
+    const steps = await api.testerPull()
+    const stuck = steps.filter((s) => !s.ok)
+    if (stuck.length) fail(`${stuck.map((s) => s.repo).join(', ')}: ${stuck[0].message}`)
+    await loadStatus()
+  } catch (e) {
+    fail(e)
+  } finally {
+    tester.pulling = false
+  }
+}
+
+// finish records result on the ticket (none: just stop testing) and puts every
+// repo back on main. It returns whether every repo made it back.
+export async function finish(result: '' | 'passed' | 'failed', note = ''): Promise<boolean> {
+  const current = tester.state.current
+  if (!current) return true
+  tester.finishing = true
+  try {
+    const outcome = await api.testerFinish(result, note)
+    tester.finished = { key: current.key, title: current.title, result: result || 'stopped', outcome }
+    await loadState()
+    loadQueue(true)
+    if (outcome.done) tester.status = []
+    else loadStatus()
+    return outcome.done
+  } catch (e) {
+    fail(e)
+    return false
+  } finally {
+    tester.finishing = false
+  }
+}
+
+export function initTester() {
+  loadState().then(loadStatus)
+  on<TestStep>('tester-step', (s) => {
+    if (tester.starting) tester.steps[s.repo] = s
+  })
+}
