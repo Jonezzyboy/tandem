@@ -30,6 +30,7 @@
       <Icon name="refresh" spin={app.inboxLoading} />Refresh
     </button>
   </header>
+  <div class="scroll">
 
   <section>
     <div class="eyebrow warnlabel">Waiting on your review · {review.length}</div>
@@ -96,15 +97,18 @@
       </button>
     {/each}
   </section>
+  </div>
 </div>
-
 
 {#if cleaning}
   <CleanDialog items={cleanable} onclose={() => (cleaning = false)} />
 {/if}
 
 <style>
-  .page { padding: 0 32px 32px; display: flex; flex-direction: column; gap: 26px; }
+  /* The header stays put; only the list below it scrolls. */
+  .page { height: 100%; box-sizing: border-box; padding: 0 32px; display: flex; flex-direction: column; gap: 26px; overflow: hidden; }
+  .page > :not(.scroll) { flex-shrink: 0; }
+  .scroll { flex: 1; min-height: 0; overflow-y: auto; margin: 0 -32px; padding: 0 32px 32px; display: flex; flex-direction: column; gap: 26px; }
   header { display: flex; justify-content: space-between; align-items: flex-end; padding-top: 28px; }
   h1 { margin: 4px 0 0; font-family: var(--display); font-weight: 700; font-size: 30px; }
   .small { font-size: 12px; }
