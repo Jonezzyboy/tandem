@@ -110,12 +110,16 @@
     try {
       jiraAccount = await api.saveJira(jiraEmail, jiraToken)
       // SaveJira writes settings itself; keep the copy here in step so later saves don't revert it.
-      prefs.settings = { ...prefs.settings, jira: { email: jiraAccount.email } }
+      prefs.settings = { ...prefs.settings, jira: { ...prefs.settings.jira, email: jiraAccount.email } }
       jiraToken = ''
       jiraNote = { ok: true, text: 'Saved' }
     } catch (e) {
       jiraNote = { ok: false, text: errorText(e) }
     }
+  }
+
+  function saveTester(next: Partial<typeof prefs.settings.tester>) {
+    saveSettings({ tester: { ...prefs.settings.tester, ...next } })
   }
 
   const customised = $derived(Object.keys(prefs.settings.keys).length)
@@ -130,6 +134,42 @@
   </header>
 
   {#if prefs.error}<div class="banner">{prefs.error}</div>{/if}
+
+  <section aria-labelledby="s-mode">
+    <h2 id="s-mode">How you use Tandem</h2>
+    <fieldset class="modes">
+      <legend class="sr-only">Mode</legend>
+      <label class="mode" class:on={prefs.settings.mode === 'developer'}>
+        <input type="radio" name="mode" checked={prefs.settings.mode === 'developer'} onchange={() => saveSettings({ mode: 'developer' })} />
+        <span class="stack">
+          <span class="mode-name">Developer</span>
+          <span class="small muted">Start changes across repos, open PRs and run the merge train.</span>
+        </span>
+      </label>
+      <label class="mode" class:on={prefs.settings.mode === 'tester'}>
+        <input type="radio" name="mode" checked={prefs.settings.mode === 'tester'} onchange={() => saveSettings({ mode: 'tester' })} />
+        <span class="stack">
+          <span class="mode-name">Tester</span>
+          <span class="small muted">See the changes waiting to be tested, put every repo on one with a click, and back on main when you're done.</span>
+        </span>
+      </label>
+    </fieldset>
+    {#if prefs.settings.mode === 'tester'}
+      <div class="card general tester">
+        <label class="setting"><span>Jira status that means ready to test</span>
+          <input class="input" value={prefs.settings.tester.readyStatus} onchange={(e) => saveTester({ readyStatus: e.currentTarget.value })} /></label>
+        <label class="setting"><span>Move to when it passes</span>
+          <input class="input" value={prefs.settings.tester.passStatus} onchange={(e) => saveTester({ passStatus: e.currentTarget.value })} /></label>
+        <label class="setting"><span>Move to when it fails</span>
+          <input class="input" value={prefs.settings.tester.failStatus} onchange={(e) => saveTester({ failStatus: e.currentTarget.value })} /></label>
+        <label class="choice">
+          <input type="checkbox" checked={prefs.settings.tester.cloneMissing} onchange={(e) => saveTester({ cloneMissing: e.currentTarget.checked })} />
+          Clone a change's repos that aren't on this machine yet
+        </label>
+        {#if !prefs.settings.jira.site}<span class="small warn">Add your Jira site below so Tandem can find tickets to test.</span>{/if}
+      </div>
+    {/if}
+  </section>
 
   <section aria-labelledby="s-account">
     <h2 id="s-account">Account</h2>
@@ -154,6 +194,11 @@
     <h2 id="s-jira">Jira</h2>
     <div class="card general">
       <p class="muted small intro">Lets a pasted ticket link fill in the change’s title and show the ticket’s status. Without it, the link is still kept.</p>
+      <label class="setting">
+        <span>Jira site</span>
+        <input class="input mono" placeholder="https://acme.atlassian.net" value={prefs.settings.jira.site}
+          onchange={(e) => saveSettings({ jira: { ...prefs.settings.jira, site: e.currentTarget.value } })} />
+      </label>
       <label class="setting">
         <span>Atlassian account email</span>
         <input class="input" type="email" placeholder="you@company.com" bind:value={jiraEmail} autocomplete="off" />
@@ -409,6 +454,13 @@
   .intro { margin: 0; line-height: 1.5; }
   .link { border: 0; background: none; padding: 0; color: var(--accent-text); cursor: pointer; }
   .link:hover { color: var(--link-hover); }
+  .modes { border: 0; margin: 0 0 12px; padding: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+  .mode { display: flex; gap: 12px; align-items: flex-start; padding: 16px; border-radius: 12px; background: var(--panel); border: 1px solid var(--line); cursor: pointer; }
+  .mode.on { background: var(--accent-bg); border-color: var(--accent); }
+  .mode input { width: 16px; height: 16px; margin: 3px 0 0; accent-color: var(--accent); }
+  .mode-name { font-weight: 500; font-size: 14px; }
+  .mode .small { line-height: 1.5; }
+  .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
   .about { display: flex; flex-direction: column; gap: 8px; font-size: 13px; }
   .about div { display: grid; grid-template-columns: 180px minmax(0, 1fr); gap: 12px; }
 </style>

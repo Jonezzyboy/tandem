@@ -3,6 +3,7 @@
 import {main} from '../models';
 import {core} from '../models';
 import {triage} from '../models';
+import {testrun} from '../models';
 
 export function Account():Promise<main.Account>;
 
@@ -85,6 +86,20 @@ export function SystemDark():Promise<boolean>;
 export function TandemHome():Promise<string>;
 
 export function TestTriage(arg1:triage.Config):Promise<string>;
+
+export function TesterFinish(arg1:string,arg2:string):Promise<main.TestFinish>;
+
+export function TesterPlan(arg1:string):Promise<main.TesterPlan>;
+
+export function TesterPull():Promise<Array<testrun.Step>>;
+
+export function TesterQueue(arg1:boolean):Promise<main.TesterQueue>;
+
+export function TesterStart(arg1:main.TestStartRequest):Promise<Array<testrun.Step>>;
+
+export function TesterState():Promise<testrun.State>;
+
+export function TesterStatus():Promise<Array<testrun.RepoStatus>>;
 
 export function TrainPlan(arg1:string):Promise<main.TrainPlan>;
 

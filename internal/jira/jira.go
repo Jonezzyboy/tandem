@@ -2,10 +2,12 @@
 package jira
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"regexp"
@@ -16,6 +18,11 @@ import (
 
 // Keep in sync with parseTicket in the desktop frontend.
 var keyPattern = regexp.MustCompile(`^[A-Z][A-Z0-9_]+-[0-9]+$`)
+
+// IsKey reports whether s is an issue key such as DEV-123.
+func IsKey(s string) bool {
+	return keyPattern.MatchString(s)
+}
 
 type Ref struct {
 	Site string
@@ -67,53 +74,146 @@ type Client struct {
 	HTTP  *http.Client
 }
 
+const issueFields = "summary,status,issuetype,priority,assignee,reporter,updated,description"
+
 func (c Client) Issue(ctx context.Context, r Ref) (Issue, error) {
-	if c.Email == "" || c.Token == "" {
-		return Issue{}, ErrNoAccess
-	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, r.Site+"/rest/api/3/issue/"+url.PathEscape(r.Key)+"?fields=summary,status,issuetype,priority,assignee,reporter,updated,description", nil)
-	if err != nil {
+	var body rawIssue
+	if err := c.do(ctx, http.MethodGet, r.Site+"/rest/api/3/issue/"+url.PathEscape(r.Key)+"?fields="+issueFields, nil, &body); err != nil {
 		return Issue{}, err
+	}
+	return body.issue(), nil
+}
+
+// Search returns up to 50 issues matching jql on site, most relevant first as
+// jql orders them.
+func (c Client) Search(ctx context.Context, site, jql string) ([]Issue, error) {
+	q := url.Values{"jql": {jql}, "fields": {issueFields}, "maxResults": {"50"}}
+	var body struct {
+		Issues []rawIssue `json:"issues"`
+	}
+	if err := c.do(ctx, http.MethodGet, strings.TrimRight(site, "/")+"/rest/api/3/search/jql?"+q.Encode(), nil, &body); err != nil {
+		return nil, err
+	}
+	out := make([]Issue, len(body.Issues))
+	for i, raw := range body.Issues {
+		out[i] = raw.issue()
+	}
+	return out, nil
+}
+
+// MoveTo transitions the issue to the status named to, if its workflow allows
+// that from where it is.
+func (c Client) MoveTo(ctx context.Context, r Ref, to string) error {
+	var body struct {
+		Transitions []struct {
+			ID   string `json:"id"`
+			Name string `json:"name"`
+			To   struct {
+				Name string `json:"name"`
+			} `json:"to"`
+		} `json:"transitions"`
+	}
+	base := r.Site + "/rest/api/3/issue/" + url.PathEscape(r.Key) + "/transitions"
+	if err := c.do(ctx, http.MethodGet, base, nil, &body); err != nil {
+		return err
+	}
+	for _, t := range body.Transitions {
+		if strings.EqualFold(t.To.Name, to) || strings.EqualFold(t.Name, to) {
+			return c.do(ctx, http.MethodPost, base, map[string]any{"transition": map[string]string{"id": t.ID}}, nil)
+		}
+	}
+	return fmt.Errorf("%s can't move to %q from where it is", r.Key, to)
+}
+
+// Comment adds text to the issue as a plain comment, a paragraph per line.
+func (c Client) Comment(ctx context.Context, r Ref, text string) error {
+	var paras []map[string]any
+	for _, line := range strings.Split(strings.TrimSpace(text), "\n") {
+		p := map[string]any{"type": "paragraph"}
+		if line != "" {
+			p["content"] = []map[string]any{{"type": "text", "text": line}}
+		}
+		paras = append(paras, p)
+	}
+	doc := map[string]any{"type": "doc", "version": 1, "content": paras}
+	return c.do(ctx, http.MethodPost, r.Site+"/rest/api/3/issue/"+url.PathEscape(r.Key)+"/comment", map[string]any{"body": doc}, nil)
+}
+
+// do sends a request with the client's credentials and decodes a JSON answer
+// into out, when given.
+func (c Client) do(ctx context.Context, method, u string, in, out any) error {
+	if c.Email == "" || c.Token == "" {
+		return ErrNoAccess
+	}
+	var body io.Reader
+	if in != nil {
+		data, err := json.Marshal(in)
+		if err != nil {
+			return err
+		}
+		body = bytes.NewReader(data)
+	}
+	req, err := http.NewRequestWithContext(ctx, method, u, body)
+	if err != nil {
+		return err
 	}
 	req.SetBasicAuth(c.Email, c.Token)
 	req.Header.Set("Accept", "application/json")
+	if in != nil {
+		req.Header.Set("Content-Type", "application/json")
+	}
 	hc := c.HTTP
 	if hc == nil {
 		hc = http.DefaultClient
 	}
 	resp, err := hc.Do(req)
 	if err != nil {
-		return Issue{}, err
+		return err
 	}
 	defer resp.Body.Close()
 	switch {
 	// Jira answers 404 for an issue the account can't see.
 	case resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden || resp.StatusCode == http.StatusNotFound:
-		return Issue{}, ErrNoAccess
-	case resp.StatusCode != http.StatusOK:
-		return Issue{}, fmt.Errorf("Jira answered %s", resp.Status)
+		return ErrNoAccess
+	case resp.StatusCode == http.StatusBadRequest:
+		var e struct {
+			ErrorMessages []string `json:"errorMessages"`
+		}
+		json.NewDecoder(resp.Body).Decode(&e)
+		return fmt.Errorf("Jira refused the request: %s", strings.Join(e.ErrorMessages, "; "))
+	case resp.StatusCode < 200 || resp.StatusCode > 299:
+		return fmt.Errorf("Jira answered %s", resp.Status)
 	}
-	type person struct {
-		DisplayName string `json:"displayName"`
+	if out == nil {
+		return nil
 	}
-	var body struct {
-		Key    string `json:"key"`
-		Fields struct {
-			Summary     string                 `json:"summary"`
-			Status      struct{ Name string }  `json:"status"`
-			IssueType   struct{ Name string }  `json:"issuetype"`
-			Priority    *struct{ Name string } `json:"priority"`
-			Assignee    *person                `json:"assignee"`
-			Reporter    *person                `json:"reporter"`
-			Updated     string                 `json:"updated"`
-			Description *node                  `json:"description"`
-		} `json:"fields"`
+	if err := json.NewDecoder(resp.Body).Decode(out); err != nil {
+		return fmt.Errorf("reading Jira's answer: %w", err)
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
-		return Issue{}, fmt.Errorf("reading Jira's answer: %w", err)
-	}
-	f := body.Fields
-	is := Issue{Key: body.Key, Summary: f.Summary, Type: f.IssueType.Name, Status: f.Status.Name}
+	return nil
+}
+
+type person struct {
+	DisplayName string `json:"displayName"`
+}
+
+type rawIssue struct {
+	Key    string `json:"key"`
+	Fields struct {
+		Summary     string                 `json:"summary"`
+		Status      struct{ Name string }  `json:"status"`
+		IssueType   struct{ Name string }  `json:"issuetype"`
+		Priority    *struct{ Name string } `json:"priority"`
+		Assignee    *person                `json:"assignee"`
+		Reporter    *person                `json:"reporter"`
+		Updated     string                 `json:"updated"`
+		Description *node                  `json:"description"`
+	} `json:"fields"`
+}
+
+func (raw rawIssue) issue() Issue {
+	f := raw.Fields
+	is := Issue{Key: raw.Key, Summary: f.Summary, Type: f.IssueType.Name, Status: f.Status.Name}
 	if f.Priority != nil {
 		is.Priority = f.Priority.Name
 	}
@@ -128,7 +228,7 @@ func (c Client) Issue(ctx context.Context, r Ref) (Issue, error) {
 	if f.Description != nil {
 		is.Description = strings.TrimSpace(f.Description.text())
 	}
-	return is, nil
+	return is
 }
 
 var blankRuns = regexp.MustCompile(`\n{3,}`)

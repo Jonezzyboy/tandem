@@ -228,6 +228,36 @@ func Search(ctx context.Context, qualifiers ...string) ([]SearchPR, error) {
 	return prs, nil
 }
 
+// SearchHead finds open PRs whose head branch is branch, in repos owned by
+// any of owners (all of GitHub when there are none).
+func SearchHead(ctx context.Context, branch string, owners []string) ([]SearchPR, error) {
+	q := []string{"--head", branch, "--state", "open"}
+	for _, o := range owners {
+		q = append(q, "--owner", o)
+	}
+	return Search(ctx, q...)
+}
+
+// ViewIn looks up PR number in repo (owner/name) without needing a clone.
+func ViewIn(ctx context.Context, repo string, number int) (*PR, error) {
+	out, err := run(ctx, "", "", "pr", "view", strconv.Itoa(number), "--repo", repo, "--json", viewFields)
+	if err != nil {
+		return nil, err
+	}
+	var pr PR
+	if err := json.Unmarshal([]byte(out), &pr); err != nil {
+		return nil, fmt.Errorf("parse gh pr view: %w", err)
+	}
+	return &pr, nil
+}
+
+// Clone clones repo (owner/name) into dir with gh, so it uses gh's sign-in
+// and protocol.
+func Clone(ctx context.Context, repo, dir string) error {
+	_, err := run(ctx, "", "", "repo", "clone", repo, dir, "--", "--quiet")
+	return err
+}
+
 type User struct {
 	Login     string `json:"login"`
 	Name      string `json:"name"`

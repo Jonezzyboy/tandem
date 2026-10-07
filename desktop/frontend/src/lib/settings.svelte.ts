@@ -12,7 +12,9 @@ export interface Settings {
   draftPRs: boolean
   triage: TriageSettings
   // The Atlassian account; its API token is in the Keychain, never here.
-  jira: { email: string }
+  jira: { email: string; site: string }
+  mode: 'developer' | 'tester'
+  tester: { readyStatus: string; passStatus: string; failStatus: string; cloneMissing: boolean }
 }
 
 export interface TriageSettings {
@@ -89,7 +91,9 @@ export const prefs = $state({
   settings: {
     theme: 'graphite', keys: {}, editors: {}, mergeMethod: 'squash', draftPRs: true,
     triage: { enabled: false, url: 'http://localhost:11434', model: 'nimble', minConfidence: 0.85, retries: 1 },
-    jira: { email: '' },
+    jira: { email: '', site: '' },
+    mode: 'developer',
+    tester: { readyStatus: 'Ready for Test', passStatus: 'Ready to Merge', failStatus: 'Failed Testing', cloneMissing: true },
   } as Settings,
   account: null as Account | null,
   editorApps: [] as EditorApp[],

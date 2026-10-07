@@ -2,9 +2,12 @@ package jira
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 )
@@ -65,5 +68,55 @@ func TestIssue(t *testing.T) {
 		if _, err := c.Issue(context.Background(), ref); !errors.Is(err, ErrNoAccess) {
 			t.Errorf("%+v: err = %v, want ErrNoAccess", c, err)
 		}
+	}
+}
+
+func TestSearchMoveToAndComment(t *testing.T) {
+	var moved, commented string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.URL.Path == "/rest/api/3/search/jql":
+			if r.URL.Query().Get("jql") != `status = "Ready for Test"` {
+				w.WriteHeader(http.StatusBadRequest)
+				w.Write([]byte(`{"errorMessages":["bad jql"]}`))
+				return
+			}
+			w.Write([]byte(`{"issues":[{"key":"DEV-1","fields":{"summary":"One","status":{"name":"Ready for Test"},"issuetype":{"name":"Story"}}},
+				{"key":"DEV-2","fields":{"summary":"Two","status":{"name":"Ready for Test"},"issuetype":{"name":"Bug"}}}]}`))
+		case r.URL.Path == "/rest/api/3/issue/DEV-1/transitions" && r.Method == http.MethodGet:
+			w.Write([]byte(`{"transitions":[{"id":"11","name":"Fail","to":{"name":"Failed Testing"}},{"id":"21","name":"Pass","to":{"name":"Ready to Merge"}}]}`))
+		case r.URL.Path == "/rest/api/3/issue/DEV-1/transitions":
+			var body struct{ Transition struct{ ID string } }
+			json.NewDecoder(r.Body).Decode(&body)
+			moved = body.Transition.ID
+			w.WriteHeader(http.StatusNoContent)
+		case r.URL.Path == "/rest/api/3/issue/DEV-1/comment":
+			data, _ := io.ReadAll(r.Body)
+			commented = string(data)
+			w.WriteHeader(http.StatusCreated)
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer srv.Close()
+	c := Client{Email: "me@example.com", Token: "tok"}
+	ref := Ref{Site: srv.URL, Key: "DEV-1"}
+
+	got, err := c.Search(context.Background(), srv.URL+"/", `status = "Ready for Test"`)
+	if err != nil || len(got) != 2 || got[0].Key != "DEV-1" || got[1].Type != "Bug" {
+		t.Fatalf("Search = %+v, %v", got, err)
+	}
+	if _, err := c.Search(context.Background(), srv.URL, "nonsense"); err == nil || !strings.Contains(err.Error(), "bad jql") {
+		t.Errorf("bad jql err = %v", err)
+	}
+	if err := c.MoveTo(context.Background(), ref, "ready to merge"); err != nil || moved != "21" {
+		t.Errorf("MoveTo: moved %q, %v", moved, err)
+	}
+	if err := c.MoveTo(context.Background(), ref, "Done"); err == nil {
+		t.Error("moved to a status with no transition")
+	}
+	if err := c.Comment(context.Background(), ref, "Tested on Safari.\nPasses."); err != nil ||
+		!strings.Contains(commented, `"text":"Tested on Safari."`) || !strings.Contains(commented, `"text":"Passes."`) {
+		t.Errorf("Comment sent %s, %v", commented, err)
 	}
 }

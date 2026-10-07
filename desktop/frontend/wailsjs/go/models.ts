@@ -476,6 +476,7 @@ export namespace main {
 	}
 	export class JiraSettings {
 	    email: string;
+	    site: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new JiraSettings(source);
@@ -484,6 +485,7 @@ export namespace main {
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.email = source["email"];
+	        this.site = source["site"];
 	    }
 	}
 	export class JiraTicket {
@@ -639,6 +641,112 @@ export namespace main {
 	    }
 	}
 	
+	export class TestPR {
+	    repo: string;
+	    number: number;
+	    url: string;
+	    draft: boolean;
+	    author: string;
+	    updated: string;
+	    pass: number;
+	    fail: number;
+	    pending: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new TestPR(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.repo = source["repo"];
+	        this.number = source["number"];
+	        this.url = source["url"];
+	        this.draft = source["draft"];
+	        this.author = source["author"];
+	        this.updated = source["updated"];
+	        this.pass = source["pass"];
+	        this.fail = source["fail"];
+	        this.pending = source["pending"];
+	    }
+	}
+	export class PlanRepo {
+	    name: string;
+	    cloned: boolean;
+	    current: string;
+	    dirty: number;
+	    pr?: TestPR;
+	
+	    static createFrom(source: any = {}) {
+	        return new PlanRepo(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.name = source["name"];
+	        this.cloned = source["cloned"];
+	        this.current = source["current"];
+	        this.dirty = source["dirty"];
+	        this.pr = this.convertValues(source["pr"], TestPR);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class QueueItem {
+	    key: string;
+	    url: string;
+	    summary: string;
+	    status: string;
+	    assignee: string;
+	    prs: TestPR[];
+	
+	    static createFrom(source: any = {}) {
+	        return new QueueItem(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.key = source["key"];
+	        this.url = source["url"];
+	        this.summary = source["summary"];
+	        this.status = source["status"];
+	        this.assignee = source["assignee"];
+	        this.prs = this.convertValues(source["prs"], TestPR);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
 	export class RepoInfo {
 	    name: string;
 	    path: string;
@@ -653,6 +761,24 @@ export namespace main {
 	        this.path = source["path"];
 	    }
 	}
+	export class TesterSettings {
+	    readyStatus: string;
+	    passStatus: string;
+	    failStatus: string;
+	    cloneMissing: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new TesterSettings(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.readyStatus = source["readyStatus"];
+	        this.passStatus = source["passStatus"];
+	        this.failStatus = source["failStatus"];
+	        this.cloneMissing = source["cloneMissing"];
+	    }
+	}
 	export class Settings {
 	    theme: string;
 	    keys: Record<string, string>;
@@ -662,6 +788,8 @@ export namespace main {
 	    draftPRs: boolean;
 	    triage: triage.Config;
 	    jira: JiraSettings;
+	    mode: string;
+	    tester: TesterSettings;
 	
 	    static createFrom(source: any = {}) {
 	        return new Settings(source);
@@ -677,6 +805,8 @@ export namespace main {
 	        this.draftPRs = source["draftPRs"];
 	        this.triage = this.convertValues(source["triage"], triage.Config);
 	        this.jira = this.convertValues(source["jira"], JiraSettings);
+	        this.mode = source["mode"];
+	        this.tester = this.convertValues(source["tester"], TesterSettings);
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
@@ -735,6 +865,134 @@ export namespace main {
 	        this.ticket = source["ticket"];
 	    }
 	}
+	export class TestFinish {
+	    steps: testrun.Step[];
+	    jira: string;
+	    jiraError: string;
+	    done: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new TestFinish(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.steps = this.convertValues(source["steps"], testrun.Step);
+	        this.jira = source["jira"];
+	        this.jiraError = source["jiraError"];
+	        this.done = source["done"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	
+	export class TestStartRequest {
+	    key: string;
+	    title: string;
+	    url: string;
+	    repos: string[];
+	    setAside: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new TestStartRequest(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.key = source["key"];
+	        this.title = source["title"];
+	        this.url = source["url"];
+	        this.repos = source["repos"];
+	        this.setAside = source["setAside"];
+	    }
+	}
+	export class TesterPlan {
+	    ticket: JiraTicket;
+	    repos: PlanRepo[];
+	    cloneRoot: string;
+	    error: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new TesterPlan(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.ticket = this.convertValues(source["ticket"], JiraTicket);
+	        this.repos = this.convertValues(source["repos"], PlanRepo);
+	        this.cloneRoot = source["cloneRoot"];
+	        this.error = source["error"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class TesterQueue {
+	    items: QueueItem[];
+	    setup: string;
+	    error: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new TesterQueue(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.items = this.convertValues(source["items"], QueueItem);
+	        this.setup = source["setup"];
+	        this.error = source["error"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	
 	export class TrainLeg {
 	    repo: string;
 	    name: string;
@@ -794,6 +1052,181 @@ export namespace main {
 		    }
 		    return a;
 		}
+	}
+
+}
+
+export namespace testrun {
+	
+	export class Record {
+	    key: string;
+	    title: string;
+	    url: string;
+	    result: string;
+	    // Go type: time
+	    at: any;
+	
+	    static createFrom(source: any = {}) {
+	        return new Record(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.key = source["key"];
+	        this.title = source["title"];
+	        this.url = source["url"];
+	        this.result = source["result"];
+	        this.at = this.convertValues(source["at"], null);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class Repo {
+	    name: string;
+	    dir: string;
+	    stash?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new Repo(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.name = source["name"];
+	        this.dir = source["dir"];
+	        this.stash = source["stash"];
+	    }
+	}
+	export class RepoStatus {
+	    name: string;
+	    onBranch: boolean;
+	    current: string;
+	    behind: number;
+	    new: string[];
+	    dirty: number;
+	    error: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new RepoStatus(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.name = source["name"];
+	        this.onBranch = source["onBranch"];
+	        this.current = source["current"];
+	        this.behind = source["behind"];
+	        this.new = source["new"];
+	        this.dirty = source["dirty"];
+	        this.error = source["error"];
+	    }
+	}
+	export class Session {
+	    key: string;
+	    title: string;
+	    url: string;
+	    // Go type: time
+	    started: any;
+	    repos: Repo[];
+	
+	    static createFrom(source: any = {}) {
+	        return new Session(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.key = source["key"];
+	        this.title = source["title"];
+	        this.url = source["url"];
+	        this.started = this.convertValues(source["started"], null);
+	        this.repos = this.convertValues(source["repos"], Repo);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class State {
+	    current?: Session;
+	    history: Record[];
+	
+	    static createFrom(source: any = {}) {
+	        return new State(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.current = this.convertValues(source["current"], Session);
+	        this.history = this.convertValues(source["history"], Record);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class Step {
+	    repo: string;
+	    done: boolean;
+	    ok: boolean;
+	    message: string;
+	    sha: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new Step(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.repo = source["repo"];
+	        this.done = source["done"];
+	        this.ok = source["ok"];
+	        this.message = source["message"];
+	        this.sha = source["sha"];
+	    }
 	}
 
 }

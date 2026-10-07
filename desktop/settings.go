@@ -1,6 +1,7 @@
 package main
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
@@ -37,11 +38,25 @@ type Settings struct {
 	DraftPRs    bool          `json:"draftPRs"`
 	Triage      triage.Config `json:"triage"`
 	Jira        JiraSettings  `json:"jira"`
+	// Mode is "developer" or "tester": which sidebar and pages the app shows.
+	Mode   string         `json:"mode"`
+	Tester TesterSettings `json:"tester"`
 }
 
 // JiraSettings holds the Atlassian account; its API token is in the Keychain.
 type JiraSettings struct {
 	Email string `json:"email"`
+	// Site is the Jira Cloud address searched for tickets to test, e.g.
+	// https://acme.atlassian.net.
+	Site string `json:"site"`
+}
+
+// TesterSettings name the Jira statuses tester mode reads and sets.
+type TesterSettings struct {
+	ReadyStatus  string `json:"readyStatus"`
+	PassStatus   string `json:"passStatus"`
+	FailStatus   string `json:"failStatus"`
+	CloneMissing bool   `json:"cloneMissing"`
 }
 
 // theme is a theme's window background and whether macOS should draw it dark.
@@ -60,7 +75,7 @@ var themes = map[string]theme{
 }
 
 func defaultSettings() Settings {
-	return normalize(Settings{Theme: "graphite", MergeMethod: "squash", DraftPRs: true})
+	return normalize(Settings{Theme: "graphite", MergeMethod: "squash", DraftPRs: true, Tester: TesterSettings{CloneMissing: true}})
 }
 
 // settingsPath is ~/Library/Application Support/com.alanjones.tandem/settings.json,
@@ -120,6 +135,17 @@ func normalize(s Settings) Settings {
 	}
 	s.Editors, s.Editor = editors, ""
 	s.Triage = s.Triage.Normalize()
+	if s.Mode != "tester" {
+		s.Mode = "developer"
+	}
+	s.Jira.Site = strings.TrimRight(strings.TrimSpace(s.Jira.Site), "/")
+	if s.Jira.Site != "" && !strings.Contains(s.Jira.Site, "://") {
+		s.Jira.Site = "https://" + s.Jira.Site
+	}
+	t := &s.Tester
+	t.ReadyStatus = cmp.Or(strings.TrimSpace(t.ReadyStatus), "Ready for Test")
+	t.PassStatus = cmp.Or(strings.TrimSpace(t.PassStatus), "Ready to Merge")
+	t.FailStatus = cmp.Or(strings.TrimSpace(t.FailStatus), "Failed Testing")
 	return s
 }
 
