@@ -379,6 +379,22 @@ export interface TestRepoStatus {
   error: string
 }
 
+// A package in a repo under test with a build script; dir is relative to the
+// repo, "" for its root.
+export interface BuildTarget {
+  repo: string
+  dir: string
+}
+
+export interface BuildEvent {
+  repo: string
+  dir: string
+  line: string
+  done: boolean
+  ok: boolean
+  error: string
+}
+
 export interface TestFinish {
   steps: TestStep[]
   done: boolean

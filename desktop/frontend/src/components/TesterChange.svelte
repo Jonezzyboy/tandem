@@ -2,9 +2,9 @@
   import { onDestroy, onMount } from 'svelte'
   import { api, errorText } from '@lib/api'
   import { navigate } from '@lib/state.svelte'
-  import { finish, loadStatus, pullLatest, saveChecks, startTest, tester, verdict } from '@lib/tester.svelte'
+  import { buildKey, finish, loadBuilds, loadStatus, pullLatest, runBuild, saveChecks, startTest, stopBuild, tester, verdict } from '@lib/tester.svelte'
   import { ago, shortRepo } from '@lib/format'
-  import type { PlanRepo, TestCheck, TesterPlan, TestPR, TestStep, VerdictOption } from '@lib/types'
+  import type { BuildTarget, PlanRepo, TestCheck, TesterPlan, TestPR, TestStep, VerdictOption } from '@lib/types'
   import Icon from './Icon.svelte'
 
   let { id }: { id: string } = $props()
@@ -50,8 +50,30 @@
   const tick = setInterval(() => { if (session) loadStatus() }, 60_000)
   onDestroy(() => clearInterval(tick))
   $effect(() => {
-    if (session) loadStatus()
+    if (session) {
+      loadStatus()
+      loadBuilds()
+    }
   })
+
+  // The build whose output is open, by buildKey.
+  let openLog = $state('')
+  function buildState(t: BuildTarget): { text: string; tone: string } {
+    const b = tester.builds[buildKey(t)]
+    if (!b) return { text: 'not built since switching', tone: 'muted' }
+    if (b.running) return { text: 'building…', tone: 'muted' }
+    if (!b.ok) return { text: b.error === 'stopped' ? 'stopped' : `failed${b.error ? `: ${b.error}` : ''}`, tone: 'warn' }
+    if (b.at < (tester.movedAt[t.repo] ?? 0)) return { text: 'built before the latest pull: rebuild', tone: 'warn' }
+    return { text: `built ${ago(b.at, now)} ago`, tone: 'ok' }
+  }
+  const anyBuilding = $derived(tester.buildTargets.some((t) => tester.builds[buildKey(t)]?.running))
+  function buildAll() {
+    for (const t of tester.buildTargets) if (!tester.builds[buildKey(t)]?.running) runBuild(t)
+  }
+  function scrollEnd(node: HTMLElement, _lines: number) {
+    node.scrollTop = node.scrollHeight
+    return { update() { node.scrollTop = node.scrollHeight } }
+  }
 
   const status = $derived(Object.fromEntries(tester.status.map((s) => [s.name, s])))
   const behind = $derived(tester.status.filter((s) => s.behind > 0))
@@ -169,7 +191,7 @@
       <div class="meta mono">
         {#if url}<button class="link" style="--wails-draggable: no-drag" onclick={() => api.openURL(url)}>{id}<Icon name="external" size={11} /></button>{:else}<span>{id}</span>{/if}
         {#if session}
-          <span>·</span><span class="ok-text">testing for {elapsed}</span><span>·</span><span>{session.repos.length} repo{session.repos.length === 1 ? '' : 's'} on {id}</span>
+          <span>·</span><span class="ok-text">testing for {elapsed}</span>{#if tester.pullNote}<span>·</span><span>{tester.pullNote}</span>{/if}<span>·</span><span>{session.repos.length} repo{session.repos.length === 1 ? '' : 's'} on {id}</span>
         {:else if plan?.ticket.status}
           <span>·</span><span class="ok-text">{plan.ticket.status}</span>
           {#if plan.ticket.type || plan.ticket.priority}<span>·</span><span>{[plan.ticket.type, plan.ticket.priority].filter(Boolean).join(' · ')}</span>{/if}
@@ -183,6 +205,9 @@
     </div>
     <div class="actions" style="--wails-draggable: no-drag">
       {#if session && !starting && !lastSteps}
+        <button class="btn" disabled={tester.pulling} onclick={pullLatest} title="Fetch and fast-forward every repo under test">
+          <Icon name="sync" spin={tester.pulling} />Pull latest
+        </button>
         <button class="btn" disabled={tester.finishing} onclick={() => backToMain(recorded)}>
           <Icon name="refresh" spin={tester.finishing} />Back to main
         </button>
@@ -283,6 +308,35 @@
             </div>
           {/each}
         </section>
+        {#if tester.buildTargets.length}
+          <section class="panel builds" aria-label="Builds">
+            <div class="panel-head">
+              <span class="eyebrow">Builds · npm install, then npm run build</span>
+              {#if tester.buildTargets.length > 1}<button class="btn small" disabled={anyBuilding} onclick={buildAll}>Build all</button>{/if}
+            </div>
+            {#each tester.buildTargets as t (buildKey(t))}
+              {@const b = tester.builds[buildKey(t)]}
+              {@const bs = buildState(t)}
+              <div class="build">
+                <span class="stack grow">
+                  <span class="mono">{shortRepo(t.repo)}{t.dir ? `/${t.dir}` : ''}</span>
+                  <span class="small {bs.tone}">{bs.text}</span>
+                </span>
+                {#if b?.lines.length}
+                  <button class="link small" onclick={() => (openLog = openLog === buildKey(t) ? '' : buildKey(t))}>{openLog === buildKey(t) ? 'Hide output' : 'Output'}</button>
+                {/if}
+                {#if b?.running}
+                  <button class="btn small" onclick={() => stopBuild(t)}><Icon name="close" size={14} />Stop</button>
+                {:else}
+                  <button class="btn small" onclick={() => { openLog = buildKey(t); runBuild(t) }}><Icon name="play" size={14} />Build</button>
+                {/if}
+              </div>
+              {#if openLog === buildKey(t) && b?.lines.length}
+                <pre class="log selectable" use:scrollEnd={b.lines.length}>{b.lines.join('\n')}</pre>
+              {/if}
+            {/each}
+          </section>
+        {/if}
       </div>
       <section class="panel verdict" aria-label="Your verdict">
         <span class="eyebrow">Your verdict</span>
@@ -525,7 +579,9 @@
   .row-actions { display: flex; gap: 8px; }
   .col { display: flex; flex-direction: column; gap: 16px; min-width: 0; min-height: 0; }
   .col > * { flex-shrink: 0; }
-  .col > .checklist { flex-shrink: 1; min-height: 180px; overflow: hidden; }
+  .col > .checklist { flex-shrink: 1; min-height: 0; overflow: hidden; }
+  /* A long list keeps a few rows in view however much else the column holds. */
+  .col > .checklist:has(.items > :nth-child(6)) { min-height: 200px; }
   .items { display: flex; flex-direction: column; gap: 10px; min-height: 0; overflow-y: auto; margin-right: -8px; padding-right: 8px; }
   .panel .bar { width: 120px; }
   .check { display: flex; gap: 10px; align-items: flex-start; font-size: 13.5px; line-height: 1.45; color: var(--text-2); }
@@ -534,6 +590,8 @@
   .check .dot { width: 6px; height: 6px; margin: 8px 4px 0; border-radius: 3px; background: var(--muted); flex-shrink: 0; }
   .check .icon-btn { width: 22px; height: 22px; margin-top: -1px; }
   .add { display: flex; gap: 8px; }
+  .build { display: flex; gap: 12px; align-items: center; font-size: 13px; }
+  .log { margin: 0; padding: 10px 12px; background: var(--log-bg); border: 1px solid var(--line); border-radius: 8px; font: 12px/1.6 var(--mono); color: var(--text-2); white-space: pre-wrap; word-break: break-word; max-height: 260px; overflow: auto; }
   .section { display: flex; align-items: baseline; gap: 12px; margin-top: 6px; font-size: 13px; font-weight: 600; color: var(--text); }
   .section:first-of-type { margin-top: 0; }
   .add .input { flex: 1; min-height: 30px; font-size: 13px; }

@@ -40,14 +40,14 @@ type TestPR struct {
 }
 
 type QueueItem struct {
-	Key      string   `json:"key"`
-	URL      string   `json:"url"`
-	Summary  string   `json:"summary"`
-	Status   string   `json:"status"`
-	Type     string   `json:"type"`
-	Priority string   `json:"priority"`
-	Assignee string   `json:"assignee"`
-	Updated  string   `json:"updated"`
+	Key      string `json:"key"`
+	URL      string `json:"url"`
+	Summary  string `json:"summary"`
+	Status   string `json:"status"`
+	Type     string `json:"type"`
+	Priority string `json:"priority"`
+	Assignee string `json:"assignee"`
+	Updated  string `json:"updated"`
 	// StatusSince is when the ticket moved into Status, or empty when Jira
 	// didn't say.
 	StatusSince string   `json:"statusSince"`
@@ -424,11 +424,11 @@ func (a *App) TesterState() (testrun.State, error) {
 }
 
 type TestStartRequest struct {
-	Key      string      `json:"key"`
-	Title    string      `json:"title"`
-	URL      string      `json:"url"`
-	Repos    []StartRepo `json:"repos"`
-	SetAside bool        `json:"setAside"`
+	Key      string          `json:"key"`
+	Title    string          `json:"title"`
+	URL      string          `json:"url"`
+	Repos    []StartRepo     `json:"repos"`
+	SetAside bool            `json:"setAside"`
 	Checks   []testrun.Check `json:"checks"`
 }
 
@@ -799,4 +799,88 @@ func checklist(desc string) []testrun.Check {
 		out = out[:40]
 	}
 	return append([]testrun.Check{}, out...)
+}
+
+// TesterBuilds lists the packages with a build script in the repos under test.
+func (a *App) TesterBuilds() ([]testrun.BuildTarget, error) {
+	st, err := a.testStore().Load()
+	out := []testrun.BuildTarget{}
+	if err != nil || st.Current == nil {
+		return out, err
+	}
+	for _, r := range st.Current.Repos {
+		out = append(out, testrun.FindBuilds(r.Name, r.Dir)...)
+	}
+	return out, nil
+}
+
+// BuildEvent is a line of a build's output, or, with Done set, how it ended.
+type BuildEvent struct {
+	Repo  string `json:"repo"`
+	Dir   string `json:"dir"`
+	Line  string `json:"line"`
+	Done  bool   `json:"done"`
+	OK    bool   `json:"ok"`
+	Error string `json:"error"`
+}
+
+// TesterBuild installs and builds the package at dir in repo, a repo under
+// test, emitting "tester-build" for each line of output and when it ends.
+func (a *App) TesterBuild(repo, dir string) error {
+	st, err := a.testStore().Load()
+	if err != nil {
+		return err
+	}
+	if st.Current == nil {
+		return errors.New("nothing is being tested")
+	}
+	i := slices.IndexFunc(st.Current.Repos, func(r testrun.Repo) bool { return r.Name == repo })
+	if i < 0 {
+		return fmt.Errorf("%s isn't under test", repo)
+	}
+	root := st.Current.Repos[i].Dir
+	path := filepath.Join(root, filepath.FromSlash(dir))
+	if rel, err := filepath.Rel(root, path); err != nil || strings.HasPrefix(rel, "..") {
+		return fmt.Errorf("%s is outside %s", dir, repo)
+	}
+	id := repo + "\x00" + dir
+	ctx, cancel := context.WithTimeout(a.ctx, 20*time.Minute)
+	a.mu.Lock()
+	if _, running := a.builds[id]; running {
+		a.mu.Unlock()
+		cancel()
+		return errors.New("that build is already running")
+	}
+	a.builds[id] = cancel
+	a.mu.Unlock()
+	go func() {
+		defer func() {
+			a.mu.Lock()
+			delete(a.builds, id)
+			a.mu.Unlock()
+			cancel()
+		}()
+		err := testrun.Build(ctx, path, "", func(line string) {
+			a.emit("tester-build", BuildEvent{Repo: repo, Dir: dir, Line: line})
+		})
+		ev := BuildEvent{Repo: repo, Dir: dir, Done: true, OK: err == nil}
+		switch {
+		case errors.Is(ctx.Err(), context.Canceled):
+			ev.Error = "stopped"
+		case err != nil:
+			ev.Error = core.FirstLine(err.Error())
+		}
+		a.emit("tester-build", ev)
+	}()
+	return nil
+}
+
+// TesterBuildStop stops the build of dir in repo, if it's running.
+func (a *App) TesterBuildStop(repo, dir string) {
+	a.mu.Lock()
+	cancel := a.builds[repo+"\x00"+dir]
+	a.mu.Unlock()
+	if cancel != nil {
+		cancel()
+	}
 }

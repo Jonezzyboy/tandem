@@ -2,7 +2,7 @@ import * as App from '@wailsjs/go/main/App'
 import { EventsOn } from '@wailsjs/runtime/runtime'
 import type {
   BranchInfo, ChangeSummary, ChangeView, CheckEvent, CleanItem, CleanResult, Inbox, JiraAccount, JiraTicket, LegResult, PinItem, PRPreview, PRRequest,
-  TestCheck, TestFinish, TesterPlan, TesterQueue, TesterState, TestRepoStatus, TestStep, VerdictOption,
+  BuildTarget, TestCheck, TestFinish, TesterPlan, TesterQueue, TesterState, TestRepoStatus, TestStep, VerdictOption,
   RepoInfo, StartItem, TrainPlan,
 } from './types'
 
@@ -35,6 +35,9 @@ export const api = {
   testerStart: (req: { key: string; title: string; url: string; repos: { name: string; branch: string }[]; setAside: boolean; checks: TestCheck[] }) =>
     App.TesterStart(req as never) as unknown as Promise<TestStep[]>,
   testerChecks: (checks: TestCheck[]) => App.TesterChecks(checks as never),
+  testerBuilds: () => App.TesterBuilds() as unknown as Promise<BuildTarget[]>,
+  testerBuild: (repo: string, dir: string) => App.TesterBuild(repo, dir),
+  testerBuildStop: (repo: string, dir: string) => App.TesterBuildStop(repo, dir),
   testerStatus: () => App.TesterStatus() as unknown as Promise<TestRepoStatus[]>,
   testerPull: () => App.TesterPull() as unknown as Promise<TestStep[]>,
   testerFinish: () => App.TesterFinish() as unknown as Promise<TestFinish>,

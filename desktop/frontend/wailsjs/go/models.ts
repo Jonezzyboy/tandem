@@ -1216,6 +1216,20 @@ export namespace main {
 
 export namespace testrun {
 	
+	export class BuildTarget {
+	    repo: string;
+	    dir: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new BuildTarget(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.repo = source["repo"];
+	        this.dir = source["dir"];
+	    }
+	}
 	export class Check {
 	    group?: string;
 	    text: string;
