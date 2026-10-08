@@ -73,7 +73,7 @@ func TestIssue(t *testing.T) {
 }
 
 func TestSearchMoveToAndComment(t *testing.T) {
-	var moved, commented string
+	var moved, commented, attached string
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case r.URL.Path == "/rest/api/3/search/jql":
@@ -82,7 +82,10 @@ func TestSearchMoveToAndComment(t *testing.T) {
 				w.Write([]byte(`{"errorMessages":["bad jql"]}`))
 				return
 			}
-			w.Write([]byte(`{"issues":[{"key":"DEV-1","fields":{"summary":"One","status":{"name":"Ready for Test"},"issuetype":{"name":"Story"}}},
+			w.Write([]byte(`{"issues":[{"key":"DEV-1","fields":{"summary":"One","status":{"name":"Ready for Test"},"issuetype":{"name":"Story"}},
+				"changelog":{"histories":[{"created":"2026-10-01T09:00:00.000+0000","items":[{"field":"status","toString":"Ready for Test"}]},
+				{"created":"2026-10-03T09:00:00.000+0000","items":[{"field":"status","toString":"Ready for Test"}]},
+				{"created":"2026-10-04T09:00:00.000+0000","items":[{"field":"status","toString":"In Progress"}]}]}},
 				{"key":"DEV-2","fields":{"summary":"Two","status":{"name":"Ready for Test"},"issuetype":{"name":"Bug"}}}]}`))
 		case r.URL.Path == "/rest/api/3/issue/DEV-1/transitions" && r.Method == http.MethodGet:
 			w.Write([]byte(`{"transitions":[{"id":"11","name":"Fix Failed","to":{"name":"Failed Test","statusCategory":{"key":"indeterminate"}}},
@@ -94,6 +97,15 @@ func TestSearchMoveToAndComment(t *testing.T) {
 			w.WriteHeader(http.StatusNoContent)
 		case r.URL.Path == "/rest/api/3/status":
 			w.Write([]byte(`[{"name":"Signoff"},{"name":"Confirm Fix"},{"name":"Signoff"}]`))
+		case r.URL.Path == "/rest/api/3/issue/DEV-1/attachments":
+			f, h, err := r.FormFile("file")
+			if err != nil || r.Header.Get("X-Atlassian-Token") != "no-check" {
+				w.WriteHeader(http.StatusBadRequest)
+				return
+			}
+			data, _ := io.ReadAll(f)
+			attached = h.Filename + ":" + string(data)
+			w.Write([]byte(`[]`))
 		case r.URL.Path == "/rest/api/3/issue/DEV-1/comment":
 			data, _ := io.ReadAll(r.Body)
 			commented = string(data)
@@ -109,6 +121,9 @@ func TestSearchMoveToAndComment(t *testing.T) {
 	got, err := c.Search(context.Background(), srv.URL+"/", `status = "Ready for Test"`)
 	if err != nil || len(got) != 2 || got[0].Key != "DEV-1" || got[1].Type != "Bug" {
 		t.Fatalf("Search = %+v, %v", got, err)
+	}
+	if want := time.Date(2026, 10, 3, 9, 0, 0, 0, time.UTC); !got[0].StatusSince.Equal(want) || !got[1].StatusSince.IsZero() {
+		t.Errorf("StatusSince = %v, %v; want %v, zero", got[0].StatusSince, got[1].StatusSince, want)
 	}
 	if st, err := c.Statuses(context.Background(), srv.URL); err != nil || !slices.Equal(st, []string{"Confirm Fix", "Signoff"}) {
 		t.Errorf("Statuses = %v, %v", st, err)
@@ -129,5 +144,8 @@ func TestSearchMoveToAndComment(t *testing.T) {
 	if err := c.Comment(context.Background(), ref, "Tested on Safari.\nPasses."); err != nil ||
 		!strings.Contains(commented, `"text":"Tested on Safari."`) || !strings.Contains(commented, `"text":"Passes."`) {
 		t.Errorf("Comment sent %s, %v", commented, err)
+	}
+	if err := c.Attach(context.Background(), ref, "shot.png", []byte("png")); err != nil || attached != "shot.png:png" {
+		t.Errorf("Attach sent %q, %v", attached, err)
 	}
 }

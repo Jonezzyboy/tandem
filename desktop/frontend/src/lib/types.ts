@@ -268,8 +268,12 @@ export interface QueueItem {
   url: string
   summary: string
   status: string
+  type: string
+  priority: string
   assignee: string
   updated: string
+  // When it moved into status, or empty when Jira didn't say.
+  statusSince: string
   prs: TestPR[]
   // False until GitHub has been searched for the ticket's PRs.
   prsLoaded: boolean
@@ -297,11 +301,33 @@ export interface PlanRepo {
   pr: TestPR | null
 }
 
+export interface TestCommit {
+  sha: string
+  subject: string
+  at: string
+}
+
+export interface RepoChanges {
+  repo: string
+  commits: TestCommit[]
+  error: string
+}
+
 export interface TesterPlan {
   ticket: JiraTicket
   repos: PlanRepo[]
   cloneRoot: string
   error: string
+  // What to try, from the ticket's acceptance criteria.
+  checklist: string[]
+  // The previous test of this ticket here, and what was pushed since.
+  last: TestRecord | null
+  changes: RepoChanges[]
+}
+
+export interface TestCheck {
+  text: string
+  done: boolean
 }
 
 export interface TestStep {
@@ -318,6 +344,7 @@ export interface TestSession {
   url: string
   started: string
   repos: { name: string; dir: string; stash?: string }[]
+  checks?: TestCheck[]
 }
 
 export interface TestRecord {
@@ -327,7 +354,11 @@ export interface TestRecord {
   result: 'passed' | 'failed' | 'moved' | 'stopped'
   verdict?: string
   to?: string
+  note?: string
+  started?: string
   at: string
+  checks?: number
+  checked?: number
 }
 
 export interface TesterState {

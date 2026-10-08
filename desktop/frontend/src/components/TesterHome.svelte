@@ -3,15 +3,15 @@
   import { api } from '@lib/api'
   import { parseTicket } from '@lib/jira'
   import { navigate } from '@lib/state.svelte'
-  import { loadQueue, tester } from '@lib/tester.svelte'
-  import { ago } from '@lib/format'
+  import { isRetest, lastTest, loadQueue, loadState, queueCI, tester, type QueueCI, type QueueSort, type QueueView } from '@lib/tester.svelte'
+  import { ago, shortRepo } from '@lib/format'
   import type { QueueItem } from '@lib/types'
   import Icon from './Icon.svelte'
 
   // Jira is reread every two minutes while the page is open.
   const AUTO_REFRESH = 120_000
 
-  onMount(() => { loadQueue(false) })
+  onMount(() => { loadQueue(false); loadState() })
   let now = $state(Date.now())
   const tick = setInterval(() => {
     now = Date.now()
@@ -35,27 +35,98 @@
 
   function ci(item: QueueItem): { text: string; tone: 'ok' | 'warn' | 'muted' } {
     const n = item.prs.length
-    if (!item.prsLoaded) return { text: 'finding PRs…', tone: 'muted' }
-    if (n === 0) return { text: 'no open PRs found', tone: 'muted' }
-    const failing = item.prs.filter((p) => p.fail > 0).length
-    if (failing) return { text: `${failing} PR${failing === 1 ? '' : 's'} failing CI`, tone: 'warn' }
-    if (item.prs.some((p) => p.pending > 0)) return { text: 'CI running', tone: 'muted' }
-    return { text: `CI passing on ${n === 1 ? 'its PR' : `all ${n}`}`, tone: 'ok' }
+    switch (queueCI(item)) {
+      case 'loading': return { text: 'finding PRs…', tone: 'muted' }
+      case 'none': return { text: 'no open PRs: may already be on main', tone: 'muted' }
+      case 'failing': {
+        const failing = item.prs.filter((p) => p.fail > 0).length
+        return { text: `${failing === n && n > 1 ? 'all' : failing} failing CI · not ready`, tone: 'warn' }
+      }
+      case 'running': return { text: 'CI running', tone: 'muted' }
+      case 'passing': return { text: n === 1 ? 'CI passing' : `CI passing on all ${n}`, tone: 'ok' }
+    }
   }
 
-  function byline(item: QueueItem): string {
-    return [item.assignee, item.updated ? `updated ${ago(item.updated, now)} ago` : ''].filter(Boolean).join(' · ')
+  const URGENT = ['highest', 'blocker', 'critical', 'high']
+  function priorityRank(p: string): number {
+    const i = ['blocker', 'critical', 'highest', 'high', 'medium', 'low', 'lowest'].indexOf(p.toLowerCase())
+    return i < 0 ? 4 : i
+  }
+  const since = (i: QueueItem) => Date.parse(i.statusSince || i.updated) || 0
+
+  function waiting(item: QueueItem): string {
+    if (item.statusSince) return `Waiting ${ago(item.statusSince, now)} in ${item.status}`
+    return item.updated ? `Updated ${ago(item.updated, now)} ago` : ''
   }
 
-  // Grouped by status, in the order the statuses are listed in Settings.
-  const groups = $derived.by(() => {
+  function retestNote(key: string): string {
+    const r = lastTest(key)
+    return r ? `Retest · you failed it ${ago(r.at, now)} ago` : ''
+  }
+
+  const f = tester.filters
+  const VIEWS: { id: QueueView; label: string }[] = [
+    { id: 'all', label: 'All' },
+    { id: 'ready', label: 'Ready to go' },
+    { id: 'retests', label: 'Retests' },
+  ]
+  const CI_FILTERS: { id: QueueCI | 'all'; label: string }[] = [
+    { id: 'all', label: 'CI: any' },
+    { id: 'passing', label: 'CI passing' },
+    { id: 'failing', label: 'CI failing' },
+    { id: 'running', label: 'CI running' },
+    { id: 'none', label: 'No PRs' },
+  ]
+  const SORTS: { id: QueueSort; label: string }[] = [
+    { id: 'waiting', label: 'Waiting longest' },
+    { id: 'priority', label: 'Priority' },
+    { id: 'updated', label: 'Recently updated' },
+  ]
+  const UNASSIGNED = 'Unassigned'
+
+  const items = $derived(tester.queue?.items ?? [])
+  const statuses = $derived.by(() => {
     const q = tester.queue
     if (!q) return []
-    const order = [...q.statuses, ...q.items.map((i) => i.status).filter((s) => !q.statuses.includes(s))]
-    return [...new Set(order)]
-      .map((status) => ({ status, items: q.items.filter((i) => i.status === status) }))
-      .filter((g) => g.items.length)
+    return [...new Set([...q.statuses, ...q.items.map((i) => i.status).filter((s) => !q.statuses.includes(s))])]
   })
+  const repos = $derived([...new Set(items.flatMap((i) => i.prs.map((p) => p.repo)))].sort())
+  const assignees = $derived([...new Set(items.map((i) => i.assignee || UNASSIGNED))].sort())
+
+  function inView(i: QueueItem, view: QueueView): boolean {
+    if (view === 'ready') return queueCI(i) === 'passing'
+    if (view === 'retests') return isRetest(i.key)
+    return true
+  }
+  const counts = $derived(Object.fromEntries(VIEWS.map((v) => [v.id, items.filter((i) => inView(i, v.id)).length])))
+
+  const filtering = $derived(!!(f.text.trim() || f.view !== 'all' || f.ci !== 'all' || f.status || f.repo || f.assignee))
+  function clearFilters() {
+    Object.assign(f, { view: 'all', text: '', ci: 'all', status: '', repo: '', assignee: '' })
+  }
+
+  const shown = $derived.by(() => {
+    const text = f.text.trim().toLowerCase()
+    const out = items.filter((i) =>
+      inView(i, f.view) &&
+      (!text || `${i.key} ${i.summary} ${i.assignee}`.toLowerCase().includes(text)) &&
+      // PRs still loading count as a match, so a ticket doesn't blink out and back.
+      (f.ci === 'all' || queueCI(i) === f.ci || queueCI(i) === 'loading') &&
+      (!f.status || i.status === f.status) &&
+      (!f.repo || !i.prsLoaded || i.prs.some((p) => p.repo === f.repo)) &&
+      (!f.assignee || (i.assignee || UNASSIGNED) === f.assignee))
+    if (f.sort === 'waiting') out.sort((a, b) => since(a) - since(b))
+    else if (f.sort === 'updated') out.sort((a, b) => (Date.parse(b.updated) || 0) - (Date.parse(a.updated) || 0))
+    else out.sort((a, b) => priorityRank(a.priority) - priorityRank(b.priority) || since(a) - since(b))
+    return out
+  })
+
+  // Grouped by status, in the order the statuses are listed in Settings.
+  const groups = $derived(
+    statuses.map((status) => ({ status, items: shown.filter((i) => i.status === status) })).filter((g) => g.items.length),
+  )
+  // The one ticket to suggest: the first shown whose CI passes.
+  const suggested = $derived(tester.state.current ? '' : (groups.flatMap((g) => g.items).find((i) => queueCI(i) === 'passing')?.key ?? ''))
 
   const busy = $derived(tester.queueLoading || !!tester.queue?.loading)
   const done = $derived(tester.finished)
@@ -64,8 +135,14 @@
 <div class="page">
   <header style="--wails-draggable: drag">
     <div class="heading">
-      <div class="mono muted small">
-        {#if tester.queue?.statuses.length}Tickets in {tester.queue.statuses.join(', ')}{:else}Tickets ready to test{/if}, with their PRs on GitHub
+      <div class="mono muted small status" role="status">
+        {#if tester.queueLoading}Reading Jira…
+        {:else if tester.queue?.loading}Finding PRs on GitHub…
+        {:else if tester.queue?.at}{items.length} ticket{items.length === 1 ? '' : 's'}{tester.queue.statuses.length ? ` in ${tester.queue.statuses.join(', ')}` : ''} · updated {ago(tester.queue.at, now)} ago
+        {:else}Tickets ready to test, with their PRs on GitHub{/if}
+        <button class="icon-btn tiny" style="--wails-draggable: no-drag" disabled={busy} onclick={() => loadQueue(true)} aria-label="Refresh now" title="Refresh now · rereads every 2 minutes">
+          <Icon name={busy ? 'running' : 'refresh'} size={13} spin={busy} />
+        </button>
       </div>
       <h1>Ready to test</h1>
     </div>
@@ -75,21 +152,54 @@
     </form>
   </header>
   {#if findError}<div class="small warn">{findError}</div>{/if}
-
-  <div class="refresh-row">
-    <span class="small muted" role="status">
-      {#if tester.queueLoading}Reading Jira…
-      {:else if tester.queue?.loading}Finding PRs on GitHub…
-      {:else if tester.queue?.at}Updated {ago(tester.queue.at, now)} ago · refreshes every 2 minutes
-      {/if}
-    </span>
-    <button class="btn small" disabled={busy} onclick={() => loadQueue(true)}>
-      <Icon name={busy ? 'running' : 'refresh'} size={14} spin={busy} />{busy ? 'Refreshing' : 'Refresh'}
-    </button>
-  </div>
   <div class="bar" class:on={busy} aria-hidden="true"><div></div></div>
-  <div class="scroll">
 
+  {#if items.length}
+    <div class="filters" role="search" aria-label="Filter tickets">
+      <div class="search">
+        <Icon name="search" size={14} />
+        <input class="input" bind:value={f.text} placeholder="Filter key, title, person" aria-label="Filter by key, title or person" />
+      </div>
+      <div class="seg" role="group" aria-label="Quick views">
+        {#each VIEWS as v (v.id)}
+          <button class:on={f.view === v.id} aria-pressed={f.view === v.id} onclick={() => (f.view = v.id)}>{v.label} <span class="mono">{counts[v.id]}</span></button>
+        {/each}
+      </div>
+      <select class="input" bind:value={f.ci} aria-label="CI">
+        {#each CI_FILTERS as c (c.id)}<option value={c.id}>{c.label}</option>{/each}
+      </select>
+      {#if statuses.length > 1}
+        <select class="input" bind:value={f.status} aria-label="Status">
+          <option value="">Status: any</option>
+          {#each statuses as s (s)}<option value={s}>{s}</option>{/each}
+        </select>
+      {/if}
+      {#if repos.length > 1}
+        <select class="input" bind:value={f.repo} aria-label="Repo">
+          <option value="">Repo: any</option>
+          {#each repos as r (r)}<option value={r}>{shortRepo(r)}</option>{/each}
+        </select>
+      {/if}
+      {#if assignees.length > 1}
+        <select class="input" bind:value={f.assignee} aria-label="Assignee">
+          <option value="">Assignee: any</option>
+          {#each assignees as a (a)}<option value={a}>{a}</option>{/each}
+        </select>
+      {/if}
+      {#if filtering}
+        <span class="small muted">{shown.length} of {items.length}</span>
+        <button class="btn small" onclick={clearFilters}>Clear</button>
+      {/if}
+      <span class="grow"></span>
+      <label class="sort small muted">Sort
+        <select class="input" bind:value={f.sort}>
+          {#each SORTS as s (s.id)}<option value={s.id}>{s.label}</option>{/each}
+        </select>
+      </label>
+    </div>
+  {/if}
+
+  <div class="scroll">
   {#if done}
     <section class="done" class:bad={!done.outcome.done} aria-label="Testing finished">
       <div class="done-head">
@@ -124,36 +234,48 @@
   {/if}
 
   {#if !tester.queue}
-    <section class="list" aria-label="Loading">
-      {#each [0, 1, 2] as i (i)}<div class="card skeleton"></div>{/each}
+    <section class="group" aria-label="Loading">
+      {#each [0, 1, 2] as i (i)}<div class="row skeleton"></div>{/each}
     </section>
-  {:else if !tester.queue.setup && !tester.queue.error && tester.queue.items.length === 0}
+  {:else if !tester.queue.setup && !tester.queue.error && items.length === 0}
     <p class="muted">No tickets in {tester.queue.statuses.join(' or ')} right now. You can still open any ticket above.</p>
+  {:else if filtering && shown.length === 0}
+    <p class="muted">No tickets match these filters. <button class="link" onclick={clearFilters}>Clear filters</button></p>
   {/if}
 
   {#each groups as g (g.status)}
-    <section class="list" aria-label={g.status}>
-      <div class="eyebrow">{g.status} · {g.items.length}</div>
+    <section class="group" aria-label={g.status}>
+      <div class="group-head eyebrow"><span>{g.status} · {g.items.length}</span><span>PRs · CI</span></div>
       {#each g.items as item (item.key)}
         {@const c = ci(item)}
         {@const testing = tester.state.current?.key === item.key}
-        <article class="card" class:testing>
+        {@const retest = retestNote(item.key)}
+        <article class="row" class:testing>
           <div class="stack grow">
             <div class="meta small">
               <button class="link mono" onclick={() => api.openURL(item.url)}>{item.key}</button>
-              <span class="muted">{byline(item)}</span>
+              {#if item.priority}<span class:urgent={URGENT.includes(item.priority.toLowerCase())} class:muted={!URGENT.includes(item.priority.toLowerCase())}>{item.priority}</span>{/if}
+              <span class="muted">{[item.type, item.assignee || UNASSIGNED].filter(Boolean).join(' · ')}</span>
+              {#if retest}<span class="tag warn-tag">{retest}</span>{/if}
             </div>
             <div class="title">{item.summary}</div>
-            <div class="prs">
-              {#each item.prs as p (p.url)}
-                <button class="chip mono" onclick={() => api.openURL(p.url)} title="Open the PR on GitHub">{p.repo.split('/')[1]} #{p.number}</button>
-              {/each}
-              <span class="small {c.tone}">{c.text}</span>
-            </div>
+            <div class="small muted">{waiting(item)}</div>
           </div>
-          <button class="btn" class:primary={!testing} onclick={() => navigate({ name: 'test', id: item.key })}>
-            {testing ? 'Testing now →' : 'Test this change'}
-          </button>
+          <div class="prs">
+            {#if item.prs.length}
+              <div class="chips">
+                {#each item.prs as p (p.url)}
+                  <button class="chip mono" onclick={() => api.openURL(p.url)} title="Open the PR on GitHub">{shortRepo(p.repo)} #{p.number}</button>
+                {/each}
+              </div>
+            {/if}
+            <span class="small {c.tone}">{c.text}</span>
+          </div>
+          <div class="act">
+            <button class="btn small" class:primary={testing || item.key === suggested} onclick={() => navigate({ name: 'test', id: item.key })}>
+              {testing ? 'Testing now →' : isRetest(item.key) ? 'Retest' : 'Test'}
+            </button>
+          </div>
         </article>
       {/each}
     </section>
@@ -163,27 +285,40 @@
 
 <style>
   /* The header stays put; only the list below it scrolls. */
-  .page { height: 100%; box-sizing: border-box; padding: 0 32px; display: flex; flex-direction: column; gap: 16px; overflow: hidden; }
+  .page { height: 100%; box-sizing: border-box; padding: 0 32px; display: flex; flex-direction: column; gap: 14px; overflow: hidden; }
   .page > :not(.scroll) { flex-shrink: 0; }
   .scroll { flex: 1; min-height: 0; overflow-y: auto; margin: 0 -32px; padding: 0 32px 32px; display: flex; flex-direction: column; gap: 16px; }
   header { padding-top: 28px; display: flex; justify-content: space-between; align-items: flex-end; gap: 24px; }
   .heading { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+  .status { display: flex; align-items: center; gap: 6px; min-height: 22px; }
+  .tiny { width: 22px; height: 22px; }
   h1 { margin: 0; font-family: var(--display); font-weight: 700; font-size: 30px; line-height: 1.15; }
   .small { font-size: 12px; }
   .grow { flex: 1; min-width: 0; }
-  .stack { display: flex; flex-direction: column; gap: 6px; }
+  .stack { display: flex; flex-direction: column; gap: 5px; }
   .strong { font-weight: 600; font-size: 15px; }
   .sub { color: var(--text-2); }
-  .find { position: relative; width: 340px; flex-shrink: 0; }
+  .find { position: relative; width: 320px; flex-shrink: 0; }
   .find :global(svg) { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--muted); pointer-events: none; }
   .find .input { width: 100%; padding-left: 36px; font-size: 13px; }
-  .refresh-row { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: -10px; }
   /* A thin sweep under the header while Jira or GitHub is being read. */
-  .bar { height: 2px; border-radius: 1px; overflow: hidden; background: transparent; }
+  .bar { height: 2px; margin: -8px 0 -6px; border-radius: 1px; overflow: hidden; background: transparent; }
   .bar.on { background: var(--line); }
   .bar > div { width: 30%; height: 100%; background: var(--accent-text); transform: translateX(-100%); }
   .bar.on > div { animation: sweep 1.1s ease-in-out infinite; }
   @keyframes sweep { to { transform: translateX(340%); } }
+  .filters { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  .filters .input { min-height: 30px; font-size: 13px; }
+  .filters select.input { max-width: 190px; }
+  .search { position: relative; flex: 1; min-width: 190px; max-width: 240px; }
+  .search :global(svg) { position: absolute; left: 10px; top: 50%; transform: translateY(-50%); color: var(--muted); pointer-events: none; }
+  .search .input { width: 100%; padding-left: 30px; }
+  .seg { display: inline-flex; padding: 2px; gap: 2px; border-radius: 8px; border: 1px solid var(--line-2); background: var(--nav); }
+  .seg button { min-height: 24px; padding: 0 10px; border: 0; border-radius: 6px; background: transparent; color: var(--text-2); font-size: 12px; cursor: pointer; white-space: nowrap; }
+  .seg button .mono { color: var(--muted); margin-left: 2px; }
+  .seg button:hover { color: var(--text); }
+  .seg button.on { background: var(--raised); color: var(--text); box-shadow: 0 0 0 1px var(--line-2); }
+  .sort { display: flex; align-items: center; gap: 8px; }
   .note { display: flex; gap: 12px; align-items: center; padding: 10px 12px 10px 14px; border-radius: 10px; background: var(--panel); border: 1px solid var(--line-2); font-size: 13px; }
   .done { display: flex; flex-direction: column; gap: 12px; padding: 16px 18px; border-radius: 12px; background: var(--ok-bg); border: 1px solid var(--ok-border); }
   .done.bad { background: var(--warn-row); border-color: var(--warn-border); }
@@ -191,16 +326,25 @@
   .done ul { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 8px; font-size: 13px; }
   .done li { display: grid; grid-template-columns: 16px minmax(0, 1fr); gap: 10px; align-items: start; }
   p { margin: 0; }
-  .list { display: flex; flex-direction: column; gap: 10px; }
-  .card { display: flex; gap: 16px; align-items: center; padding: 16px 18px; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; }
-  .card.testing { border-color: var(--ok-border); }
-  .card.skeleton { height: 96px; padding: 0; animation: pulse 1.4s ease-in-out infinite; }
+  .group { border: 1px solid var(--line); border-radius: 12px; overflow: hidden; flex-shrink: 0; }
+  .group-head { display: flex; justify-content: space-between; padding: 9px 16px; background: var(--panel); }
+  .group-head span:last-child { width: 240px; }
+  .row { display: grid; grid-template-columns: minmax(0, 1fr) 240px 110px; gap: 20px; align-items: center; padding: 12px 16px; border-top: 1px solid var(--line); }
+  .group-head + .row { border-top: 0; }
+  .row.testing { background: var(--ok-bg); }
+  .row.skeleton { height: 72px; padding: 0; border-top: 1px solid var(--line); animation: pulse 1.4s ease-in-out infinite; }
+  .row.skeleton:first-child { border-top: 0; }
   @keyframes pulse { 50% { opacity: 0.5; } }
-  .meta { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
-  .title { font-size: 16px; font-weight: 500; }
-  .prs { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
-  .chip { padding: 3px 8px; border-radius: 6px; border: 1px solid var(--line-2); background: var(--raised); font-size: 12px; color: var(--text-2); cursor: pointer; }
+  .meta { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .urgent { color: var(--warn-text); }
+  .tag { font-size: 11.5px; padding: 1px 8px; border-radius: 999px; white-space: nowrap; }
+  .warn-tag { color: var(--warn-text); background: var(--warn-bg); border: 1px solid var(--warn-border); }
+  .title { font-size: 15px; font-weight: 500; }
+  .prs { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+  .chips { display: flex; gap: 6px; flex-wrap: wrap; }
+  .chip { padding: 2px 7px; border-radius: 6px; border: 1px solid var(--line-2); background: var(--raised); font-size: 11.5px; color: var(--text-2); cursor: pointer; }
   .chip:hover { color: var(--text); }
+  .act { display: flex; justify-content: flex-end; }
   .ok { color: var(--ok-text); }
   .link { border: 0; background: none; padding: 0; color: var(--accent-text); cursor: pointer; }
   .link:hover { color: var(--link-hover); }

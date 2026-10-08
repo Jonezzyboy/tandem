@@ -170,6 +170,10 @@ export function TestTriage(arg1) {
   return window['go']['main']['App']['TestTriage'](arg1);
 }
 
+export function TesterChecks(arg1) {
+  return window['go']['main']['App']['TesterChecks'](arg1);
+}
+
 export function TesterFinish() {
   return window['go']['main']['App']['TesterFinish']();
 }
@@ -198,8 +202,8 @@ export function TesterStatus() {
   return window['go']['main']['App']['TesterStatus']();
 }
 
-export function TesterVerdict(arg1, arg2) {
-  return window['go']['main']['App']['TesterVerdict'](arg1, arg2);
+export function TesterVerdict(arg1) {
+  return window['go']['main']['App']['TesterVerdict'](arg1);
 }
 
 export function TesterVerdicts(arg1) {

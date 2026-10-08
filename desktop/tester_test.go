@@ -6,6 +6,7 @@ import (
 
 	"github.com/jonezzyboy/tandem/internal/gh"
 	"github.com/jonezzyboy/tandem/internal/jira"
+	"github.com/jonezzyboy/tandem/internal/testrun"
 )
 
 func TestOutcomeOf(t *testing.T) {
@@ -57,5 +58,29 @@ func TestPRsForMatchesBranchOrTitle(t *testing.T) {
 	}
 	if got[1].Pass != 1 || got[2].Fail != 1 || got[3].Pending != 1 || got[2].Branch != "DEV-12-price-fix" {
 		t.Errorf("prs = %+v", got)
+	}
+}
+
+func TestChecklist(t *testing.T) {
+	desc := "Show token expiry.\n\n• Context only\n\nAcceptance criteria\n\n• Shows MM/YY\n   • nested detail\n• Expired badge\n\nNotes\n\n• not a check\n"
+	if got := checklist(desc); !slices.Equal(got, []string{"Shows MM/YY", "Expired badge"}) {
+		t.Errorf("under heading = %q", got)
+	}
+	if got := checklist("Intro\n\n1. First\n2. Second\n- [ ] Third\n"); !slices.Equal(got, []string{"First", "Second", "Third"}) {
+		t.Errorf("no heading = %q", got)
+	}
+	if got := checklist("Just prose."); got == nil || len(got) != 0 {
+		t.Errorf("prose = %#v", got)
+	}
+}
+
+func TestVerdictComment(t *testing.T) {
+	checks := []testrun.Check{{Text: "MM/YY", Done: true}, {Text: "badge"}}
+	want := "Badge wrong.\n\nChecked:\n[x] MM/YY\n[ ] badge\n\nAttached: a.png"
+	if got := verdictComment(" Badge wrong. ", checks, []string{"a.png"}); got != want {
+		t.Errorf("comment = %q", got)
+	}
+	if got := verdictComment("  ", nil, nil); got != "" {
+		t.Errorf("empty comment = %q", got)
 	}
 }

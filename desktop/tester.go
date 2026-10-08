@@ -2,9 +2,11 @@ package main
 
 import (
 	"context"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"strings"
 	"sync"
@@ -42,9 +44,14 @@ type QueueItem struct {
 	URL      string   `json:"url"`
 	Summary  string   `json:"summary"`
 	Status   string   `json:"status"`
+	Type     string   `json:"type"`
+	Priority string   `json:"priority"`
 	Assignee string   `json:"assignee"`
 	Updated  string   `json:"updated"`
-	PRs      []TestPR `json:"prs"`
+	// StatusSince is when the ticket moved into Status, or empty when Jira
+	// didn't say.
+	StatusSince string   `json:"statusSince"`
+	PRs         []TestPR `json:"prs"`
 	// PRsLoaded is false until GitHub has been searched for the ticket's PRs.
 	PRsLoaded bool `json:"prsLoaded"`
 }
@@ -225,9 +232,12 @@ func (a *App) readTickets() TesterQueue {
 	}
 	for _, is := range issues {
 		it := QueueItem{Key: is.Key, URL: jira.Ref{Site: s.Jira.Site, Key: is.Key}.URL(), Summary: is.Summary, Status: is.Status,
-			Assignee: is.Assignee, PRs: []TestPR{}}
+			Type: is.Type, Priority: is.Priority, Assignee: is.Assignee, PRs: []TestPR{}}
 		if !is.Updated.IsZero() {
 			it.Updated = is.Updated.Format(time.RFC3339)
+		}
+		if !is.StatusSince.IsZero() {
+			it.StatusSince = is.StatusSince.Format(time.RFC3339)
 		}
 		q.Items = append(q.Items, it)
 	}
@@ -292,6 +302,18 @@ type TesterPlan struct {
 	Repos     []PlanRepo `json:"repos"`
 	CloneRoot string     `json:"cloneRoot"`
 	Error     string     `json:"error"`
+	// Checklist is what to try, from the ticket's acceptance criteria.
+	Checklist []string `json:"checklist"`
+	// Last is the previous test of this ticket on this machine, and Changes
+	// what was pushed to each of its repos since.
+	Last    *testrun.Record `json:"last"`
+	Changes []RepoChanges   `json:"changes"`
+}
+
+type RepoChanges struct {
+	Repo    string           `json:"repo"`
+	Commits []testrun.Commit `json:"commits"`
+	Error   string           `json:"error"`
 }
 
 // TesterPlan gathers what testing key would touch: its ticket, and every repo
@@ -305,7 +327,10 @@ func (a *App) TesterPlan(key string) (TesterPlan, error) {
 		return TesterPlan{}, fmt.Errorf("%q isn't a Jira ticket key or link", key)
 	}
 	s := a.Settings()
-	p := TesterPlan{Repos: []PlanRepo{}, CloneRoot: a.cloneRoot()}
+	p := TesterPlan{Repos: []PlanRepo{}, CloneRoot: a.cloneRoot(), Checklist: []string{}, Changes: []RepoChanges{}}
+	if st, err := a.testStore().Load(); err == nil {
+		p.Last = st.Last(key)
+	}
 	ctx, cancel := context.WithTimeout(a.ctx, 45*time.Second)
 	defer cancel()
 	var prs []TestPR
@@ -322,7 +347,22 @@ func (a *App) TesterPlan(key string) (TesterPlan, error) {
 			p.Ticket, _ = a.JiraLookup(jira.Ref{Site: s.Jira.Site, Key: key}.URL())
 		})
 	}
+	if p.Last != nil {
+		p.Changes = make([]RepoChanges, len(p.Last.Repos))
+		for i, t := range p.Last.Repos {
+			wg.Go(func() {
+				c := RepoChanges{Repo: t.Name, Commits: []testrun.Commit{}}
+				if repo, err := workspace.Resolve(a.roots, t.Name); err != nil {
+					c.Error = "not cloned on this machine"
+				} else if c.Commits, err = testrun.Since(ctx, repo.Path, t.Branch, t.SHA); err != nil {
+					c.Error = core.FirstLine(err.Error())
+				}
+				p.Changes[i] = c
+			})
+		}
+	}
 	wg.Wait()
+	p.Checklist = checklist(p.Ticket.Description)
 	if p.Ticket.Key == "" {
 		p.Ticket = JiraTicket{Key: key, Error: "Add your Jira site in Settings to see the ticket."}
 	}
@@ -389,6 +429,7 @@ type TestStartRequest struct {
 	URL      string      `json:"url"`
 	Repos    []StartRepo `json:"repos"`
 	SetAside bool        `json:"setAside"`
+	Checks   []string    `json:"checks"`
 }
 
 type StartRepo struct {
@@ -426,8 +467,11 @@ func (a *App) TesterStart(req TestStartRequest) ([]testrun.Step, error) {
 		OnStep: func(s testrun.Step) { a.emit("tester-step", s) },
 	})
 	if len(s.Repos) > 0 {
+		for _, c := range req.Checks {
+			s.Checks = append(s.Checks, testrun.Check{Text: c})
+		}
 		if st.Current != nil {
-			s.Started = st.Current.Started
+			s.Started, s.Checks = st.Current.Started, st.Current.Checks
 			for _, r := range st.Current.Repos {
 				if !slices.ContainsFunc(s.Repos, func(x testrun.Repo) bool { return x.Name == r.Name }) {
 					s.Repos = append(s.Repos, r)
@@ -440,6 +484,21 @@ func (a *App) TesterStart(req TestStartRequest) ([]testrun.Step, error) {
 		}
 	}
 	return steps, nil
+}
+
+// TesterChecks saves the checklist of the change under test.
+func (a *App) TesterChecks(checks []testrun.Check) error {
+	a.testMu.Lock()
+	defer a.testMu.Unlock()
+	st, err := a.testStore().Load()
+	if err != nil {
+		return err
+	}
+	if st.Current == nil {
+		return errors.New("nothing is being tested")
+	}
+	st.Current.Checks = checks
+	return a.testStore().Save(st)
 }
 
 // TesterStatus fetches the repos under test and compares them with origin.
@@ -526,9 +585,49 @@ func (a *App) TesterVerdicts(key string) ([]VerdictOption, error) {
 	return out, nil
 }
 
-// TesterVerdict moves the ticket under test along transition id, adds note as
-// a comment, and records the verdict for the history.
-func (a *App) TesterVerdict(id, note string) (string, error) {
+// Attachment is a file to add to the ticket, its content base64-encoded.
+type Attachment struct {
+	Name string `json:"name"`
+	Data string `json:"data"`
+}
+
+// VerdictRequest is a test result: the transition to make, a note, whether to
+// add the checklist to the comment, and files such as screenshots.
+type VerdictRequest struct {
+	ID         string       `json:"id"`
+	Note       string       `json:"note"`
+	WithChecks bool         `json:"withChecks"`
+	Files      []Attachment `json:"files"`
+}
+
+// verdictComment is the comment a verdict adds: the note, the checklist and
+// the files attached, or "" when there's none of those.
+func verdictComment(note string, checks []testrun.Check, files []string) string {
+	var parts []string
+	if n := strings.TrimSpace(note); n != "" {
+		parts = append(parts, n)
+	}
+	if len(checks) > 0 {
+		lines := []string{"Checked:"}
+		for _, c := range checks {
+			mark := "[ ]"
+			if c.Done {
+				mark = "[x]"
+			}
+			lines = append(lines, mark+" "+c.Text)
+		}
+		parts = append(parts, strings.Join(lines, "\n"))
+	}
+	if len(files) > 0 {
+		parts = append(parts, "Attached: "+strings.Join(files, ", "))
+	}
+	return strings.Join(parts, "\n\n")
+}
+
+// TesterVerdict moves the ticket under test along the chosen transition,
+// attaches the files, comments, and records the verdict for the history.
+func (a *App) TesterVerdict(req VerdictRequest) (string, error) {
+	id, note := req.ID, req.Note
 	a.testMu.Lock()
 	defer a.testMu.Unlock()
 	st, err := a.testStore().Load()
@@ -555,10 +654,16 @@ func (a *App) TesterVerdict(id, note string) (string, error) {
 		return "", fmt.Errorf("%s can't make that move any more: its status may have changed", s.Key)
 	}
 	t := ts[i]
+	files := make([][]byte, len(req.Files))
+	for i, f := range req.Files {
+		if files[i], err = base64.StdEncoding.DecodeString(f.Data); err != nil {
+			return "", fmt.Errorf("reading %s: %w", f.Name, err)
+		}
+	}
 	if err := c.Transition(ctx, ref, id); err != nil {
 		return "", err
 	}
-	s.Verdict = &testrun.Verdict{Name: t.Name, To: t.To, Outcome: outcomeOf(t)}
+	s.Verdict = &testrun.Verdict{Name: t.Name, To: t.To, Outcome: outcomeOf(t), Note: strings.TrimSpace(note)}
 	if err := a.testStore().Save(st); err != nil {
 		return "", err
 	}
@@ -566,11 +671,27 @@ func (a *App) TesterVerdict(id, note string) (string, error) {
 	a.queue = nil
 	a.mu.Unlock()
 	msg := s.Key + " moved to " + t.To
-	if strings.TrimSpace(note) != "" {
-		if err := c.Comment(ctx, ref, note); err != nil {
-			return msg + ", but your note wasn't added: " + err.Error(), nil
+	var attached, problems []string
+	for i, f := range req.Files {
+		if err := c.Attach(ctx, ref, f.Name, files[i]); err != nil {
+			problems = append(problems, f.Name+" wasn't attached: "+err.Error())
+		} else {
+			attached = append(attached, f.Name)
 		}
-		msg += ", with your note"
+	}
+	var checks []testrun.Check
+	if req.WithChecks {
+		checks = s.Checks
+	}
+	if text := verdictComment(note, checks, attached); text != "" {
+		if err := c.Comment(ctx, ref, text); err != nil {
+			problems = append(problems, "the comment wasn't added: "+err.Error())
+		} else {
+			msg += ", with a comment"
+		}
+	}
+	if len(problems) > 0 {
+		msg += ", but " + strings.Join(problems, "; ")
 	}
 	return msg, nil
 }
@@ -609,4 +730,44 @@ func (a *App) TesterFinish() (TestFinish, error) {
 	a.queue = nil
 	a.mu.Unlock()
 	return out, nil
+}
+
+var (
+	acceptanceHeading = regexp.MustCompile(`(?i)^(acceptance criteria|acceptance|to test|test plan|testing|how to test|steps to test)\b`)
+	listItem          = regexp.MustCompile(`^(?:• |[0-9]+\. |- \[[ xX]\] |[-*] )(.+)`)
+)
+
+// checklist picks what to try out of a ticket's description: the list under an
+// acceptance-criteria or testing heading, or failing that every top-level list
+// item. Nested items belong to their parent.
+func checklist(desc string) []string {
+	var all, under []string
+	in, found := false, false
+	for _, line := range strings.Split(desc, "\n") {
+		if strings.TrimSpace(line) == "" {
+			continue
+		}
+		m := listItem.FindStringSubmatch(line)
+		switch {
+		case m != nil:
+			item := strings.TrimSpace(m[1])
+			all = append(all, item)
+			if in {
+				under = append(under, item)
+			}
+		case strings.HasPrefix(line, " "):
+		case acceptanceHeading.MatchString(strings.TrimSpace(line)):
+			in, found = true, true
+		default:
+			in = false
+		}
+	}
+	out := all
+	if found {
+		out = under
+	}
+	if len(out) > 30 {
+		out = out[:30]
+	}
+	return append([]string{}, out...)
 }
