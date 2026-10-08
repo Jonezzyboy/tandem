@@ -89,6 +89,12 @@ export function TandemHome():Promise<string>;
 
 export function TestTriage(arg1:triage.Config):Promise<string>;
 
+export function TesterBuild(arg1:string,arg2:string):Promise<void>;
+
+export function TesterBuildStop(arg1:string,arg2:string):Promise<void>;
+
+export function TesterBuilds():Promise<Array<testrun.BuildTarget>>;
+
 export function TesterChecks(arg1:Array<testrun.Check>):Promise<void>;
 
 export function TesterFinish():Promise<main.TestFinish>;

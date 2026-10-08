@@ -1,6 +1,7 @@
 import { api, on } from './api'
 import { fail } from './state.svelte'
-import type { QueueItem, TestCheck, TestFinish, TesterQueue, TesterState, TestRecord, TestRepoStatus, TestStep } from './types'
+import { shortRepo } from './format'
+import type { BuildEvent, BuildTarget, QueueItem, TestCheck, TestFinish, TesterQueue, TesterState, TestRecord, TestRepoStatus, TestStep } from './types'
 
 export const tester = $state({
   queue: null as TesterQueue | null,
@@ -17,8 +18,53 @@ export const tester = $state({
   // verdict recorded, if any, and how each repo went back.
   finished: null as { key: string; verdict: string; outcome: TestFinish } | null,
   // Kept here so the queue's filters survive leaving the page and coming back.
+  // The packages in the repos under test that can be built, and each one's
+  // latest build, by buildKey.
+  buildTargets: [] as BuildTarget[],
+  builds: {} as Record<string, Build>,
+  // When each repo under test last moved, so builds from before look stale.
+  movedAt: {} as Record<string, number>,
+  // What the last pull did, such as "pulled 2 commits into app-charge".
+  pullNote: '',
   filters: { view: 'all' as QueueView, text: '', ci: 'all' as QueueCI | 'all', status: '', repo: '', assignee: '', sort: 'waiting' as QueueSort },
 })
+
+export interface Build {
+  running: boolean
+  ok: boolean
+  error: string
+  lines: string[]
+  at: number
+}
+
+const BUILD_LINES = 400
+
+export const buildKey = (t: { repo: string; dir: string }) => `${t.repo}\u0000${t.dir}`
+
+export async function loadBuilds() {
+  if (!tester.state.current) {
+    tester.buildTargets = []
+    return
+  }
+  try {
+    tester.buildTargets = await api.testerBuilds()
+  } catch (e) {
+    fail(e)
+  }
+}
+
+export async function runBuild(t: BuildTarget) {
+  tester.builds[buildKey(t)] = { running: true, ok: false, error: '', lines: [], at: Date.now() }
+  try {
+    await api.testerBuild(t.repo, t.dir)
+  } catch (e) {
+    tester.builds[buildKey(t)] = { running: false, ok: false, error: String(e), lines: [], at: Date.now() }
+  }
+}
+
+export function stopBuild(t: BuildTarget) {
+  api.testerBuildStop(t.repo, t.dir)
+}
 
 export type QueueView = 'all' | 'ready' | 'retests'
 export type QueueSort = 'waiting' | 'updated' | 'priority'
@@ -79,10 +125,14 @@ export async function loadStatus() {
 
 export async function startTest(key: string, title: string, url: string, repos: { name: string; branch: string }[], setAside: boolean, checks: TestCheck[]): Promise<TestStep[]> {
   tester.starting = key
+  tester.pullNote = ''
   tester.steps = Object.fromEntries(repos.map((r) => [r.name, { repo: r.name, done: false, ok: false, message: 'waiting…', sha: '' }]))
   try {
     const steps = await api.testerStart({ key, title, url, repos, setAside, checks })
-    for (const s of steps) tester.steps[s.repo] = s
+    for (const s of steps) {
+      tester.steps[s.repo] = s
+      tester.movedAt[s.repo] = Date.now()
+    }
     await loadState()
     loadStatus()
     return steps
@@ -98,6 +148,9 @@ export async function pullLatest() {
   tester.pulling = true
   try {
     const steps = await api.testerPull()
+    const pulled = steps.filter((s) => s.ok && s.message.startsWith('pulled'))
+    for (const s of pulled) tester.movedAt[s.repo] = Date.now()
+    tester.pullNote = pulled.length ? `pulled ${pulled.map((s) => shortRepo(s.repo)).join(', ')}` : steps.every((s) => s.ok) ? 'already up to date' : ''
     const stuck = steps.filter((s) => !s.ok)
     if (stuck.length) fail(`${stuck.map((s) => s.repo).join(', ')}: ${stuck[0].message}`)
     await loadStatus()
@@ -145,7 +198,7 @@ export async function finish(verdictMsg = ''): Promise<boolean> {
     tester.finished = { key: current.key, verdict: verdictMsg, outcome }
     await loadState()
     loadQueue(true)
-    if (outcome.done) tester.status = []
+    if (outcome.done) Object.assign(tester, { status: [], buildTargets: [], builds: {}, pullNote: '' })
     else loadStatus()
     return outcome.done
   } catch (e) {
@@ -162,4 +215,13 @@ export function initTester() {
     if (tester.starting) tester.steps[s.repo] = s
   })
   on<TesterQueue>('tester-queue', (q) => { tester.queue = q })
+  on<BuildEvent>('tester-build', (ev) => {
+    const b = (tester.builds[buildKey(ev)] ??= { running: true, ok: false, error: '', lines: [], at: Date.now() })
+    if (ev.done) {
+      Object.assign(b, { running: false, ok: ev.ok, error: ev.error, at: Date.now() })
+      return
+    }
+    b.lines.push(ev.line)
+    if (b.lines.length > BUILD_LINES) b.lines.splice(0, b.lines.length - BUILD_LINES)
+  })
 }

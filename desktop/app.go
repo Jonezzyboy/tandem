@@ -51,6 +51,8 @@ type App struct {
 	inbox    *Inbox
 	inboxAt  time.Time
 	trains   map[string]context.CancelFunc
+	// builds are the tester's npm builds running, by repo and package dir.
+	builds map[string]context.CancelFunc
 	// goup records each automatic go get by change, leg, dir, module and rev,
 	// with its error ("" on success), so one merge commit is tried once.
 	goup     map[string]string
@@ -77,6 +79,7 @@ func NewApp(store change.Store, roots []string) *App {
 		inflight: map[string]bool{},
 		ops:      map[string]*sync.Mutex{},
 		trains:   map[string]context.CancelFunc{},
+		builds:   map[string]context.CancelFunc{},
 		goup:     map[string]string{},
 		settings: defaultSettings(),
 	}

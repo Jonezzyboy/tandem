@@ -170,6 +170,18 @@ export function TestTriage(arg1) {
   return window['go']['main']['App']['TestTriage'](arg1);
 }
 
+export function TesterBuild(arg1, arg2) {
+  return window['go']['main']['App']['TesterBuild'](arg1, arg2);
+}
+
+export function TesterBuildStop(arg1, arg2) {
+  return window['go']['main']['App']['TesterBuildStop'](arg1, arg2);
+}
+
+export function TesterBuilds() {
+  return window['go']['main']['App']['TesterBuilds']();
+}
+
 export function TesterChecks(arg1) {
   return window['go']['main']['App']['TesterChecks'](arg1);
 }
