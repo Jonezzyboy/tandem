@@ -1,13 +1,20 @@
 <script lang="ts">
   import { app, navigate } from '@lib/state.svelte'
   import { keycaps, prefs, shortcutFor } from '@lib/settings.svelte'
+  import { onDestroy } from 'svelte'
   import { finish, tester } from '@lib/tester.svelte'
+  import { ago } from '@lib/format'
   import Icon from './Icon.svelte'
   import Avatar from './Avatar.svelte'
 
   const current = $derived(tester.state.current)
   const behind = $derived(tester.status.reduce((n, s) => n + s.behind, 0))
   const readyCount = $derived(tester.queue?.items.length ?? 0)
+  const checks = $derived(current?.checks ?? [])
+  const checked = $derived(checks.filter((c) => c.done).length)
+  let now = $state(Date.now())
+  const clock = setInterval(() => (now = Date.now()), 30_000)
+  onDestroy(() => clearInterval(clock))
 
   async function backToMain() {
     if (await finish()) navigate({ name: 'ready' })
@@ -34,12 +41,16 @@
     {#if current}
       <div class="now" class:active={app.route.name === 'test' && app.route.id === current.key}>
         <button class="now-open" onclick={() => navigate({ name: 'test', id: current.key })}>
-          <span class="now-id"><span class="dot"></span><span class="mono">{current.key}</span></span>
+          <span class="now-id"><span class="dot"></span><span class="mono grow">{current.key}</span><span class="mono elapsed">{ago(current.started, now)}</span></span>
           {#if current.title}<span class="now-title">{current.title}</span>{/if}
           {#if behind > 0}
             <span class="small warn">{behind} new commit{behind === 1 ? '' : 's'} to pull</span>
           {:else}
             <span class="small ok-text">{current.repos.length} repo{current.repos.length === 1 ? '' : 's'} on {current.key}</span>
+          {/if}
+          {#if checks.length}
+            <span class="small muted">{checked} of {checks.length} checks</span>
+            <span class="progress" aria-hidden="true"><span style:width="{(checked / checks.length) * 100}%"></span></span>
           {/if}
         </button>
         <button class="btn small back" disabled={tester.finishing} onclick={backToMain}>
@@ -104,6 +115,9 @@
   .now-id { display: flex; gap: 8px; align-items: center; font-size: 12px; color: var(--ok-text); }
   .now-title { font-size: 14px; line-height: 1.3; }
   .back { justify-content: center; }
+  .elapsed { color: var(--muted); font-size: 11px; }
+  .progress { height: 4px; border-radius: 2px; background: var(--line); overflow: hidden; }
+  .progress > span { display: block; height: 100%; background: var(--ok); }
   .account {
     margin: auto -12px -16px; padding: 10px 12px 12px; display: flex; align-items: center; gap: 4px;
     border-top: 1px solid var(--line); background: var(--nav);

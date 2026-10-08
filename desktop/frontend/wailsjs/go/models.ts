@@ -216,6 +216,20 @@ export namespace main {
 	        this.error = source["error"];
 	    }
 	}
+	export class Attachment {
+	    name: string;
+	    data: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new Attachment(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.name = source["name"];
+	        this.data = source["data"];
+	    }
+	}
 	export class BranchInfo {
 	    name: string;
 	    local: boolean;
@@ -716,8 +730,11 @@ export namespace main {
 	    url: string;
 	    summary: string;
 	    status: string;
+	    type: string;
+	    priority: string;
 	    assignee: string;
 	    updated: string;
+	    statusSince: string;
 	    prs: TestPR[];
 	    prsLoaded: boolean;
 	
@@ -731,10 +748,47 @@ export namespace main {
 	        this.url = source["url"];
 	        this.summary = source["summary"];
 	        this.status = source["status"];
+	        this.type = source["type"];
+	        this.priority = source["priority"];
 	        this.assignee = source["assignee"];
 	        this.updated = source["updated"];
+	        this.statusSince = source["statusSince"];
 	        this.prs = this.convertValues(source["prs"], TestPR);
 	        this.prsLoaded = source["prsLoaded"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class RepoChanges {
+	    repo: string;
+	    commits: testrun.Commit[];
+	    error: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new RepoChanges(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.repo = source["repo"];
+	        this.commits = this.convertValues(source["commits"], testrun.Commit);
+	        this.error = source["error"];
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
@@ -924,6 +978,7 @@ export namespace main {
 	    url: string;
 	    repos: StartRepo[];
 	    setAside: boolean;
+	    checks: string[];
 	
 	    static createFrom(source: any = {}) {
 	        return new TestStartRequest(source);
@@ -936,6 +991,7 @@ export namespace main {
 	        this.url = source["url"];
 	        this.repos = this.convertValues(source["repos"], StartRepo);
 	        this.setAside = source["setAside"];
+	        this.checks = source["checks"];
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
@@ -961,6 +1017,9 @@ export namespace main {
 	    repos: PlanRepo[];
 	    cloneRoot: string;
 	    error: string;
+	    checklist: string[];
+	    last?: testrun.Record;
+	    changes: RepoChanges[];
 	
 	    static createFrom(source: any = {}) {
 	        return new TesterPlan(source);
@@ -972,6 +1031,9 @@ export namespace main {
 	        this.repos = this.convertValues(source["repos"], PlanRepo);
 	        this.cloneRoot = source["cloneRoot"];
 	        this.error = source["error"];
+	        this.checklist = source["checklist"];
+	        this.last = this.convertValues(source["last"], testrun.Record);
+	        this.changes = this.convertValues(source["changes"], RepoChanges);
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
@@ -1113,11 +1175,112 @@ export namespace main {
 	        this.outcome = source["outcome"];
 	    }
 	}
+	export class VerdictRequest {
+	    id: string;
+	    note: string;
+	    withChecks: boolean;
+	    files: Attachment[];
+	
+	    static createFrom(source: any = {}) {
+	        return new VerdictRequest(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.note = source["note"];
+	        this.withChecks = source["withChecks"];
+	        this.files = this.convertValues(source["files"], Attachment);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
 
 }
 
 export namespace testrun {
 	
+	export class Check {
+	    text: string;
+	    done: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new Check(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.text = source["text"];
+	        this.done = source["done"];
+	    }
+	}
+	export class Commit {
+	    sha: string;
+	    subject: string;
+	    // Go type: time
+	    at: any;
+	
+	    static createFrom(source: any = {}) {
+	        return new Commit(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.sha = source["sha"];
+	        this.subject = source["subject"];
+	        this.at = this.convertValues(source["at"], null);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class Tested {
+	    name: string;
+	    branch: string;
+	    sha: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new Tested(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.name = source["name"];
+	        this.branch = source["branch"];
+	        this.sha = source["sha"];
+	    }
+	}
 	export class Record {
 	    key: string;
 	    title: string;
@@ -1125,8 +1288,14 @@ export namespace testrun {
 	    result: string;
 	    verdict?: string;
 	    to?: string;
+	    note?: string;
+	    // Go type: time
+	    started: any;
 	    // Go type: time
 	    at: any;
+	    checks?: number;
+	    checked?: number;
+	    repos?: Tested[];
 	
 	    static createFrom(source: any = {}) {
 	        return new Record(source);
@@ -1140,7 +1309,12 @@ export namespace testrun {
 	        this.result = source["result"];
 	        this.verdict = source["verdict"];
 	        this.to = source["to"];
+	        this.note = source["note"];
+	        this.started = this.convertValues(source["started"], null);
 	        this.at = this.convertValues(source["at"], null);
+	        this.checks = source["checks"];
+	        this.checked = source["checked"];
+	        this.repos = this.convertValues(source["repos"], Tested);
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
@@ -1166,6 +1340,7 @@ export namespace testrun {
 	    dir: string;
 	    branch?: string;
 	    stash?: string;
+	    tested?: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new Repo(source);
@@ -1177,6 +1352,7 @@ export namespace testrun {
 	        this.dir = source["dir"];
 	        this.branch = source["branch"];
 	        this.stash = source["stash"];
+	        this.tested = source["tested"];
 	    }
 	}
 	export class RepoStatus {
@@ -1209,6 +1385,7 @@ export namespace testrun {
 	    name: string;
 	    to: string;
 	    outcome: string;
+	    note?: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new Verdict(source);
@@ -1219,6 +1396,7 @@ export namespace testrun {
 	        this.name = source["name"];
 	        this.to = source["to"];
 	        this.outcome = source["outcome"];
+	        this.note = source["note"];
 	    }
 	}
 	export class Session {
@@ -1229,6 +1407,7 @@ export namespace testrun {
 	    started: any;
 	    repos: Repo[];
 	    verdict?: Verdict;
+	    checks?: Check[];
 	
 	    static createFrom(source: any = {}) {
 	        return new Session(source);
@@ -1242,6 +1421,7 @@ export namespace testrun {
 	        this.started = this.convertValues(source["started"], null);
 	        this.repos = this.convertValues(source["repos"], Repo);
 	        this.verdict = this.convertValues(source["verdict"], Verdict);
+	        this.checks = this.convertValues(source["checks"], Check);
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
@@ -1314,6 +1494,7 @@ export namespace testrun {
 	        this.sha = source["sha"];
 	    }
 	}
+	
 
 }
 

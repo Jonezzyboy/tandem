@@ -143,6 +143,22 @@ func TestTestingRoundTrip(t *testing.T) {
 	if data, _ := os.ReadFile(filepath.Join(api, "app.txt")); string(data) != "my local tweak\n" {
 		t.Errorf("api work = %q", data)
 	}
+
+	// The record keeps what was tested, so a retest can list what's new since.
+	s.Checks = []Check{{Text: "zero pence", Done: true}, {Text: "refunds"}}
+	rec := s.Record()
+	if len(rec.Repos) != 2 || rec.Repos[0].SHA == "" || rec.Repos[0].Branch != "DEV-1" || rec.Checks != 2 || rec.Checked != 1 {
+		t.Fatalf("record = %+v", rec)
+	}
+	f.commit(apiDev, "feature.txt", "feature v3\n", "Round prices")
+	git(t, apiDev, "push", "--quiet")
+	since, err := Since(ctx, api, "DEV-1", rec.Repos[0].SHA)
+	if err != nil || len(since) != 1 || since[0].Subject != "Round prices" || since[0].At.IsZero() {
+		t.Errorf("since = %+v, %v", since, err)
+	}
+	if _, err := Since(ctx, api, "DEV-1", "0123456789abcdef0123456789abcdef01234567"); err == nil {
+		t.Error("since an unknown commit: no error")
+	}
 }
 
 func TestBeginRefusesWithoutSetAsideAndEndKeepsDirtyRepos(t *testing.T) {

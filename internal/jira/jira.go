@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"mime/multipart"
 	"net/http"
 	"net/url"
 	"regexp"
@@ -62,6 +63,9 @@ type Issue struct {
 	Assignee string
 	Reporter string
 	Updated  time.Time
+	// StatusSince is when the issue moved into Status, when its changelog was
+	// read and says so.
+	StatusSince time.Time
 	// Description is the issue's description as plain text.
 	Description string
 }
@@ -86,9 +90,9 @@ func (c Client) Issue(ctx context.Context, r Ref) (Issue, error) {
 }
 
 // Search returns up to 50 issues matching jql on site, most relevant first as
-// jql orders them.
+// jql orders them, with when each moved into its status.
 func (c Client) Search(ctx context.Context, site, jql string) ([]Issue, error) {
-	q := url.Values{"jql": {jql}, "fields": {issueFields}, "maxResults": {"50"}}
+	q := url.Values{"jql": {jql}, "fields": {issueFields}, "maxResults": {"50"}, "expand": {"changelog"}}
 	var body struct {
 		Issues []rawIssue `json:"issues"`
 	}
@@ -183,12 +187,31 @@ func (c Client) Comment(ctx context.Context, r Ref, text string) error {
 	return c.do(ctx, http.MethodPost, r.Site+"/rest/api/3/issue/"+url.PathEscape(r.Key)+"/comment", map[string]any{"body": doc}, nil)
 }
 
+// Attach uploads data to the issue as a file called name.
+func (c Client) Attach(ctx context.Context, r Ref, name string, data []byte) error {
+	var buf bytes.Buffer
+	w := multipart.NewWriter(&buf)
+	part, err := w.CreateFormFile("file", name)
+	if err != nil {
+		return err
+	}
+	part.Write(data)
+	if err := w.Close(); err != nil {
+		return err
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, r.Site+"/rest/api/3/issue/"+url.PathEscape(r.Key)+"/attachments", &buf)
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", w.FormDataContentType())
+	// Jira refuses uploads without this, as XSRF protection.
+	req.Header.Set("X-Atlassian-Token", "no-check")
+	return c.send(req, nil)
+}
+
 // do sends a request with the client's credentials and decodes a JSON answer
 // into out, when given.
 func (c Client) do(ctx context.Context, method, u string, in, out any) error {
-	if c.Email == "" || c.Token == "" {
-		return ErrNoAccess
-	}
 	var body io.Reader
 	if in != nil {
 		data, err := json.Marshal(in)
@@ -201,11 +224,18 @@ func (c Client) do(ctx context.Context, method, u string, in, out any) error {
 	if err != nil {
 		return err
 	}
-	req.SetBasicAuth(c.Email, c.Token)
-	req.Header.Set("Accept", "application/json")
 	if in != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}
+	return c.send(req, out)
+}
+
+func (c Client) send(req *http.Request, out any) error {
+	if c.Email == "" || c.Token == "" {
+		return ErrNoAccess
+	}
+	req.SetBasicAuth(c.Email, c.Token)
+	req.Header.Set("Accept", "application/json")
 	hc := c.HTTP
 	if hc == nil {
 		hc = http.DefaultClient
@@ -253,7 +283,19 @@ type rawIssue struct {
 		Updated     string                 `json:"updated"`
 		Description *node                  `json:"description"`
 	} `json:"fields"`
+	Changelog *struct {
+		Histories []struct {
+			Created string `json:"created"`
+			Items   []struct {
+				Field    string `json:"field"`
+				ToString string `json:"toString"`
+			} `json:"items"`
+		} `json:"histories"`
+	} `json:"changelog"`
 }
+
+// Jira's timestamps carry a zone offset without a colon: 2026-10-02T11:04:05.123+0100.
+const jiraTime = "2006-01-02T15:04:05.000-0700"
 
 func (raw rawIssue) issue() Issue {
 	f := raw.Fields
@@ -267,8 +309,19 @@ func (raw rawIssue) issue() Issue {
 	if f.Reporter != nil {
 		is.Reporter = f.Reporter.DisplayName
 	}
-	// Jira's timestamps carry a zone offset without a colon: 2026-10-02T11:04:05.123+0100.
-	is.Updated, _ = time.Parse("2006-01-02T15:04:05.000-0700", f.Updated)
+	is.Updated, _ = time.Parse(jiraTime, f.Updated)
+	if raw.Changelog != nil {
+		for _, h := range raw.Changelog.Histories {
+			for _, it := range h.Items {
+				if it.Field != "status" || it.ToString != is.Status {
+					continue
+				}
+				if t, err := time.Parse(jiraTime, h.Created); err == nil && t.After(is.StatusSince) {
+					is.StatusSince = t
+				}
+			}
+		}
+	}
 	if f.Description != nil {
 		is.Description = strings.TrimSpace(f.Description.text())
 	}

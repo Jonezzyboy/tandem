@@ -29,6 +29,13 @@ type Session struct {
 	Repos   []Repo    `json:"repos"`
 	// Verdict is the result recorded on the ticket, before the repos go back.
 	Verdict *Verdict `json:"verdict,omitempty"`
+	Checks  []Check  `json:"checks,omitempty"`
+}
+
+// Check is one thing to try while testing, ticked once tried.
+type Check struct {
+	Text string `json:"text"`
+	Done bool   `json:"done"`
 }
 
 // Verdict is the move a tester made on the ticket. Outcome is "passed",
@@ -37,6 +44,7 @@ type Verdict struct {
 	Name    string `json:"name"`
 	To      string `json:"to"`
 	Outcome string `json:"outcome"`
+	Note    string `json:"note,omitempty"`
 }
 
 type Repo struct {
@@ -47,6 +55,8 @@ type Repo struct {
 	Branch string `json:"branch,omitempty"`
 	// Stash is the commit of the stash holding work set aside to switch.
 	Stash string `json:"stash,omitempty"`
+	// Tested is the commit that was checked out when testing ended.
+	Tested string `json:"tested,omitempty"`
 }
 
 // Record is a finished test, newest first in State.History. Result is the
@@ -58,16 +68,48 @@ type Record struct {
 	Result  string    `json:"result"`
 	Verdict string    `json:"verdict,omitempty"`
 	To      string    `json:"to,omitempty"`
+	Note    string    `json:"note,omitempty"`
+	Started time.Time `json:"started,omitzero"`
 	At      time.Time `json:"at"`
+	Checks  int       `json:"checks,omitempty"`
+	Checked int       `json:"checked,omitempty"`
+	Repos   []Tested  `json:"repos,omitempty"`
+}
+
+// Tested is the commit a repo was tested at.
+type Tested struct {
+	Name   string `json:"name"`
+	Branch string `json:"branch"`
+	SHA    string `json:"sha"`
 }
 
 // Record is the history entry for s, finished now.
 func (s *Session) Record() Record {
-	r := Record{Key: s.Key, Title: s.Title, URL: s.URL, Result: "stopped", At: time.Now().UTC()}
+	r := Record{Key: s.Key, Title: s.Title, URL: s.URL, Result: "stopped", Started: s.Started, At: time.Now().UTC(), Checks: len(s.Checks)}
 	if s.Verdict != nil {
-		r.Result, r.Verdict, r.To = s.Verdict.Outcome, s.Verdict.Name, s.Verdict.To
+		r.Result, r.Verdict, r.To, r.Note = s.Verdict.Outcome, s.Verdict.Name, s.Verdict.To, s.Verdict.Note
+	}
+	for _, c := range s.Checks {
+		if c.Done {
+			r.Checked++
+		}
+	}
+	for _, repo := range s.Repos {
+		if repo.Tested != "" {
+			r.Repos = append(r.Repos, Tested{Name: repo.Name, Branch: repo.branch(s.Key), SHA: repo.Tested})
+		}
 	}
 	return r
+}
+
+// Last is the newest record for key, if any.
+func (st State) Last(key string) *Record {
+	for i := range st.History {
+		if st.History[i].Key == key {
+			return &st.History[i]
+		}
+	}
+	return nil
 }
 
 type State struct {
@@ -338,7 +380,12 @@ func End(ctx context.Context, s *Session) ([]Step, []Repo) {
 	steps := make([]Step, len(s.Repos))
 	var wg sync.WaitGroup
 	for i, r := range s.Repos {
-		wg.Go(func() { steps[i] = end(ctx, r) })
+		wg.Go(func() {
+			if gitx.CurrentBranch(ctx, r.Dir) == r.branch(s.Key) {
+				s.Repos[i].Tested, _ = gitx.Run(ctx, r.Dir, "rev-parse", "HEAD")
+			}
+			steps[i] = end(ctx, r)
+		})
 	}
 	wg.Wait()
 	var left []Repo
@@ -384,6 +431,38 @@ func end(ctx context.Context, r Repo) Step {
 	}
 	st.OK, st.Message, st.SHA = true, strings.Join(notes, " · "), short(ctx, r.Dir, "HEAD")
 	return st
+}
+
+// Commit is one commit on a change's branch.
+type Commit struct {
+	SHA     string    `json:"sha"`
+	Subject string    `json:"subject"`
+	At      time.Time `json:"at"`
+}
+
+// Since lists the commits on origin's branch after sha, newest first, up to
+// 20. It fetches first.
+func Since(ctx context.Context, dir, branch, sha string) ([]Commit, error) {
+	if err := gitx.Fetch(ctx, dir); err != nil {
+		return nil, err
+	}
+	if _, err := gitx.Run(ctx, dir, "cat-file", "-e", sha+"^{commit}"); err != nil {
+		return nil, errors.New("the branch was rewritten since your last test")
+	}
+	log, err := gitx.Run(ctx, dir, "log", "--format=%h%x09%ct%x09%s", "-n", "20", sha+"..origin/"+branch)
+	if err != nil {
+		return nil, err
+	}
+	out := []Commit{}
+	for line := range strings.SplitSeq(log, "\n") {
+		parts := strings.SplitN(line, "\t", 3)
+		if len(parts) != 3 {
+			continue
+		}
+		unix, _ := strconv.ParseInt(parts[1], 10, 64)
+		out = append(out, Commit{SHA: parts[0], At: time.Unix(unix, 0).UTC(), Subject: parts[2]})
+	}
+	return out, nil
 }
 
 func uncommitted(ctx context.Context, dir string) int {
