@@ -12,7 +12,7 @@
   let plan = $state<TesterPlan | null>(null)
   let planError = $state('')
   // The checklist to start with, edited before testing begins.
-  let draft = $state<string[] | null>(null)
+  let draft = $state<TestCheck[] | null>(null)
   async function load() {
     planError = ''
     try {
@@ -76,10 +76,23 @@
   function addCheck() {
     const text = newCheck.trim()
     if (!text) return
-    if (session) saveChecks([...checks, { text, done: false } as TestCheck])
-    else draft = [...(draft ?? []), text]
+    if (session) saveChecks([...checks, { text, done: false }])
+    else draft = [...(draft ?? []), { text, done: false }]
     newCheck = ''
   }
+
+  // sections splits a checklist into runs of one group, keeping each check's
+  // index in the whole list.
+  function sections(list: TestCheck[]): { group: string; items: { c: TestCheck; i: number }[] }[] {
+    const out: { group: string; items: { c: TestCheck; i: number }[] }[] = []
+    list.forEach((c, i) => {
+      const group = c.group ?? ''
+      if (out.at(-1)?.group !== group) out.push({ group, items: [] })
+      out.at(-1)!.items.push({ c, i })
+    })
+    return out
+  }
+  const grouped = (list: TestCheck[]) => list.some((c) => c.group)
 
   const last = $derived(plan?.last ?? null)
   const newCommits = $derived((plan?.changes ?? []).reduce((n, c) => n + c.commits.length, 0))
@@ -237,8 +250,11 @@
             {#if checks.length}<div class="bar"><div style:width="{(checked / checks.length) * 100}%"></div></div>{/if}
           </div>
           {#if !checks.length}<p class="small muted">Nothing to check yet. Add what you mean to try, and tick it off as you go.</p>{/if}
-          {#each checks as c, i (i)}
-            <label class="check"><input type="checkbox" checked={c.done} onchange={() => toggleCheck(i)} /><span class:done={c.done}>{c.text}</span></label>
+          {#each sections(checks) as sec, si (si)}
+            {#if grouped(checks)}<div class="section">{sec.group || 'Your checks'}</div>{/if}
+            {#each sec.items as { c, i } (i)}
+              <label class="check"><input type="checkbox" checked={c.done} onchange={() => toggleCheck(i)} /><span class:done={c.done}>{c.text}</span></label>
+            {/each}
           {/each}
           {@render addCheckForm()}
         </section>
@@ -399,9 +415,17 @@
             <p class="small muted">Reading the ticket…</p>
           {:else}
             {#if !draft?.length}<p class="small muted">The ticket has no list to test against. Add the checks you mean to try.</p>{/if}
-            {#each draft ?? [] as c, i (i)}
-              <div class="check"><span class="dot"></span><span class="grow">{c}</span>
-                <button class="icon-btn" aria-label="Remove this check" onclick={() => (draft = (draft ?? []).filter((_, j) => j !== i))}><Icon name="close" size={14} /></button></div>
+            {#each sections(draft ?? []) as sec, si (si)}
+              {#if grouped(draft ?? [])}
+                <div class="section">
+                  <span class="grow">{sec.group || 'Your checks'}</span>
+                  <button class="link small" onclick={() => { const drop = new Set(sec.items.map((x) => x.i)); draft = (draft ?? []).filter((_, j) => !drop.has(j)) }}>Remove section</button>
+                </div>
+              {/if}
+              {#each sec.items as { c, i } (i)}
+                <div class="check"><span class="dot"></span><span class="grow">{c.text}</span>
+                  <button class="icon-btn" aria-label="Remove this check" onclick={() => (draft = (draft ?? []).filter((_, j) => j !== i))}><Icon name="close" size={14} /></button></div>
+              {/each}
             {/each}
             {@render addCheckForm()}
           {/if}
@@ -499,6 +523,8 @@
   .check .dot { width: 6px; height: 6px; margin: 8px 4px 0; border-radius: 3px; background: var(--muted); flex-shrink: 0; }
   .check .icon-btn { width: 22px; height: 22px; margin-top: -1px; }
   .add { display: flex; gap: 8px; }
+  .section { display: flex; align-items: baseline; gap: 12px; margin-top: 6px; font-size: 13px; font-weight: 600; color: var(--text); }
+  .section:first-of-type { margin-top: 0; }
   .add .input { flex: 1; min-height: 30px; font-size: 13px; }
   .commit { display: grid; grid-template-columns: 120px minmax(0, 1fr) auto; gap: 12px; font-size: 13px; }
   .commit > * { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

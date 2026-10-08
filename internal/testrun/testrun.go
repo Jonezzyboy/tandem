@@ -34,8 +34,10 @@ type Session struct {
 
 // Check is one thing to try while testing, ticked once tried.
 type Check struct {
-	Text string `json:"text"`
-	Done bool   `json:"done"`
+	// Group is the section of the ticket the check came from, if any.
+	Group string `json:"group,omitempty"`
+	Text  string `json:"text"`
+	Done  bool   `json:"done"`
 }
 
 // Verdict is the move a tester made on the ticket. Outcome is "passed",

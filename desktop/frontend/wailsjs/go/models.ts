@@ -978,7 +978,7 @@ export namespace main {
 	    url: string;
 	    repos: StartRepo[];
 	    setAside: boolean;
-	    checks: string[];
+	    checks: testrun.Check[];
 	
 	    static createFrom(source: any = {}) {
 	        return new TestStartRequest(source);
@@ -991,7 +991,7 @@ export namespace main {
 	        this.url = source["url"];
 	        this.repos = this.convertValues(source["repos"], StartRepo);
 	        this.setAside = source["setAside"];
-	        this.checks = source["checks"];
+	        this.checks = this.convertValues(source["checks"], testrun.Check);
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
@@ -1017,7 +1017,7 @@ export namespace main {
 	    repos: PlanRepo[];
 	    cloneRoot: string;
 	    error: string;
-	    checklist: string[];
+	    checklist: testrun.Check[];
 	    last?: testrun.Record;
 	    changes: RepoChanges[];
 	
@@ -1031,7 +1031,7 @@ export namespace main {
 	        this.repos = this.convertValues(source["repos"], PlanRepo);
 	        this.cloneRoot = source["cloneRoot"];
 	        this.error = source["error"];
-	        this.checklist = source["checklist"];
+	        this.checklist = this.convertValues(source["checklist"], testrun.Check);
 	        this.last = this.convertValues(source["last"], testrun.Record);
 	        this.changes = this.convertValues(source["changes"], RepoChanges);
 	    }
@@ -1217,6 +1217,7 @@ export namespace main {
 export namespace testrun {
 	
 	export class Check {
+	    group?: string;
 	    text: string;
 	    done: boolean;
 	
@@ -1226,6 +1227,7 @@ export namespace testrun {
 	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.group = source["group"];
 	        this.text = source["text"];
 	        this.done = source["done"];
 	    }

@@ -319,13 +319,15 @@ export interface TesterPlan {
   cloneRoot: string
   error: string
   // What to try, from the ticket's acceptance criteria.
-  checklist: string[]
+  checklist: TestCheck[]
   // The previous test of this ticket here, and what was pushed since.
   last: TestRecord | null
   changes: RepoChanges[]
 }
 
 export interface TestCheck {
+  // The section of the ticket the check came from, if any.
+  group?: string
   text: string
   done: boolean
 }

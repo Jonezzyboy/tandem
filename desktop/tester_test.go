@@ -62,12 +62,25 @@ func TestPRsForMatchesBranchOrTitle(t *testing.T) {
 }
 
 func TestChecklist(t *testing.T) {
+	texts := func(cs []testrun.Check) (out []string) {
+		for _, c := range cs {
+			out = append(out, c.Group+"|"+c.Text)
+		}
+		return out
+	}
 	desc := "Show token expiry.\n\n• Context only\n\nAcceptance criteria\n\n• Shows MM/YY\n   • nested detail\n• Expired badge\n\nNotes\n\n• not a check\n"
-	if got := checklist(desc); !slices.Equal(got, []string{"Shows MM/YY", "Expired badge"}) {
+	if got := texts(checklist(desc)); !slices.Equal(got, []string{"|Shows MM/YY", "|Expired badge"}) {
 		t.Errorf("under heading = %q", got)
 	}
-	if got := checklist("Intro\n\n1. First\n2. Second\n- [ ] Third\n"); !slices.Equal(got, []string{"First", "Second", "Third"}) {
-		t.Errorf("no heading = %q", got)
+	// Lists introduced by a sentence each keep it, shortened, as their section.
+	desc = "We need an in-app flow.\nFor the main order form page we will need to consider...\n\n• Features\n• Purchase button\n\n" +
+		"For the Term Upgrade, Addon, Upsell Pages we will need to concider…\n\n• Features\n\nFor development\n\n• Separate tab\n"
+	want := []string{"Main order form page|Features", "Main order form page|Purchase button", "Term Upgrade, Addon, Upsell Pages|Features", "Development|Separate tab"}
+	if got := texts(checklist(desc)); !slices.Equal(got, want) {
+		t.Errorf("sections = %q", got)
+	}
+	if got := texts(checklist("1. First\n2. Second\n- [ ] Third\n")); !slices.Equal(got, []string{"|First", "|Second", "|Third"}) {
+		t.Errorf("no lead-in = %q", got)
 	}
 	if got := checklist("Just prose."); got == nil || len(got) != 0 {
 		t.Errorf("prose = %#v", got)
@@ -75,8 +88,8 @@ func TestChecklist(t *testing.T) {
 }
 
 func TestVerdictComment(t *testing.T) {
-	checks := []testrun.Check{{Text: "MM/YY", Done: true}, {Text: "badge"}}
-	want := "Badge wrong.\n\nChecked:\n[x] MM/YY\n[ ] badge\n\nAttached: a.png"
+	checks := []testrun.Check{{Text: "MM/YY", Done: true}, {Group: "Confirmation", Text: "badge"}}
+	want := "Badge wrong.\n\nChecked:\n[x] MM/YY\n\nConfirmation:\n[ ] badge\n\nAttached: a.png"
 	if got := verdictComment(" Badge wrong. ", checks, []string{"a.png"}); got != want {
 		t.Errorf("comment = %q", got)
 	}
