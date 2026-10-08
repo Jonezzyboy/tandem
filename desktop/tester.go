@@ -303,7 +303,7 @@ type TesterPlan struct {
 	CloneRoot string     `json:"cloneRoot"`
 	Error     string     `json:"error"`
 	// Checklist is what to try, from the ticket's acceptance criteria.
-	Checklist []string `json:"checklist"`
+	Checklist []testrun.Check `json:"checklist"`
 	// Last is the previous test of this ticket on this machine, and Changes
 	// what was pushed to each of its repos since.
 	Last    *testrun.Record `json:"last"`
@@ -327,7 +327,7 @@ func (a *App) TesterPlan(key string) (TesterPlan, error) {
 		return TesterPlan{}, fmt.Errorf("%q isn't a Jira ticket key or link", key)
 	}
 	s := a.Settings()
-	p := TesterPlan{Repos: []PlanRepo{}, CloneRoot: a.cloneRoot(), Checklist: []string{}, Changes: []RepoChanges{}}
+	p := TesterPlan{Repos: []PlanRepo{}, CloneRoot: a.cloneRoot(), Checklist: []testrun.Check{}, Changes: []RepoChanges{}}
 	if st, err := a.testStore().Load(); err == nil {
 		p.Last = st.Last(key)
 	}
@@ -429,7 +429,7 @@ type TestStartRequest struct {
 	URL      string      `json:"url"`
 	Repos    []StartRepo `json:"repos"`
 	SetAside bool        `json:"setAside"`
-	Checks   []string    `json:"checks"`
+	Checks   []testrun.Check `json:"checks"`
 }
 
 type StartRepo struct {
@@ -467,9 +467,7 @@ func (a *App) TesterStart(req TestStartRequest) ([]testrun.Step, error) {
 		OnStep: func(s testrun.Step) { a.emit("tester-step", s) },
 	})
 	if len(s.Repos) > 0 {
-		for _, c := range req.Checks {
-			s.Checks = append(s.Checks, testrun.Check{Text: c})
-		}
+		s.Checks = req.Checks
 		if st.Current != nil {
 			s.Started, s.Checks = st.Current.Started, st.Current.Checks
 			for _, r := range st.Current.Repos {
@@ -609,7 +607,12 @@ func verdictComment(note string, checks []testrun.Check, files []string) string 
 	}
 	if len(checks) > 0 {
 		lines := []string{"Checked:"}
+		group := ""
 		for _, c := range checks {
+			if c.Group != group {
+				group = c.Group
+				lines = append(lines, "", group+":")
+			}
 			mark := "[ ]"
 			if c.Done {
 				mark = "[x]"
@@ -735,14 +738,36 @@ func (a *App) TesterFinish() (TestFinish, error) {
 var (
 	acceptanceHeading = regexp.MustCompile(`(?i)^(acceptance criteria|acceptance|to test|test plan|testing|how to test|steps to test)\b`)
 	listItem          = regexp.MustCompile(`^(?:• |[0-9]+\. |- \[[ xX]\] |[-*] )(.+)`)
+	// leadIn is a sentence introducing a list, such as "For the order page we
+	// will need to consider…": the part that names the section is kept.
+	leadIn = regexp.MustCompile(`(?i)^(?:for|on|in)\s+(?:the\s+)?(.+?)(?:,?\s+(?:we|you|it)\s+(?:will\s+|should\s+|must\s+)?(?:need|have|want)\s+to\b.*)?$`)
 )
+
+const sectionMax = 60
+
+// section names the list a lead-in line introduces.
+func section(line string) string {
+	line = strings.TrimRight(strings.TrimSpace(line), ".…:- ")
+	if m := leadIn.FindStringSubmatch(line); m != nil {
+		line = m[1]
+	}
+	if r := []rune(line); len(r) > sectionMax {
+		line = strings.TrimSpace(string(r[:sectionMax-1])) + "…"
+	}
+	if line != "" {
+		line = strings.ToUpper(line[:1]) + line[1:]
+	}
+	return line
+}
 
 // checklist picks what to try out of a ticket's description: the list under an
 // acceptance-criteria or testing heading, or failing that every top-level list
-// item. Nested items belong to their parent.
-func checklist(desc string) []string {
-	var all, under []string
-	in, found := false, false
+// item, each grouped under the line that introduces its list. Nested items
+// belong to their parent.
+func checklist(desc string) []testrun.Check {
+	var all, under []testrun.Check
+	in, found, inList := false, false, false
+	group, lead := "", ""
 	for _, line := range strings.Split(desc, "\n") {
 		if strings.TrimSpace(line) == "" {
 			continue
@@ -750,24 +775,28 @@ func checklist(desc string) []string {
 		m := listItem.FindStringSubmatch(line)
 		switch {
 		case m != nil:
-			item := strings.TrimSpace(m[1])
-			all = append(all, item)
+			if !inList {
+				group, inList = section(lead), true
+			}
+			c := testrun.Check{Group: group, Text: strings.TrimSpace(m[1])}
+			all = append(all, c)
 			if in {
-				under = append(under, item)
+				c.Group = ""
+				under = append(under, c)
 			}
 		case strings.HasPrefix(line, " "):
 		case acceptanceHeading.MatchString(strings.TrimSpace(line)):
-			in, found = true, true
+			in, found, inList, lead = true, true, false, ""
 		default:
-			in = false
+			in, inList, lead = false, false, line
 		}
 	}
 	out := all
 	if found {
 		out = under
 	}
-	if len(out) > 30 {
-		out = out[:30]
+	if len(out) > 40 {
+		out = out[:40]
 	}
-	return append([]string{}, out...)
+	return append([]testrun.Check{}, out...)
 }

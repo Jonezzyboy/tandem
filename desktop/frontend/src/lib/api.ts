@@ -32,7 +32,7 @@ export const api = {
   testerQueue: (force = false) => App.TesterQueue(force) as unknown as Promise<TesterQueue>,
   testerPlan: (key: string) => App.TesterPlan(key) as unknown as Promise<TesterPlan>,
   testerState: () => App.TesterState() as unknown as Promise<TesterState>,
-  testerStart: (req: { key: string; title: string; url: string; repos: { name: string; branch: string }[]; setAside: boolean; checks: string[] }) =>
+  testerStart: (req: { key: string; title: string; url: string; repos: { name: string; branch: string }[]; setAside: boolean; checks: TestCheck[] }) =>
     App.TesterStart(req as never) as unknown as Promise<TestStep[]>,
   testerChecks: (checks: TestCheck[]) => App.TesterChecks(checks as never),
   testerStatus: () => App.TesterStatus() as unknown as Promise<TestRepoStatus[]>,

@@ -77,7 +77,7 @@ export async function loadStatus() {
   }
 }
 
-export async function startTest(key: string, title: string, url: string, repos: { name: string; branch: string }[], setAside: boolean, checks: string[]): Promise<TestStep[]> {
+export async function startTest(key: string, title: string, url: string, repos: { name: string; branch: string }[], setAside: boolean, checks: TestCheck[]): Promise<TestStep[]> {
   tester.starting = key
   tester.steps = Object.fromEntries(repos.map((r) => [r.name, { repo: r.name, done: false, ok: false, message: 'waiting…', sha: '' }]))
   try {
