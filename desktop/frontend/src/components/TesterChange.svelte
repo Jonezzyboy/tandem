@@ -244,18 +244,20 @@
     {/if}
     <div class="cols">
       <div class="col">
-        <section class="panel" aria-label="Checklist">
+        <section class="panel checklist" aria-label="Checklist">
           <div class="panel-head">
             <span class="eyebrow">Checklist{checks.length ? ` · ${checked} of ${checks.length}` : ''}</span>
             {#if checks.length}<div class="bar"><div style:width="{(checked / checks.length) * 100}%"></div></div>{/if}
           </div>
           {#if !checks.length}<p class="small muted">Nothing to check yet. Add what you mean to try, and tick it off as you go.</p>{/if}
+          <div class="items">
           {#each sections(checks) as sec, si (si)}
             {#if grouped(checks)}<div class="section">{sec.group || 'Your checks'}</div>{/if}
             {#each sec.items as { c, i } (i)}
               <label class="check"><input type="checkbox" checked={c.done} onchange={() => toggleCheck(i)} /><span class:done={c.done}>{c.text}</span></label>
             {/each}
           {/each}
+          </div>
           {@render addCheckForm()}
         </section>
         <section class="repos" aria-label="Repos">
@@ -282,7 +284,7 @@
           {/each}
         </section>
       </div>
-      <section class="panel" aria-label="Your verdict">
+      <section class="panel verdict" aria-label="Your verdict">
         <span class="eyebrow">Your verdict</span>
         {#if recorded}
           <div class="recorded"><Icon name="check" color="var(--ok)" /><span>{recorded}.</span></div>
@@ -406,7 +408,7 @@
         {/if}
       </div>
       <div class="col">
-        <section class="panel" aria-label="Checklist">
+        <section class="panel checklist" aria-label="Checklist">
           <div class="panel-head">
             <span class="eyebrow">Checklist{plan?.checklist.length ? ' · from the ticket' : ''}</span>
             {#if draft?.length}<span class="small muted">{draft.length} item{draft.length === 1 ? '' : 's'}</span>{/if}
@@ -415,6 +417,7 @@
             <p class="small muted">Reading the ticket…</p>
           {:else}
             {#if !draft?.length}<p class="small muted">The ticket has no list to test against. Add the checks you mean to try.</p>{/if}
+            <div class="items">
             {#each sections(draft ?? []) as sec, si (si)}
               {#if grouped(draft ?? [])}
                 <div class="section">
@@ -427,6 +430,7 @@
                   <button class="icon-btn" aria-label="Remove this check" onclick={() => (draft = (draft ?? []).filter((_, j) => j !== i))}><Icon name="close" size={14} /></button></div>
               {/each}
             {/each}
+            </div>
             {@render addCheckForm()}
           {/if}
         </section>
@@ -456,7 +460,10 @@
 {/snippet}
 
 <style>
-  .page { padding: 0 32px 32px; display: flex; flex-direction: column; gap: 18px; }
+  /* Each column scrolls on its own, so a long checklist never scrolls the page. */
+  .page { height: 100%; box-sizing: border-box; overflow-y: auto; padding: 0 32px 24px; display: flex; flex-direction: column; gap: 18px; }
+  .page > * { flex-shrink: 0; }
+  .page > .cols { flex: 1 1 auto; min-height: 0; }
   header { padding-top: 28px; display: flex; justify-content: space-between; align-items: flex-end; gap: 24px; }
   .heading { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
   .meta { display: flex; gap: 8px; font-size: 12px; color: var(--muted); align-items: center; flex-wrap: wrap; }
@@ -475,7 +482,8 @@
     display: flex; gap: 12px; align-items: center; padding: 10px 12px 10px 16px; border-radius: 10px;
     background: var(--warn-row); border: 1px solid var(--warn-border); color: var(--warn-text); font-size: 13px;
   }
-  .cols { display: grid; grid-template-columns: minmax(0, 1fr) 400px; gap: 16px; align-items: start; }
+  .cols { display: grid; grid-template-columns: minmax(0, 1fr) 400px; grid-template-rows: minmax(0, 1fr); gap: 16px; align-items: start; }
+  .cols > * { max-height: 100%; overflow-y: auto; box-sizing: border-box; }
   .repos { border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
   .row { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr) minmax(0, 1.5fr); gap: 14px; padding: 12px 16px; align-items: center; border-top: 1px solid var(--line); font-size: 13px; }
   .row > * { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
@@ -515,7 +523,10 @@
   .bar > div { height: 100%; background: var(--ok); transition: width 0.3s ease-out; }
   .step { display: grid; grid-template-columns: 18px minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 14px 16px; border-top: 1px solid var(--line); font-size: 13px; }
   .row-actions { display: flex; gap: 8px; }
-  .col { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+  .col { display: flex; flex-direction: column; gap: 16px; min-width: 0; min-height: 0; }
+  .col > * { flex-shrink: 0; }
+  .col > .checklist { flex-shrink: 1; min-height: 180px; overflow: hidden; }
+  .items { display: flex; flex-direction: column; gap: 10px; min-height: 0; overflow-y: auto; margin-right: -8px; padding-right: 8px; }
   .panel .bar { width: 120px; }
   .check { display: flex; gap: 10px; align-items: flex-start; font-size: 13.5px; line-height: 1.45; color: var(--text-2); }
   .check input { width: 16px; height: 16px; margin: 2px 0 0; accent-color: var(--accent); flex-shrink: 0; }
