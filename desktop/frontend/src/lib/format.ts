@@ -26,3 +26,11 @@ export function reviewLabel(review: string): string {
 export function shortRepo(repo: string): string {
   return repo.slice(repo.lastIndexOf('/') + 1)
 }
+
+// slackMessage is the note posted in Slack once a change's PRs are open: the
+// ticket and title, then each repo's PR in merge order.
+export function slackMessage(key: string, title: string, prs: { repo: string; url: string; level: number }[]): string {
+  const sorted = prs.filter((p) => p.url).sort((a, b) => a.level - b.level)
+  if (!sorted.length) return ''
+  return [`${key}${title ? ` - ${title}` : ''}:`, ...sorted.map((p) => `${shortRepo(p.repo)}: ${p.url}`)].join('\n')
+}

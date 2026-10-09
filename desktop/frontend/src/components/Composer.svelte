@@ -3,10 +3,12 @@
   import { api } from '@lib/api'
   import { fail, log } from '@lib/state.svelte'
   import { prefs } from '@lib/settings.svelte'
+  import { slackMessage } from '@lib/format'
   import type { ChangeView, PRPreview, PRRequest } from '@lib/types'
+  import CopySlack from './CopySlack.svelte'
   import Icon from './Icon.svelte'
 
-  let { view, onclose }: { view: ChangeView; onclose: () => void } = $props()
+  let { view, onclose, ticketKey = '' }: { view: ChangeView; onclose: () => void; ticketKey?: string } = $props()
 
   // The form is seeded once; background refreshes of view must not overwrite typing.
   let title = $state(untrack(() => view.title))
@@ -63,6 +65,9 @@
 
   onMount(plan)
 
+  // Every PR of the change, including legs this publish skipped.
+  const slackText = $derived(done ? slackMessage(ticketKey || view.id, title, done.items) : '')
+
   function onKey(e: KeyboardEvent) {
     if (e.key === 'Escape') onclose()
   }
@@ -103,7 +108,16 @@
           {/if}
         </div>
       {/each}
-      <div class="foot"><button class="btn" onclick={onclose}>Done</button></div>
+      {#if slackText}
+        <div class="slack">
+          <span class="eyebrow">Post in Slack</span>
+          <pre class="mono small selectable">{slackText}</pre>
+        </div>
+      {/if}
+      <div class="foot">
+        {#if slackText}<CopySlack text={slackText} primary />{/if}
+        <button class="btn" onclick={onclose}>Done</button>
+      </div>
     </div>
   {:else}
     <div class="body">
@@ -216,6 +230,8 @@
   .foot { display: flex; justify-content: space-between; align-items: center; gap: 16px; padding: 14px 24px 20px; border-top: 1px solid var(--line); }
   .results { display: flex; flex-direction: column; gap: 10px; padding: 20px 24px 0; flex: 1; }
   .results .foot { margin-top: auto; padding-left: 0; padding-right: 0; justify-content: flex-end; }
+  .slack { display: flex; flex-direction: column; gap: 8px; margin-top: 6px; }
+  .slack pre { margin: 0; padding: 12px 14px; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; white-space: pre-wrap; word-break: break-all; line-height: 1.6; }
   .result { display: flex; gap: 12px; align-items: center; padding: 12px 14px; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; }
   .name { width: 280px; flex-shrink: 0; }
 </style>
