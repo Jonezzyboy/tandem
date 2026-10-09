@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onDestroy, onMount } from 'svelte'
   import { api } from '@lib/api'
+  import { ClipboardSetText } from '@wailsjs/runtime/runtime'
   import { ago, reviewLabel } from '@lib/format'
   import { app, checkOut, fail, loadCleanPlan, log, navigate, switching as switchingIds } from '@lib/state.svelte'
   import { editorLabel } from '@lib/settings.svelte'
@@ -56,6 +57,30 @@
   }
 
   let jira = $state<JiraTicket | null>(null)
+
+  // The PRs as a message to post in Slack: a heading line, then each repo's PR
+  // in merge order.
+  const slackText = $derived.by(() => {
+    if (!view) return ''
+    const prs = levels.flat().filter((l) => l.pr)
+    if (!prs.length) return ''
+    const title = view.title || jira?.summary || ''
+    const key = ticketKey || view.id
+    return [`${key}${title ? ` - ${title}` : ''}:`, ...prs.map((l) => `${l.name}: ${l.pr!.url}`)].join('\n')
+  })
+  let copied = $state(false)
+  let copiedTimer: ReturnType<typeof setTimeout>
+  async function copyForSlack() {
+    try {
+      await ClipboardSetText(slackText)
+      copied = true
+      clearTimeout(copiedTimer)
+      copiedTimer = setTimeout(() => (copied = false), 2000)
+    } catch (e) {
+      fail(e)
+    }
+  }
+  onDestroy(() => clearTimeout(copiedTimer))
   let ticketOpen = $state(false)
   // Primitives, so Jira is reread when the link changes or GitHub is reread (Refresh, ⌘R, the minute
   // poll), not on every local view update.
@@ -344,6 +369,9 @@
         </button>
         <button class="btn" onclick={() => runChecks()} disabled={checking !== null}>
           <Icon name="play" spin={checking === '*'} />Run checks
+        </button>
+        <button class="btn" onclick={copyForSlack} disabled={!slackText} title={slackText || 'Open PRs first'}>
+          <Icon name={copied ? 'check' : 'link'} />{copied ? 'Copied' : 'Copy for Slack'}
         </button>
         <button class="btn" onclick={() => (app.trainOpen = true)} disabled={!view.legs.some((l) => l.pr)}>
           <Icon name="branch" spin={trainRunning} />{trainRunning ? 'Train running' : 'Merge train'}
