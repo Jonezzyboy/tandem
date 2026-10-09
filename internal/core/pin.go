@@ -146,12 +146,12 @@ func manifestFiles(dir string) []string {
 }
 
 // pinnedTo reports whether the leg's go.mod in dir requires module at a
-// pseudo-version of rev: in HEAD with head, else in the working tree.
-func pinnedTo(ctx context.Context, l *change.Leg, dir, module, rev string, head bool) bool {
+// pseudo-version of rev: at ref, or in the working tree when ref is empty.
+func pinnedTo(ctx context.Context, l *change.Leg, dir, module, rev, ref string) bool {
 	path := filepath.Join(dir, "go.mod")
 	var data []byte
-	if head {
-		out, err := gitx.Run(ctx, l.Dir(), "show", "HEAD:"+filepath.ToSlash(filepath.Clean(path)))
+	if ref != "" {
+		out, err := gitx.Run(ctx, l.Dir(), "show", ref+":"+filepath.ToSlash(filepath.Clean(path)))
 		if err != nil {
 			return false
 		}
@@ -207,14 +207,24 @@ func MergedPins(ctx context.Context, c *change.Change, g Graph, v *ChangeView) {
 			continue
 		}
 		l, err := c.Leg(e.To)
-		if err != nil || pinnedTo(ctx, l, e.Dir, e.Via, up.PR.MergeSHA, true) {
+		if err != nil || pinnedTo(ctx, l, e.Dir, e.Via, up.PR.MergeSHA, branchTip(ctx, l, c.Branch)) {
 			continue
 		}
 		down.Pins = append(down.Pins, PinView{
 			Module: e.Via, Upstream: up.Name, Dir: e.Dir, Rev: up.PR.MergeSHA,
-			Applied: pinnedTo(ctx, l, e.Dir, e.Via, up.PR.MergeSHA, false),
+			Applied: down.OnBranch && pinnedTo(ctx, l, e.Dir, e.Via, up.PR.MergeSHA, ""),
 		})
 	}
+}
+
+// branchTip is the ref holding the leg's branch as its PR sees it: origin's,
+// or the local branch before it is pushed. Whatever the clone has checked out
+// doesn't matter.
+func branchTip(ctx context.Context, l *change.Leg, branch string) string {
+	if ref := "refs/remotes/origin/" + branch; gitx.RefExists(ctx, l.Dir(), ref) {
+		return ref
+	}
+	return "refs/heads/" + branch
 }
 
 // ManifestsClean reports whether go.mod and go.sum in dir have no uncommitted

@@ -120,8 +120,18 @@
   }
 
   const offBranch = $derived(landed ? [] : (view?.legs ?? []).filter((l) => !l.onBranch))
-  const pinLegs = $derived((view?.legs ?? []).filter((l) => l.pins?.length))
-  const mergedUpstreams = $derived([...new Set(pinLegs.flatMap((l) => l.pins!.map((p) => p.upstream)))])
+  // Off-branch legs are left to the switch banner: Commit & push needs them on it.
+  const pinLegs = $derived((view?.legs ?? []).filter((l) => l.pins?.length && l.onBranch))
+  const pinsByUpstream = $derived.by(() => {
+    const out = new Map<string, { rev: string; legs: string[] }>()
+    for (const l of pinLegs) for (const p of l.pins!) {
+      const u = out.get(p.upstream) ?? { rev: p.rev, legs: [] }
+      if (!u.legs.includes(l.name)) u.legs.push(l.name)
+      out.set(p.upstream, u)
+    }
+    return [...out].map(([upstream, u]) => ({ upstream, ...u }))
+  })
+  const pinProblems = $derived(pinLegs.flatMap((l) => l.pins!.filter((p) => !p.applied).map((p) => `${l.name}: ${pinProblem(p)}`)))
   const unpublished = $derived((view?.legs ?? []).some((l) => !l.pr || l.pr.draft))
   const switching = $derived(switchingIds[id] ?? false)
   const switchTo = (toBase: boolean) => checkOut(id, toBase)
@@ -252,11 +262,8 @@
     }
   }
 
-  function pinState(l: LegView, p: NonNullable<LegView['pins']>[number]): { text: string; warn: boolean } {
-    if (p.applied) return { text: 'updated, uncommitted', warn: false }
-    if (p.error) return { text: p.error, warn: true }
-    if (!l.onBranch) return { text: `repo is on ${l.current || 'a detached HEAD'}`, warn: true }
-    return { text: 'go.mod has other uncommitted edits: commit or discard them', warn: true }
+  function pinProblem(p: NonNullable<LegView['pins']>[number]): string {
+    return p.error || 'go.mod has other uncommitted edits: commit or discard them'
   }
 
   async function runChecks(leg = '') {
@@ -432,15 +439,11 @@
       <div class="pin-banner">
         <Icon name="sync" />
         <div class="grow-text pin-text">
-          <div><span class="mono">{mergedUpstreams.join(', ')}</span> merged. Downstream go.mod now points at the merge commit; commit and push it so those PRs can be reviewed and tested:</div>
-          {#each pinLegs as l (l.repo)}
-            {#each l.pins! as p (p.dir + p.module)}
-              {@const st = pinState(l, p)}
-              <div class="pin-line mono small" title="{l.name} ← {p.module}@{p.rev.slice(0, 12)} · {st.text}">
-                {l.name} ← {p.module}@{p.rev.slice(0, 12)}
-                <span class:warn={st.warn} class:muted={!st.warn}>· {st.text}</span>
-              </div>
-            {/each}
+          {#each pinsByUpstream as u (u.upstream)}
+            <div><span class="mono">{u.upstream}</span> merged: pin it at <span class="mono">{u.rev.slice(0, 7)}</span> in <span class="mono">{u.legs.join(', ')}</span></div>
+          {/each}
+          {#each pinProblems as text (text)}
+            <div class="small warn selectable">{text}</div>
           {/each}
         </div>
         <button class="btn small primary" disabled={committingPins} onclick={commitPins}>
@@ -643,7 +646,6 @@
     background: var(--ok-bg); border: 1px solid var(--ok-border); font-size: 13px;
   }
   .pin-text { min-width: 0; }
-  .pin-line { margin-top: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .banner { padding: 10px 14px; border-radius: 10px; background: var(--warn-bg); border: 1px solid var(--warn-border); font-size: 13px; }
 
   .order {

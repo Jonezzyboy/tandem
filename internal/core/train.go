@@ -95,11 +95,11 @@ func TrainPreflight(ctx context.Context, c *change.Change, g Graph) []TrainCheck
 			continue
 		}
 		down, err := c.Leg(e.To)
-		if err != nil || merged[e.To] || pinnedTo(ctx, down, e.Dir, e.Via, mergedSHA[e.From], true) {
+		if err != nil || merged[e.To] || pinnedTo(ctx, down, e.Dir, e.Via, mergedSHA[e.From], "HEAD") {
 			continue
 		}
 		repinned[e.To] = true
-		if pinnedTo(ctx, down, e.Dir, e.Via, mergedSHA[e.From], false) {
+		if pinnedTo(ctx, down, e.Dir, e.Via, mergedSHA[e.From], "") {
 			uncommitted[e.To] = append(uncommitted[e.To], e.Via)
 		}
 	}
