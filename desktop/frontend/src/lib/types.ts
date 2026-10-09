@@ -347,6 +347,7 @@ export interface TestSession {
   started: string
   repos: { name: string; dir: string; stash?: string }[]
   checks?: TestCheck[]
+  verdict?: { name: string; to: string; outcome: string; note?: string }
 }
 
 export interface TestRecord {
