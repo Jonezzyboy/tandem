@@ -382,8 +382,20 @@ func (a *App) TesterPlan(key string) (TesterPlan, error) {
 		r := add(pr.Repo)
 		r.PR, r.Branch = &pr, pr.Branch
 	}
-	for _, b := range local {
-		if b.Remote {
+	live := make([]bool, len(local))
+	for i, b := range local {
+		if !b.Remote {
+			continue
+		}
+		if r := byName[strings.ToLower(b.Repo.Name)]; r != nil && r.Branch != "" {
+			live[i] = true
+			continue
+		}
+		wg.Go(func() { live[i] = b.Ahead > 0 && onOrigin(ctx, b.Repo.Path, key) })
+	}
+	wg.Wait()
+	for i, b := range local {
+		if live[i] {
 			if r := add(b.Repo.Name); r.Branch == "" {
 				r.Branch = key
 			}
@@ -401,6 +413,14 @@ func (a *App) TesterPlan(key string) (TesterPlan, error) {
 	}
 	slices.SortFunc(p.Repos, func(x, y PlanRepo) int { return strings.Compare(x.Name, y.Name) })
 	return p, nil
+}
+
+// onOrigin reports whether origin still has branch. Fetches don't prune, so a
+// branch deleted when its PR merged lingers in refs/remotes/origin. It reports
+// true when origin can't be reached.
+func onOrigin(ctx context.Context, dir, branch string) bool {
+	out, err := gitx.Run(ctx, dir, "ls-remote", "--heads", "origin", "refs/heads/"+branch)
+	return err != nil || out != ""
 }
 
 func (a *App) cloneRoot() string {

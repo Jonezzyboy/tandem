@@ -290,10 +290,46 @@ func switchTo(ctx context.Context, dir, branch string) (string, error) {
 	if !remote {
 		return "", nil
 	}
-	if _, err := gitx.Run(ctx, dir, "merge", "--ff-only", "--quiet", "origin/"+branch); err != nil {
+	reset, err := catchUp(ctx, dir, branch)
+	if err != nil {
 		return "local " + branch + " has commits origin doesn't, so it was left as it is", nil
 	}
+	if reset {
+		return "origin's " + branch + " was rewritten, so it was reset to it", nil
+	}
 	return "", nil
+}
+
+// catchUp brings the checked-out branch to origin's. When it can't
+// fast-forward, it resets only if every commit origin lacks was once on origin
+// itself: the branch was rebased or force-pushed there, not committed to here.
+func catchUp(ctx context.Context, dir, branch string) (reset bool, err error) {
+	remote := "origin/" + branch
+	if _, err := gitx.Run(ctx, dir, "merge", "--ff-only", "--quiet", remote); err == nil {
+		return false, nil
+	}
+	if !onlyOriginsCommits(ctx, dir, branch) {
+		return false, fmt.Errorf("local %s has commits origin doesn't", branch)
+	}
+	if _, err := gitx.Run(ctx, dir, "reset", "--keep", "--quiet", remote); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+// onlyOriginsCommits reports whether HEAD holds no commit beyond what origin's
+// branch has pointed at, by its remote-tracking reflog.
+func onlyOriginsCommits(ctx context.Context, dir, branch string) bool {
+	tips, err := gitx.Run(ctx, dir, "rev-list", "--walk-reflogs", "refs/remotes/origin/"+branch)
+	if err != nil || tips == "" {
+		return false
+	}
+	args := []string{"rev-list", "--count", "HEAD"}
+	for t := range strings.SplitSeq(tips, "\n") {
+		args = append(args, "^"+t)
+	}
+	n, err := gitx.Run(ctx, dir, args...)
+	return err == nil && n == "0"
 }
 
 // RepoStatus is where a session's repo stands against origin.
@@ -343,7 +379,7 @@ func Status(ctx context.Context, s *Session) []RepoStatus {
 	return out
 }
 
-// Pull fast-forwards every repo of s that is on the branch to origin's latest.
+// Pull brings every repo of s that is on the branch to origin's latest.
 func Pull(ctx context.Context, s *Session) []Step {
 	out := make([]Step, len(s.Repos))
 	var wg sync.WaitGroup
@@ -358,13 +394,17 @@ func Pull(ctx context.Context, s *Session) []Step {
 				st.Message = "couldn't fetch"
 			default:
 				before := short(ctx, r.Dir, "HEAD")
-				if _, err := gitx.Run(ctx, r.Dir, "merge", "--ff-only", "--quiet", "origin/"+branch); err != nil {
+				if reset, err := catchUp(ctx, r.Dir, branch); err != nil {
 					st.Message = firstLine(err)
 				} else {
 					st.OK, st.SHA = true, short(ctx, r.Dir, "HEAD")
-					st.Message = "up to date"
-					if st.SHA != before {
+					switch {
+					case reset:
+						st.Message = "origin was rewritten, reset to " + st.SHA
+					case st.SHA != before:
 						st.Message = "pulled to " + st.SHA
+					default:
+						st.Message = "up to date"
 					}
 				}
 			}
