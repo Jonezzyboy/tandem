@@ -574,6 +574,11 @@ func TestMergedUpstreamPinIsAppliedThenCommitted(t *testing.T) {
 	if p = pins(); len(p) != 0 {
 		t.Errorf("after commit: %+v", p)
 	}
+	run(t, api.Dir(), "git", "switch", "--quiet", "main")
+	if p = pins(); len(p) != 0 {
+		t.Errorf("with the clone on main: %+v", p)
+	}
+	run(t, api.Dir(), "git", "switch", "--quiet", c.Branch)
 	for _, tc := range TrainPreflight(ctx, c, g) {
 		if len(tc.Problems) > 0 {
 			t.Errorf("preflight: %s: %v", tc.Leg.Name(), tc.Problems)
