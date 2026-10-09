@@ -17,7 +17,6 @@ export const tester = $state({
   // The last finished test, shown on the home page until dismissed: the
   // verdict recorded, if any, and how each repo went back.
   finished: null as { key: string; verdict: string; outcome: TestFinish } | null,
-  // Kept here so the queue's filters survive leaving the page and coming back.
   // The packages in the repos under test that can be built, and each one's
   // latest build, by buildKey.
   buildTargets: [] as BuildTarget[],
@@ -26,7 +25,8 @@ export const tester = $state({
   movedAt: {} as Record<string, number>,
   // What the last pull did, such as "pulled 2 commits into app-charge".
   pullNote: '',
-  filters: { view: 'all' as QueueView, text: '', ci: 'all' as QueueCI | 'all', status: '', repo: '', assignee: '', sort: 'waiting' as QueueSort },
+  // Kept here so the queue's filters survive leaving the page and coming back.
+  filters: { view: 'all' as QueueView, text: '', status: '', repo: '', assignee: '', sort: 'waiting' as QueueSort },
 })
 
 export interface Build {
@@ -148,11 +148,11 @@ export async function pullLatest() {
   tester.pulling = true
   try {
     const steps = await api.testerPull()
-    const pulled = steps.filter((s) => s.ok && s.message.startsWith('pulled'))
-    for (const s of pulled) tester.movedAt[s.repo] = Date.now()
-    tester.pullNote = pulled.length ? `pulled ${pulled.map((s) => shortRepo(s.repo)).join(', ')}` : steps.every((s) => s.ok) ? 'already up to date' : ''
+    const moved = steps.filter((s) => s.ok && s.message !== 'up to date')
+    for (const s of moved) tester.movedAt[s.repo] = Date.now()
+    tester.pullNote = moved.length ? `updated ${moved.map((s) => shortRepo(s.repo)).join(', ')}` : steps.every((s) => s.ok) ? 'already up to date' : ''
     const stuck = steps.filter((s) => !s.ok)
-    if (stuck.length) fail(`${stuck.map((s) => s.repo).join(', ')}: ${stuck[0].message}`)
+    if (stuck.length) fail(stuck.map((s) => `${shortRepo(s.repo)}: ${s.message}`).join('; '))
     await loadStatus()
   } catch (e) {
     fail(e)
@@ -192,6 +192,7 @@ export async function verdict(req: { id: string; note: string; withChecks: boole
 export async function finish(verdictMsg = ''): Promise<boolean> {
   const current = tester.state.current
   if (!current) return true
+  if (!verdictMsg && current.verdict) verdictMsg = `${current.key} moved to ${current.verdict.to}`
   tester.finishing = true
   try {
     const outcome = await api.testerFinish()

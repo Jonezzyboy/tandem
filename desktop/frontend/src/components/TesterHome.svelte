@@ -3,7 +3,7 @@
   import { api } from '@lib/api'
   import { parseTicket } from '@lib/jira'
   import { navigate } from '@lib/state.svelte'
-  import { isRetest, lastTest, loadQueue, loadState, queueCI, tester, type QueueCI, type QueueSort, type QueueView } from '@lib/tester.svelte'
+  import { isRetest, lastTest, loadQueue, loadState, queueCI, tester, type QueueSort, type QueueView } from '@lib/tester.svelte'
   import { ago, shortRepo } from '@lib/format'
   import type { QueueItem } from '@lib/types'
   import Icon from './Icon.svelte'
@@ -70,13 +70,6 @@
     { id: 'ready', label: 'Ready to go' },
     { id: 'retests', label: 'Retests' },
   ]
-  const CI_FILTERS: { id: QueueCI | 'all'; label: string }[] = [
-    { id: 'all', label: 'CI: any' },
-    { id: 'passing', label: 'CI passing' },
-    { id: 'failing', label: 'CI failing' },
-    { id: 'running', label: 'CI running' },
-    { id: 'none', label: 'No PRs' },
-  ]
   const SORTS: { id: QueueSort; label: string }[] = [
     { id: 'waiting', label: 'Waiting longest' },
     { id: 'priority', label: 'Priority' },
@@ -100,9 +93,9 @@
   }
   const counts = $derived(Object.fromEntries(VIEWS.map((v) => [v.id, items.filter((i) => inView(i, v.id)).length])))
 
-  const filtering = $derived(!!(f.text.trim() || f.view !== 'all' || f.ci !== 'all' || f.status || f.repo || f.assignee))
+  const filtering = $derived(!!(f.text.trim() || f.view !== 'all' || f.status || f.repo || f.assignee))
   function clearFilters() {
-    Object.assign(f, { view: 'all', text: '', ci: 'all', status: '', repo: '', assignee: '' })
+    Object.assign(f, { view: 'all', text: '', status: '', repo: '', assignee: '' })
   }
 
   const shown = $derived.by(() => {
@@ -110,8 +103,6 @@
     const out = items.filter((i) =>
       inView(i, f.view) &&
       (!text || `${i.key} ${i.summary} ${i.assignee}`.toLowerCase().includes(text)) &&
-      // PRs still loading count as a match, so a ticket doesn't blink out and back.
-      (f.ci === 'all' || queueCI(i) === f.ci || queueCI(i) === 'loading') &&
       (!f.status || i.status === f.status) &&
       (!f.repo || !i.prsLoaded || i.prs.some((p) => p.repo === f.repo)) &&
       (!f.assignee || (i.assignee || UNASSIGNED) === f.assignee))
@@ -165,9 +156,6 @@
           <button class:on={f.view === v.id} aria-pressed={f.view === v.id} onclick={() => (f.view = v.id)}>{v.label} <span class="mono">{counts[v.id]}</span></button>
         {/each}
       </div>
-      <select class="input" bind:value={f.ci} aria-label="CI">
-        {#each CI_FILTERS as c (c.id)}<option value={c.id}>{c.label}</option>{/each}
-      </select>
       {#if statuses.length > 1}
         <select class="input" bind:value={f.status} aria-label="Status">
           <option value="">Status: any</option>

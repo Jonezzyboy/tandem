@@ -46,7 +46,7 @@
     load()
   }
 
-  // While testing, GitHub is checked for new commits every minute.
+  // While testing, origin is checked for new commits every minute.
   const tick = setInterval(() => { if (session) loadStatus() }, 60_000)
   onDestroy(() => clearInterval(tick))
   $effect(() => {
@@ -147,7 +147,10 @@
   let note = $state('')
   let thenBack = $state(true)
   let recording = $state(false)
-  let recorded = $state('')
+  let justRecorded = $state('')
+  const recorded = $derived(justRecorded || (session?.verdict ? `${id} moved to ${session.verdict.to}` : ''))
+  // A back to main that left repos behind, kept on this page so it isn't missed.
+  const stuck = $derived(session && tester.finished?.key === id && !tester.finished.outcome.done ? tester.finished.outcome.steps.filter((s) => !s.ok) : [])
   const noteLabel = $derived(choice?.outcome === 'failed' ? 'What went wrong?' : choice?.outcome === 'passed' ? 'What did you check? (optional)' : 'Note (optional)')
   const canRecord = $derived(!!choice && (choice.outcome !== 'failed' || note.trim() !== ''))
   const commenting = $derived(note.trim() !== '' || files.length > 0 || (withChecks && checks.length > 0))
@@ -157,8 +160,8 @@
     const msg = await verdict({ id: choice.id, note, withChecks: withChecks && checks.length > 0, files: files.map(({ name, data }) => ({ name, data })) })
     recording = false
     if (!msg) return
+    justRecorded = msg
     if (thenBack) await backToMain(msg)
-    else recorded = msg
   }
 
   function prText(pr: TestPR | null): { text: string; tone: string } {
@@ -205,7 +208,7 @@
     </div>
     <div class="actions" style="--wails-draggable: no-drag">
       {#if session && !starting && !lastSteps}
-        <button class="btn" disabled={tester.pulling} onclick={pullLatest} title="Fetch and fast-forward every repo under test">
+        <button class="btn" class:primary={behind.length > 0} disabled={tester.pulling} onclick={pullLatest} title="Bring every repo under test up to origin's latest">
           <Icon name="sync" spin={tester.pulling} />Pull latest
         </button>
         <button class="btn" disabled={tester.finishing} onclick={() => backToMain(recorded)}>
@@ -248,8 +251,12 @@
     </section>
     {#if lastSteps}
       <div class="row-actions">
-        {#if session}<button class="btn primary" onclick={() => (lastSteps = null)}>Test with the repos that switched</button>{/if}
-        <button class="btn" disabled={tester.finishing} onclick={() => { lastSteps = null; backToMain() }}>Back to main</button>
+        {#if session}
+          <button class="btn primary" onclick={() => (lastSteps = null)}>Test with the repos that switched</button>
+          <button class="btn" disabled={tester.finishing} onclick={() => { lastSteps = null; backToMain() }}>Back to main</button>
+        {:else}
+          <button class="btn primary" onclick={() => (lastSteps = null)}>Back to the plan</button>
+        {/if}
       </div>
     {/if}
   {:else if session}
@@ -262,9 +269,14 @@
           {/each}
           {#if checked}<span class="sub"> · checks you ticked may need redoing</span>{/if}
         </span>
-        <button class="btn small primary" disabled={tester.pulling} onclick={pullLatest}>
-          <Icon name="sync" size={14} spin={tester.pulling} />Pull latest
-        </button>
+      </div>
+    {/if}
+    {#if stuck.length}
+      <div class="banner">
+        <Icon name="alert" />
+        <span class="grow selectable">
+          {#each stuck as s, i (s.repo)}{i ? ' · ' : ''}<span class="mono">{shortRepo(s.repo)}</span> couldn't go back: {s.message}{/each}
+        </span>
       </div>
     {/if}
     <div class="cols">
@@ -405,7 +417,7 @@
     {#if other}
       <div class="note"><Icon name="alert" color="var(--warn)" /><span class="grow">You're testing <span class="mono">{other.key}</span>. Go back to main before testing another change.</span>
         <button class="btn small" onclick={() => navigate({ name: 'test', id: other.key })}>Open {other.key}</button></div>
-    {:else if plan && !usable.length}
+    {:else if plan && !plan.repos.length}
       <div class="note"><Icon name="alert" color="var(--warn)" /><span>No open PR names {id} in its branch or title, and none of your clones has a <span class="mono">{id}</span> branch on origin. If it's already merged, test it on main.</span></div>
     {/if}
     {#if plan?.error}<div class="small warn">{plan.error}</div>{/if}
