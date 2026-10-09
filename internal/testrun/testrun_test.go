@@ -223,3 +223,34 @@ func TestBeginUsesEachRepoBranch(t *testing.T) {
 		t.Errorf("left = %+v", left)
 	}
 }
+
+func TestPullFollowsARewrittenBranch(t *testing.T) {
+	f := newFixture(t)
+	ctx := context.Background()
+	_, dev, api := f.repo("api")
+	s, steps := Begin(ctx, "DEV-1", "", "", []Target{{Name: "acme/api", Dir: api}}, Options{})
+	if !steps[0].OK {
+		t.Fatalf("begin: %+v", steps)
+	}
+
+	git(t, dev, "commit", "--quiet", "--amend", "-m", "feature, reworded")
+	git(t, dev, "push", "--quiet", "--force")
+	pulled := Pull(ctx, s)
+	if !pulled[0].OK || !strings.HasPrefix(pulled[0].Message, "origin was rewritten") {
+		t.Fatalf("pull = %+v", pulled)
+	}
+	if got, want := git(t, api, "rev-parse", "HEAD"), git(t, dev, "rev-parse", "HEAD"); got != want {
+		t.Errorf("HEAD %s, want %s", got, want)
+	}
+
+	// A commit made here is never thrown away.
+	f.commit(api, "mine.txt", "mine\n", "tester's own")
+	git(t, dev, "commit", "--quiet", "--amend", "-m", "feature, again")
+	git(t, dev, "push", "--quiet", "--force")
+	if pulled := Pull(ctx, s); pulled[0].OK || !strings.Contains(pulled[0].Message, "has commits origin doesn't") {
+		t.Fatalf("pull = %+v", pulled)
+	}
+	if got := git(t, api, "log", "-1", "--format=%s"); got != "tester's own" {
+		t.Errorf("HEAD is %q", got)
+	}
+}
