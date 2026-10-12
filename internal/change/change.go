@@ -116,12 +116,15 @@ func (c *Change) RemoveLeg(name string) (Leg, error) {
 	return removed, nil
 }
 
-var idPattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]*$`)
+var idPart = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]*$`)
 
-// ValidateID keeps IDs usable as both a directory name and a git branch.
+// ValidateID keeps IDs usable as both a directory path and a git branch.
+// A '/' nests the ID, as in feature/login.
 func ValidateID(id string) error {
-	if !idPattern.MatchString(id) || strings.Contains(id, "..") || strings.HasSuffix(id, ".lock") {
-		return fmt.Errorf("invalid change id %q: use letters, digits, '.', '_' or '-'", id)
+	for _, part := range strings.Split(id, "/") {
+		if !idPart.MatchString(part) || strings.Contains(part, "..") || strings.HasSuffix(part, ".lock") {
+			return fmt.Errorf("invalid change id %q: use letters, digits, '.', '_' or '-', with '/' between parts", id)
+		}
 	}
 	return nil
 }
@@ -134,7 +137,23 @@ type Store struct {
 const file = "change.json"
 
 func (s Store) Dir(id string) string {
-	return filepath.Join(s.Home, id)
+	return filepath.Join(s.Home, filepath.FromSlash(id))
+}
+
+// CheckNew refuses an ID that would nest inside an existing change's
+// directory, or whose directory already holds something, such as changes
+// nested under it. Git refuses the same overlap between branches.
+func (s Store) CheckNew(id string) error {
+	parts := strings.Split(id, "/")
+	for i := 1; i < len(parts); i++ {
+		if p := strings.Join(parts[:i], "/"); s.Exists(p) {
+			return fmt.Errorf("change %s can't sit inside change %s", id, p)
+		}
+	}
+	if _, err := os.Stat(s.Dir(id)); err == nil {
+		return fmt.Errorf("%s already exists, so change %s can't use it", s.Dir(id), id)
+	}
+	return nil
 }
 
 func (s Store) Exists(id string) bool {
@@ -213,23 +232,35 @@ func (s Store) SetOrder(ids []string) error {
 // List returns every change in the saved order. Changes it doesn't rank, such
 // as ones started since, come first, newest first.
 func (s Store) List() ([]*Change, error) {
-	entries, err := os.ReadDir(s.Home)
-	if errors.Is(err, fs.ErrNotExist) {
-		return nil, nil
-	}
-	if err != nil {
-		return nil, err
-	}
 	var out []*Change
-	for _, e := range entries {
-		if !e.IsDir() || !s.Exists(e.Name()) {
-			continue
-		}
-		c, err := s.Load(e.Name())
+	err := filepath.WalkDir(s.Home, func(path string, e fs.DirEntry, err error) error {
 		if err != nil {
-			return nil, err
+			if path == s.Home && errors.Is(err, fs.ErrNotExist) {
+				return fs.SkipAll
+			}
+			return err
+		}
+		if !e.IsDir() || path == s.Home {
+			return nil
+		}
+		rel, _ := filepath.Rel(s.Home, path)
+		id := filepath.ToSlash(rel)
+		if ValidateID(id) != nil {
+			return fs.SkipDir
+		}
+		if !s.Exists(id) {
+			return nil
+		}
+		c, err := s.Load(id)
+		if err != nil {
+			return err
 		}
 		out = append(out, c)
+		// A change's directory holds its worktrees, never other changes.
+		return fs.SkipDir
+	})
+	if err != nil {
+		return nil, err
 	}
 	rank := map[string]int{}
 	for i, id := range s.Order() {
@@ -255,9 +286,11 @@ func (s Store) List() ([]*Change, error) {
 // contains cwd, else the only change there is.
 func (s Store) Current(cwd string) (*Change, error) {
 	if rel, err := filepath.Rel(s.Home, cwd); err == nil && rel != "." && !strings.HasPrefix(rel, "..") {
-		id := strings.Split(rel, string(filepath.Separator))[0]
-		if s.Exists(id) {
-			return s.Load(id)
+		parts := strings.Split(filepath.ToSlash(rel), "/")
+		for i := 1; i <= len(parts); i++ {
+			if id := strings.Join(parts[:i], "/"); s.Exists(id) {
+				return s.Load(id)
+			}
 		}
 	}
 	all, err := s.List()

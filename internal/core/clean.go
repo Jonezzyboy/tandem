@@ -219,5 +219,11 @@ func Clean(ctx context.Context, cc CleanCandidate) error {
 	if err := os.Remove(cc.Dir); err != nil && !errors.Is(err, os.ErrNotExist) {
 		errs = append(errs, fmt.Errorf("left %s in place: %w", cc.Dir, err))
 	}
+	// A nested ID's parents go too once empty; a non-empty one fails the remove and stays.
+	dir := cc.Dir
+	for range strings.Count(cc.Change.ID, "/") {
+		dir = filepath.Dir(dir)
+		os.Remove(dir)
+	}
 	return errors.Join(errs...)
 }

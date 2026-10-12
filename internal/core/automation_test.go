@@ -684,3 +684,34 @@ func TestWorktreeChange(t *testing.T) {
 		t.Errorf("default mode: %+v %v", c2, err)
 	}
 }
+
+func TestNestedIDStartsAndCleansUp(t *testing.T) {
+	f := newFixture(t)
+	proto := f.repo("proto", "module example.com/proto\n\ngo 1.26\n")
+
+	c, results, err := Start(context.Background(), f.store, "feature/login", "", []workspace.Repo{proto}, StartOptions{Worktrees: true})
+	if err != nil || results[0].Err != nil {
+		t.Fatalf("start: %+v %v", results, err)
+	}
+	leg, _ := c.Leg("proto")
+	if want := filepath.Join(f.store.Home, "feature", "login", "proto"); leg.Worktree != want {
+		t.Errorf("worktree at %q, want %q", leg.Worktree, want)
+	}
+	if got := run(t, leg.Dir(), "git", "branch", "--show-current"); got != "feature/login" {
+		t.Errorf("worktree on %q", got)
+	}
+	if _, _, err := Start(context.Background(), f.store, "feature", "", []workspace.Repo{proto}, StartOptions{}); err == nil {
+		t.Error("started a change over another change's parent directory")
+	}
+
+	cc, err := DiscardCandidate(context.Background(), f.store, "feature/login")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := Clean(context.Background(), cc); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(f.store.Home, "feature")); !os.IsNotExist(err) {
+		t.Errorf("empty parent directory survived: %v", err)
+	}
+}

@@ -56,7 +56,7 @@
     reading = false
   }
 
-  const validId = $derived(/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(id) && !id.includes('..'))
+  const validId = $derived(id.split('/').every((part) => /^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(part) && !part.includes('..') && !part.endsWith('.lock')))
   // ExistingBranches unmounts on an invalid ID and leaves its last matches behind.
   const loadable = $derived(validId ? existing : [])
   const loading = $derived(selected.filter((s) => loadable.includes(s)).length)
@@ -223,8 +223,8 @@
   .start { justify-content: center; min-height: 42px; }
   .mode { display: flex; gap: 10px; align-items: flex-start; cursor: pointer; font-size: 14px; }
   .mode input { width: 16px; height: 16px; margin-top: 2px; accent-color: var(--accent); }
-  .mode .stack { display: flex; flex-direction: column; gap: 3px; line-height: 1.4; }
-  .mode .mono { white-space: nowrap; }
+  .mode .stack { display: flex; flex-direction: column; gap: 3px; line-height: 1.4; min-width: 0; }
+  .mode .mono { overflow-wrap: anywhere; }
   .results { display: flex; flex-direction: column; gap: 8px; }
   .result { display: grid; grid-template-columns: 16px auto; gap: 4px 10px; align-items: center; font-size: 13px; }
   .result span:last-child { grid-column: 2; word-break: break-all; }
