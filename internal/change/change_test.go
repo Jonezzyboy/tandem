@@ -1,6 +1,8 @@
 package change
 
 import (
+	"os"
+	"path/filepath"
 	"slices"
 	"testing"
 	"time"
@@ -74,5 +76,55 @@ func TestListFollowsSavedOrder(t *testing.T) {
 	}
 	if got := ids(); !slices.Equal(got, []string{"D-4", "B-2", "A-1", "C-3"}) {
 		t.Errorf("ordered = %v", got)
+	}
+}
+
+func TestValidateID(t *testing.T) {
+	for _, id := range []string{"DEV-123", "feature/login", "feature/user.identity_mapping", "a/b/c"} {
+		if err := ValidateID(id); err != nil {
+			t.Errorf("ValidateID(%q) = %v, want nil", id, err)
+		}
+	}
+	for _, id := range []string{"", "/x", "x/", "a//b", "a/../b", "a/.b", "a/b.lock", "a b", "-x"} {
+		if ValidateID(id) == nil {
+			t.Errorf("ValidateID(%q) = nil, want an error", id)
+		}
+	}
+}
+
+func TestNestedIDs(t *testing.T) {
+	s := Store{Home: t.TempDir()}
+	for _, id := range []string{"DEV-1", "feature/login", "feature/team/sso"} {
+		if err := s.Save(&Change{ID: id, Branch: id}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// A worktree inside a change's directory must not be read as another change.
+	if err := os.MkdirAll(filepath.Join(s.Dir("feature/login"), "api"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	all, err := s.List()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var ids []string
+	for _, c := range all {
+		ids = append(ids, c.ID)
+	}
+	slices.Sort(ids)
+	if !slices.Equal(ids, []string{"DEV-1", "feature/login", "feature/team/sso"}) {
+		t.Errorf("List = %v", ids)
+	}
+
+	c, err := s.Current(filepath.Join(s.Dir("feature/login"), "api", "src"))
+	if err != nil || c.ID != "feature/login" {
+		t.Errorf("Current inside a nested change = %v, %v", c, err)
+	}
+
+	for id, ok := range map[string]bool{"feature/signup": true, "feature": false, "feature/login/x": false, "DEV-1/x": false} {
+		if err := s.CheckNew(id); (err == nil) != ok {
+			t.Errorf("CheckNew(%q) = %v, want ok=%v", id, err, ok)
+		}
 	}
 }

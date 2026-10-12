@@ -47,6 +47,9 @@ func Start(ctx context.Context, store change.Store, id, title string, repos []wo
 	c, err := store.Load(id)
 	switch {
 	case errors.Is(err, fs.ErrNotExist):
+		if err := store.CheckNew(id); err != nil {
+			return nil, nil, err
+		}
 		c = &change.Change{ID: id, Branch: id, Created: time.Now().UTC(), Worktrees: o.Worktrees}
 	case err != nil:
 		return nil, nil, err
