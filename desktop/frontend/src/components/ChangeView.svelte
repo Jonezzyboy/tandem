@@ -5,6 +5,7 @@
   import { app, checkOut, fail, loadCleanPlan, log, navigate, switching as switchingIds } from '@lib/state.svelte'
   import { editorLabel } from '@lib/settings.svelte'
   import type { CleanItem, JiraTicket, LegView } from '@lib/types'
+  import Description from './Description.svelte'
   import Composer from './Composer.svelte'
   import CopySlack from './CopySlack.svelte'
   import TrainDialog from './TrainDialog.svelte'
@@ -393,7 +394,7 @@
               {#each jiraFacts as [label, value] (label)}<div><dt class="eyebrow">{label}</dt><dd>{value}</dd></div>{/each}
             </dl>
             {#if jira.description}
-              <div class="ticket-desc selectable">{jira.description}</div>
+              <div class="ticket-desc selectable"><Description text={jira.description} /></div>
             {:else}
               <p class="muted small">No description.</p>
             {/if}
@@ -630,7 +631,7 @@
   .ticket-details dl { display: flex; flex-wrap: wrap; gap: 10px 32px; margin: 0; }
   .ticket-details dt { margin-bottom: 3px; }
   .ticket-details dd { margin: 0; color: var(--text); }
-  .ticket-desc { white-space: pre-wrap; line-height: 1.55; color: var(--text-2); max-height: 320px; overflow: auto; }
+  .ticket-desc { line-height: 1.55; color: var(--text-2); max-height: 320px; overflow: auto; }
   .ticket-input { flex: 1; min-height: 30px; }
   .switch-banner {
     display: flex; align-items: center; gap: 12px; padding: 10px 12px 10px 14px; border-radius: 10px;

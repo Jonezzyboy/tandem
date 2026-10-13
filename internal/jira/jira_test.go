@@ -172,3 +172,28 @@ func TestSearchMoveToAndComment(t *testing.T) {
 		t.Errorf("Attach sent %q, %v", attached, err)
 	}
 }
+
+func TestTextFencesCodeAndTables(t *testing.T) {
+	var doc node
+	err := json.Unmarshal([]byte(`{"type":"doc","content":[
+		{"type":"paragraph","content":[{"type":"text","text":"URLs:"}]},
+		{"type":"codeBlock","content":[{"type":"text","text":"┌──┐\n│ a │\n└──┘"}]},
+		{"type":"table","content":[
+			{"type":"tableRow","content":[
+				{"type":"tableHeader","content":[{"type":"paragraph","content":[{"type":"text","text":"App"}]}]},
+				{"type":"tableHeader","content":[{"type":"paragraph","content":[{"type":"text","text":"Production"}]}]}]},
+			{"type":"tableRow","content":[
+				{"type":"tableCell","content":[{"type":"paragraph","content":[{"type":"text","text":"VPN360"}]}]},
+				{"type":"tableCell","content":[{"type":"paragraph","content":[{"type":"text","text":"https://app.vpn360.com"}]}]}]}]},
+		{"type":"paragraph","content":[{"type":"text","text":"Done."}]}]}`), &doc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := "URLs:\n\n```\n┌──┐\n│ a │\n└──┘\n```\n\n```\n" +
+		"App    │ Production\n" +
+		"───────┼───────────────────────\n" +
+		"VPN360 │ https://app.vpn360.com\n```\n\nDone."
+	if got := strings.TrimSpace(doc.text()); got != want {
+		t.Errorf("text =\n%s\nwant\n%s", got, want)
+	}
+}
