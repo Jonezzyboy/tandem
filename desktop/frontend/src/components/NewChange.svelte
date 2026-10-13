@@ -2,7 +2,7 @@
   import { api } from '@lib/api'
   import { fail, navigate } from '@lib/state.svelte'
   import { prefs } from '@lib/settings.svelte'
-  import { parseTicket } from '@lib/jira'
+  import { keyInBranch, parseTicket } from '@lib/jira'
   import type { JiraTicket, StartItem } from '@lib/types'
   import ExistingBranches from './ExistingBranches.svelte'
   import Icon from './Icon.svelte'
@@ -22,14 +22,37 @@
   let jiraTitle = $state('')
   let titleInput = $state<HTMLInputElement>()
   let lookups = 0
+  // The key last unlinked, so typing on doesn't link it again.
+  let dismissed = ''
+  let guessTimer: ReturnType<typeof setTimeout> | undefined
 
   function onIdInput() {
     const t = parseTicket(id)
     if (t) {
       id = t.key
       readTicket(t)
-    } else if (ticket && id.trim().toUpperCase() !== ticket.key) {
+      return
+    }
+    const key = keyInBranch(id)
+    if (ticket && ticket.key !== key) {
+      lookups++
       ticket = null
+      reading = false
+    }
+    clearTimeout(guessTimer)
+    if (!ticket && key && key !== dismissed && prefs.settings.jira.site) guessTimer = setTimeout(guessTicket, 400)
+  }
+
+  // Links the ticket a key in the branch name names, once Jira confirms it.
+  async function guessTicket() {
+    const n = ++lookups
+    try {
+      const got = await api.guessTicket(id)
+      if (n !== lookups || !got.key || got.key !== keyInBranch(id)) return
+      ticket = got
+      if (got.summary && (!title.trim() || title === jiraTitle)) title = jiraTitle = got.summary
+    } catch {
+      // Unconfirmed, so the ID stays unlinked; a pasted link still works.
     }
   }
 
@@ -51,6 +74,7 @@
   }
 
   function unlink() {
+    dismissed = ticket?.key ?? ''
     lookups++
     ticket = null
     reading = false
@@ -132,7 +156,7 @@
             <button class="icon-btn unlink" aria-label="Unlink from Jira, keep the ID" title="Unlink from Jira" onclick={unlink}><Icon name="close" size={14} /></button>
           </div>
         {/if}
-        <span class="small muted">{ticket ? '' : 'A Jira link fills in the ID and title and keeps the link. '}{worktrees ? 'The branch name in every repo’s worktree.' : 'The branch name in every repo. Clean repos switch to it; any with uncommitted work stay put.'} Repos that already have it keep their commits.</span>
+        <span class="small muted">{ticket ? '' : 'A Jira link fills in the ID and title and keeps the link, as does a ticket key in the branch name. '}{worktrees ? 'The branch name in every repo’s worktree.' : 'The branch name in every repo. Clean repos switch to it; any with uncommitted work stay put.'} Repos that already have it keep their commits.</span>
       </div>
       {#if validId}<ExistingBranches branch={id} bind:selected bind:existing />{/if}
       <div class="field">

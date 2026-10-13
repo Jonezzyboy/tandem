@@ -27,6 +27,7 @@ export const api = {
   reorder: (ids: string[]) => App.Reorder(ids),
   setTicket: (id: string, link: string) => App.SetTicket(id, link),
   jiraLookup: (link: string) => App.JiraLookup(link) as unknown as Promise<JiraTicket>,
+  guessTicket: (branch: string) => App.GuessTicket(branch) as unknown as Promise<JiraTicket>,
   jiraAccount: () => App.JiraAccount() as unknown as Promise<JiraAccount>,
   saveJira: (email: string, token: string) => App.SaveJira(email, token) as unknown as Promise<JiraAccount>,
   testerQueue: (force = false) => App.TesterQueue(force) as unknown as Promise<TesterQueue>,

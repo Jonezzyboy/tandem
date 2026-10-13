@@ -58,6 +58,10 @@ export function Focus(arg1) {
   return window['go']['main']['App']['Focus'](arg1);
 }
 
+export function GuessTicket(arg1) {
+  return window['go']['main']['App']['GuessTicket'](arg1);
+}
+
 export function Inbox(arg1) {
   return window['go']['main']['App']['Inbox'](arg1);
 }

@@ -17,3 +17,12 @@ export function parseTicket(text: string): { key: string; url: string } | null {
   k = k.toUpperCase()
   return key.test(k) ? { key: k, url: `https://${u.host}/browse/${k}` } : null
 }
+
+// Keep in sync with jira.KeyInBranch in internal/jira.
+const branchKey = /(?:^|\/)([A-Za-z][A-Za-z0-9_]+-[0-9]+)(?:$|[/._-])/
+
+// keyInBranch finds an issue key leading a part of a branch name, as in
+// DEV-123, feature/DEV-123 or dev-123-login.
+export function keyInBranch(branch: string): string {
+  return branch.trim().match(branchKey)?.[1].toUpperCase() ?? ''
+}
