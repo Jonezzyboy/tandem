@@ -16,6 +16,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 )
 
 // Keep in sync with parseTicket in the desktop frontend.
@@ -358,7 +359,9 @@ type node struct {
 }
 
 // text flattens the tree: blocks end in a blank line, list items get a bullet
-// and nested content keeps its order. Formatting and media are dropped.
+// and nested content keeps its order. Code blocks and tables, whose layout
+// matters, come out fenced in ``` lines, tables with their columns aligned.
+// Formatting and media are dropped.
 func (n node) text() string {
 	var b strings.Builder
 	n.write(&b, "")
@@ -395,6 +398,16 @@ func (n node) write(b *strings.Builder, indent string) {
 		}
 		b.WriteString("\n")
 		return
+	case "codeBlock":
+		var code strings.Builder
+		for _, c := range n.Content {
+			c.write(&code, "")
+		}
+		fence(b, strings.TrimRight(code.String(), "\n"))
+		return
+	case "table":
+		fence(b, n.grid())
+		return
 	}
 	for _, c := range n.Content {
 		c.write(b, indent)
@@ -405,7 +418,54 @@ func (n node) write(b *strings.Builder, indent string) {
 		if indent == "" {
 			b.WriteString("\n")
 		}
-	case "tableCell", "tableHeader":
-		b.WriteString(" ")
 	}
+}
+
+func fence(b *strings.Builder, body string) {
+	b.WriteString("```\n" + body + "\n```\n\n")
+}
+
+// grid lays a table out in aligned columns, with a rule under a header row.
+func (n node) grid() string {
+	var rows [][]string
+	header := false
+	for i, row := range n.Content {
+		var cells []string
+		for _, cell := range row.Content {
+			cells = append(cells, strings.Join(strings.Fields(cell.text()), " "))
+			if i == 0 && cell.Type == "tableHeader" {
+				header = true
+			}
+		}
+		rows = append(rows, cells)
+	}
+	var widths []int
+	for _, cells := range rows {
+		for j, c := range cells {
+			if j == len(widths) {
+				widths = append(widths, 0)
+			}
+			widths[j] = max(widths[j], utf8.RuneCountInString(c))
+		}
+	}
+	var lines []string
+	for i, cells := range rows {
+		padded := make([]string, len(widths))
+		for j, w := range widths {
+			c := ""
+			if j < len(cells) {
+				c = cells[j]
+			}
+			padded[j] = c + strings.Repeat(" ", w-utf8.RuneCountInString(c))
+		}
+		lines = append(lines, strings.TrimRight(strings.Join(padded, " │ "), " "))
+		if i == 0 && header {
+			rule := make([]string, len(widths))
+			for j, w := range widths {
+				rule[j] = strings.Repeat("─", w)
+			}
+			lines = append(lines, strings.Join(rule, "─┼─"))
+		}
+	}
+	return strings.Join(lines, "\n")
 }

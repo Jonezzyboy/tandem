@@ -5,6 +5,7 @@
   import { buildKey, finish, loadBuilds, loadStatus, pullLatest, runBuild, saveChecks, startTest, stopBuild, tester, verdict } from '@lib/tester.svelte'
   import { ago, shortRepo } from '@lib/format'
   import type { BuildTarget, PlanRepo, TestCheck, TesterPlan, TestPR, TestStep, VerdictOption } from '@lib/types'
+  import Description from './Description.svelte'
   import Icon from './Icon.svelte'
 
   let { id }: { id: string } = $props()
@@ -507,7 +508,7 @@
           {:else if plan.ticket.error}
             <p class="small warn">{plan.ticket.error}</p>
           {:else if plan.ticket.description}
-            <div class="desc selectable">{plan.ticket.description}</div>
+            <div class="desc selectable"><Description text={plan.ticket.description} /></div>
           {:else}
             <p class="small muted">The ticket has no description.</p>
           {/if}
@@ -561,7 +562,7 @@
   .panel p { margin: 0; }
   .panel.narrow { max-width: 760px; }
   .panel-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
-  .desc { white-space: pre-wrap; line-height: 1.55; color: var(--text-2); max-height: 360px; overflow: auto; font-size: 13.5px; }
+  .desc { line-height: 1.55; color: var(--text-2); max-height: 360px; overflow: auto; font-size: 13.5px; }
   textarea.input { width: 100%; font-size: 13px; }
   .choices { border: 0; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
   .choices legend { margin-bottom: 8px; padding: 0; }
