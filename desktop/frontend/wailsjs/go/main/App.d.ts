@@ -33,6 +33,8 @@ export function Editors():Promise<Array<main.EditorApp>>;
 
 export function Focus(arg1:string):Promise<void>;
 
+export function GuessTicket(arg1:string):Promise<main.JiraTicket>;
+
 export function Inbox(arg1:boolean):Promise<main.Inbox>;
 
 export function JiraAccount():Promise<main.JiraAccount>;

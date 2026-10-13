@@ -185,3 +185,22 @@ func TestEditorSettingsDefaultsAndMigration(t *testing.T) {
 		t.Errorf("partial editors = %v", kept.Editors)
 	}
 }
+
+func TestGuessTicketSignedOut(t *testing.T) {
+	t.Setenv("TANDEM_CONFIG_DIR", t.TempDir())
+	a := NewApp(change.Store{Home: t.TempDir()}, nil)
+	if got := a.GuessTicket("DEV-1"); got.Key != "" {
+		t.Errorf("linked %+v with no Jira site", got)
+	}
+	if _, err := a.SaveSettings(Settings{Jira: JiraSettings{Site: "chive.atlassian.net"}}); err != nil {
+		t.Fatal(err)
+	}
+	if got := a.GuessTicket("feature/DEV-12-login"); got.URL != "https://chive.atlassian.net/browse/DEV-12" || !got.NoAccess {
+		t.Errorf("capitalised key = %+v", got)
+	}
+	for _, branch := range []string{"feature/dev-12-login", "feature/user-identity-mapping"} {
+		if got := a.GuessTicket(branch); got.Key != "" {
+			t.Errorf("GuessTicket(%q) = %+v, want unlinked", branch, got)
+		}
+	}
+}

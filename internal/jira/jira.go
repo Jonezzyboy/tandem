@@ -26,6 +26,21 @@ func IsKey(s string) bool {
 	return keyPattern.MatchString(s)
 }
 
+// branchKey finds an issue key leading a part of a branch name, as in DEV-123,
+// feature/DEV-123 or dev-123-login. Keep in sync with keyInBranch in the
+// desktop frontend.
+var branchKey = regexp.MustCompile(`(?:^|/)([A-Za-z][A-Za-z0-9_]+-[0-9]+)(?:$|[/._-])`)
+
+// KeyInBranch returns the first issue key in branch, upper-cased, and whether
+// the branch already wrote it in capitals, as Jira does.
+func KeyInBranch(branch string) (key string, upper bool) {
+	m := branchKey.FindStringSubmatch(strings.TrimSpace(branch))
+	if m == nil {
+		return "", false
+	}
+	return strings.ToUpper(m[1]), m[1] == strings.ToUpper(m[1])
+}
+
 type Ref struct {
 	Site string
 	Key  string

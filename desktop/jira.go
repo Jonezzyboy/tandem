@@ -114,6 +114,30 @@ func (a *App) JiraLookup(link string) (JiraTicket, error) {
 	return t, nil
 }
 
+// GuessTicket finds the Jira issue a branch name refers to on the configured
+// site, or returns a zero JiraTicket. Signed in, only an issue Jira returns
+// counts. Signed out nothing can be checked, so only a key written in capitals
+// counts, linked without its details.
+func (a *App) GuessTicket(branch string) JiraTicket {
+	s := a.Settings().Jira
+	key, upper := jira.KeyInBranch(branch)
+	if key == "" || s.Site == "" {
+		return JiraTicket{}
+	}
+	link := jira.Ref{Site: s.Site, Key: key}.URL()
+	if s.Email == "" || jiraToken(s.Email) == "" {
+		if !upper {
+			return JiraTicket{}
+		}
+		return JiraTicket{Key: key, URL: link, Error: jira.ErrNoAccess.Error(), NoAccess: true}
+	}
+	t, err := a.JiraLookup(link)
+	if err != nil || t.Error != "" {
+		return JiraTicket{}
+	}
+	return t
+}
+
 // SetTicket links change id to a Jira issue, or unlinks it when link is empty.
 func (a *App) SetTicket(id, link string) error {
 	lock := a.opLock(id)

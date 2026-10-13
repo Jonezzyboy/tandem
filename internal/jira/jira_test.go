@@ -32,6 +32,29 @@ func TestParse(t *testing.T) {
 	}
 }
 
+func TestKeyInBranch(t *testing.T) {
+	cases := map[string]struct {
+		key   string
+		upper bool
+	}{
+		"DEV-123":                       {"DEV-123", true},
+		"feature/DEV-123":               {"DEV-123", true},
+		"feature/DEV-123-user-login":    {"DEV-123", true},
+		"dev-42_fix":                    {"DEV-42", false},
+		"bugfix/PAY2-7/retry":           {"PAY2-7", true},
+		"fix-login-2":                   {"", false},
+		"feature/user-identity-mapping": {"", false},
+		"DEV-":                          {"", false},
+		"xDEV-12":                       {"XDEV-12", false},
+		"D-1":                           {"", false},
+	}
+	for in, want := range cases {
+		if key, upper := KeyInBranch(in); key != want.key || (key != "" && upper != want.upper) {
+			t.Errorf("KeyInBranch(%q) = %q %v, want %q %v", in, key, upper, want.key, want.upper)
+		}
+	}
+}
+
 func TestIssue(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if u, p, _ := r.BasicAuth(); u != "me@example.com" || p != "tok" {
