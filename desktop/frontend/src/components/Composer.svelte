@@ -7,6 +7,7 @@
   import type { ChangeView, PRPreview, PRRequest } from '@lib/types'
   import CopySlack from './CopySlack.svelte'
   import Icon from './Icon.svelte'
+  import MarkdownEditor from './MarkdownEditor.svelte'
 
   let { view, onclose, ticketKey = '' }: { view: ChangeView; onclose: () => void; ticketKey?: string } = $props()
 
@@ -130,7 +131,7 @@
         </div>
         <div class="field grow">
           <label for="pr-body">Description</label>
-          <textarea id="pr-body" class="input mono grow" bind:value={body} placeholder="What was wrong, what changed, how it was verified"></textarea>
+          <MarkdownEditor id="pr-body" bind:value={body} placeholder="What was wrong, what changed, how it was verified" />
         </div>
         <div class="field">
           <label for="pr-reviewers">Reviewers</label>
@@ -206,7 +207,7 @@
   .top { display: flex; justify-content: space-between; align-items: flex-start; padding: 22px 24px 0; }
   h2 { margin: 4px 0 0; font-family: var(--display); font-weight: 700; font-size: 26px; }
   .small { font-size: 12px; }
-  .body { flex: 1; min-height: 0; display: grid; grid-template-columns: 460px minmax(0, 1fr); gap: 20px; padding: 20px 24px; }
+  .body { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 3fr) minmax(320px, 2fr); gap: 20px; padding: 20px 24px; }
   .form, .plan { display: flex; flex-direction: column; gap: 14px; min-height: 0; }
   .form { padding: 18px; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; }
   .grow { flex: 1; min-height: 0; }
