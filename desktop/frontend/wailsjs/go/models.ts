@@ -40,6 +40,22 @@ export namespace core {
 	        this.error = source["error"];
 	    }
 	}
+	export class CheckLink {
+	    name: string;
+	    url: string;
+	    rerunnable: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new CheckLink(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.name = source["name"];
+	        this.url = source["url"];
+	        this.rerunnable = source["rerunnable"];
+	    }
+	}
 	export class PRView {
 	    number: number;
 	    url: string;
@@ -50,6 +66,7 @@ export namespace core {
 	    fail: number;
 	    pending: number;
 	    failing: string[];
+	    failedChecks: CheckLink[];
 	    mergeSha?: string;
 	
 	    static createFrom(source: any = {}) {
@@ -67,8 +84,27 @@ export namespace core {
 	        this.fail = source["fail"];
 	        this.pending = source["pending"];
 	        this.failing = source["failing"];
+	        this.failedChecks = this.convertValues(source["failedChecks"], CheckLink);
 	        this.mergeSha = source["mergeSha"];
 	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
 	}
 	export class LegView {
 	    repo: string;
@@ -193,6 +229,7 @@ export namespace core {
 	
 	
 	
+	
 
 }
 
@@ -259,6 +296,7 @@ export namespace main {
 	    blocked: number;
 	    failing: number;
 	    remote: boolean;
+	    merged: boolean;
 	    headline: string;
 	    tone: string;
 	    // Go type: time
@@ -278,6 +316,7 @@ export namespace main {
 	        this.blocked = source["blocked"];
 	        this.failing = source["failing"];
 	        this.remote = source["remote"];
+	        this.merged = source["merged"];
 	        this.headline = source["headline"];
 	        this.tone = source["tone"];
 	        this.created = this.convertValues(source["created"], null);

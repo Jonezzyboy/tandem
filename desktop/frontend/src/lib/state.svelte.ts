@@ -11,11 +11,18 @@ export const app = $state({
   activity: {} as Record<string, Activity[]>,
   composer: false,
   trainOpen: false,
+  palette: false,
   trains: {} as Record<string, TrainRun>,
   cleanPlan: null as CleanItem[] | null,
   cleanLoading: false,
   error: '',
 })
+
+// activeChanges are the changes still in flight, in the user's order: the
+// sidebar's draggable list and the ⌘1–⌘9 jumps.
+export function activeChanges() {
+  return app.changes.filter((c) => !c.merged)
+}
 
 export function currentId(): string {
   return app.route.name === 'change' ? app.route.id : ''

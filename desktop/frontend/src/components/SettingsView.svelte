@@ -152,6 +152,16 @@
 
   let notifyStatus = $state<NotifyStatus | null>(null)
   let notifyRefused = $state(false)
+  let notifyTest = $state<{ running: boolean; ok: boolean; text: string }>({ running: false, ok: false, text: '' })
+
+  async function testNotification() {
+    notifyTest = { running: true, ok: false, text: 'Sending…' }
+    try {
+      notifyTest = { running: false, ok: true, text: await api.testNotification() }
+    } catch (e) {
+      notifyTest = { running: false, ok: false, text: errorText(e) }
+    }
+  }
   api.notificationStatus().then((s) => (notifyStatus = s))
 
   async function allowNotifications() {
@@ -443,7 +453,16 @@
           {k.label}
         </label>
       {/each}
-      <div><button class="btn small" disabled={!notifyStatus?.allowed} onclick={() => api.testNotification()}>Send a test notification</button></div>
+      <div class="triage-test">
+        <button class="btn small" disabled={!notifyStatus?.allowed || notifyTest.running} onclick={testNotification}>Send a test notification</button>
+        {#if notifyTest.text}
+          <span class="small" class:ok={notifyTest.ok} class:warn={!notifyTest.ok && !notifyTest.running} class:muted={notifyTest.running} role="status">{notifyTest.text}</span>
+        {/if}
+      </div>
+      <p class="muted small intro">
+        Banners, sounds and Focus are set in macOS:
+        <button class="link" onclick={() => api.openNotificationSettings().catch((e) => (prefs.error = errorText(e)))}>System Settings → Notifications → Tandem</button>.
+      </p>
     </div>
   </section>
 
@@ -499,10 +518,9 @@
             <span>Up to date{prefs.version === 'dev' ? ' (dev build)' : ''}</span>
           {:else if prefs.updateError}
             <span class="warn">Couldn't check: {prefs.updateError}</span>
-          {:else}
-            <span class="muted">Checking…</span>
           {/if}
-          <button class="link" onclick={checkUpdate}>Check now</button>
+          <button class="link" disabled={prefs.updateChecking} onclick={checkUpdate}>{prefs.updateChecking ? 'Checking…' : 'Check now'}</button>
+          {#if !prefs.updateChecking && prefs.updateCheckedAt}<span class="muted small">checked {new Date(prefs.updateCheckedAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</span>{/if}
         </span>
       </div>
       <div><span class="muted">Settings file</span><span class="mono selectable">{prefs.path}</span></div>

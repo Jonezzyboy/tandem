@@ -68,6 +68,11 @@
     }
   }
 
+  async function setMode(mode: 'developer' | 'tester') {
+    await saveSettings({ mode })
+    recheck()
+  }
+
   async function finish() {
     await saveSettings({ setupSeen: true })
     navigate(prefs.settings.mode === 'tester' ? { name: 'ready' } : { name: 'inbox' })
@@ -80,6 +85,24 @@
     <h1>{firstRun ? 'Set up Tandem' : 'Setup checklist'}</h1>
     <p class="muted lead">Tandem drives git and the GitHub CLI across every clone of a change. Check that this Mac has what it needs.</p>
   </header>
+
+  <fieldset class="modes">
+    <legend>How will you use Tandem?</legend>
+    <label class="mode" class:on={prefs.settings.mode === 'developer'}>
+      <input type="radio" name="setup-mode" checked={prefs.settings.mode === 'developer'} onchange={() => setMode('developer')} />
+      <span class="text">
+        <span class="title">Developer</span>
+        <span class="small muted">Start changes across repos, open their PRs together and merge them in order.</span>
+      </span>
+    </label>
+    <label class="mode" class:on={prefs.settings.mode === 'tester'}>
+      <input type="radio" name="setup-mode" checked={prefs.settings.mode === 'tester'} onchange={() => setMode('tester')} />
+      <span class="text">
+        <span class="title">Tester</span>
+        <span class="small muted">See tickets ready to test and put every repo on one with a click. Needs Jira.</span>
+      </span>
+    </label>
+  </fieldset>
 
   <ol class="items" aria-busy={checking}>
     {#if !items}
@@ -121,6 +144,11 @@
   h1 { margin: 4px 0 0; font-family: var(--display); font-weight: 700; font-size: 30px; }
   .lead { margin: 10px 0 0; line-height: 1.55; font-size: 14px; }
   .small { font-size: 12.5px; }
+  .modes { border: 0; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+  .modes legend { font-size: 14px; font-weight: 500; margin-bottom: 10px; }
+  .mode { display: flex; gap: 12px; align-items: flex-start; padding: 14px 16px; border-radius: 12px; background: var(--panel); border: 1px solid var(--line); cursor: pointer; }
+  .mode.on { background: var(--accent-bg); border-color: var(--accent); }
+  .mode input { width: 16px; height: 16px; margin: 3px 0 0; accent-color: var(--accent); }
   .items { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
   .item {
     display: flex; align-items: center; gap: 14px; padding: 14px 16px;

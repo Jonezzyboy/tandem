@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"os/exec"
 	"slices"
@@ -111,18 +112,23 @@ func (a *App) noteTitle(id string) string {
 
 // sendNative shows n in Notification Center; clicking it opens n's change.
 func (a *App) sendNative(n Note) {
-	if a.ctx == nil || !a.notifyReady {
-		return
+	if _, err := a.deliver(n); err != nil {
+		a.emit("error", "Notification: "+err.Error())
 	}
-	err := runtime.SendNotification(a.ctx, runtime.NotificationOptions{
-		ID:    fmt.Sprintf("%s-%s-%d", n.Kind, n.Change, time.Now().UnixNano()),
+}
+
+// deliver hands n to macOS and returns its identifier.
+func (a *App) deliver(n Note) (string, error) {
+	if a.ctx == nil || !a.notifyReady {
+		return "", errors.New("notifications aren't available in this build")
+	}
+	id := fmt.Sprintf("%s-%s-%d", n.Kind, n.Change, time.Now().UnixNano())
+	return id, runtime.SendNotification(a.ctx, runtime.NotificationOptions{
+		ID:    id,
 		Title: n.Title,
 		Body:  n.Body,
 		Data:  map[string]any{"change": n.Change},
 	})
-	if err != nil {
-		a.emit("error", "Notification: "+err.Error())
-	}
 }
 
 // initNotifications runs once at startup. Wails needs a bundle identifier,
@@ -172,9 +178,19 @@ func (a *App) OpenNotificationSettings() error {
 	return exec.Command("open", "x-apple.systempreferences:com.apple.Notifications-Settings.extension").Run()
 }
 
-// TestNotification sends one notification regardless of focus or settings.
-func (a *App) TestNotification() {
-	a.send(Note{Title: "Tandem", Body: "Notifications are on. Click one to open its change."})
+// TestNotification sends one notification regardless of focus or settings,
+// then checks macOS kept it: an accepted notification can still be dropped,
+// for instance while a Focus mode is on.
+func (a *App) TestNotification() (string, error) {
+	id, err := a.deliver(Note{Title: "Tandem", Body: "Notifications are working. Click one to open its change."})
+	if err != nil {
+		return "", err
+	}
+	time.Sleep(1500 * time.Millisecond)
+	if !notificationDelivered(id) {
+		return "", errors.New("macOS accepted the notification but didn't show it. Check Focus, and that Tandem's alerts are on in System Settings")
+	}
+	return "Sent. If no banner appeared, a Focus mode may be hiding it; it's in Notification Center.", nil
 }
 
 // WindowActive tells the app whether its window has focus.

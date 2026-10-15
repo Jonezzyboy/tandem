@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte'
-  import { app, currentId, init, loadInbox, navigate } from './lib/state.svelte'
+  import { activeChanges, app, currentId, init, loadInbox, navigate } from './lib/state.svelte'
   import { actions, initSettings, prefs, saveSettings, shortcutFor, shortcutFromEvent } from './lib/settings.svelte'
   import { api } from './lib/api'
   import Sidebar from './components/Sidebar.svelte'
@@ -9,6 +9,7 @@
   import NewChange from './components/NewChange.svelte'
   import SettingsView from './components/SettingsView.svelte'
   import SetupView from './components/SetupView.svelte'
+  import CommandPalette from './components/CommandPalette.svelte'
   import TesterSidebar from './components/TesterSidebar.svelte'
   import TesterHome from './components/TesterHome.svelte'
   import TesterChange from './components/TesterChange.svelte'
@@ -41,6 +42,9 @@
 
   function run(id: string) {
     switch (id) {
+      case 'palette':
+        app.palette = !app.palette
+        return
       case 'newChange':
         return navigate({ name: 'new' })
       case 'inbox':
@@ -75,7 +79,7 @@
     }
     const jump = /^meta\+([1-9])$/.exec(pressed)
     if (jump) {
-      const c = app.changes[Number(jump[1]) - 1]
+      const c = activeChanges()[Number(jump[1]) - 1]
       if (c) {
         e.preventDefault()
         navigate({ name: 'change', id: c.id })
@@ -111,6 +115,7 @@
       {/key}
     {/if}
   </main>
+  {#if app.palette}<CommandPalette {run} onclose={() => (app.palette = false)} />{/if}
   {#if app.error}
     <div class="toast" role="alert">
       <Icon name="alert" color="var(--warn)" />

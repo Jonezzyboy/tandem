@@ -84,6 +84,7 @@ export interface Action {
 // Shortcuts are "meta+shift+s": modifiers in this order, then the key as
 // KeyboardEvent.key lower-cased.
 export const actions: Action[] = [
+  { id: 'palette', label: 'Command palette', scope: 'app', default: 'meta+k' },
   { id: 'newChange', label: 'New change', scope: 'app', default: 'meta+n' },
   { id: 'inbox', label: 'Go to Inbox', scope: 'app', default: 'meta+0' },
   { id: 'settings', label: 'Open Settings', scope: 'app', default: 'meta+,' },
@@ -118,6 +119,8 @@ export const prefs = $state({
   account: null as Account | null,
   update: null as Update | null,
   updateError: '',
+  updateChecking: false,
+  updateCheckedAt: 0,
   editorApps: [] as EditorApp[],
   systemDark: true,
   version: '',
@@ -211,11 +214,15 @@ export async function initSettings() {
 }
 
 export async function checkUpdate() {
+  prefs.updateChecking = true
   try {
     prefs.update = (await App.CheckUpdate()) as unknown as Update
     prefs.updateError = ''
   } catch (e) {
     prefs.updateError = errorText(e)
+  } finally {
+    prefs.updateChecking = false
+    prefs.updateCheckedAt = Date.now()
   }
 }
 

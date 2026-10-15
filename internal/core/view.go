@@ -67,8 +67,17 @@ type PRView struct {
 	Fail    int      `json:"fail"`
 	Pending int      `json:"pending"`
 	Failing []string `json:"failing"`
+	// FailedChecks link each failing check to its CI page.
+	FailedChecks []CheckLink `json:"failedChecks"`
 	// MergeSHA is the commit the PR landed as, once merged.
 	MergeSHA string `json:"mergeSha,omitempty"`
+}
+
+type CheckLink struct {
+	Name string `json:"name"`
+	URL  string `json:"url"`
+	// Rerunnable is set for GitHub Actions jobs, which can be rerun from here.
+	Rerunnable bool `json:"rerunnable"`
 }
 
 func NewPRView(pr *gh.PR) *PRView {
@@ -76,9 +85,14 @@ func NewPRView(pr *gh.PR) *PRView {
 		return nil
 	}
 	r := pr.Rollup()
+	links := make([]CheckLink, len(r.FailedChecks))
+	for i, c := range r.FailedChecks {
+		_, _, actions := gh.ActionsJob(c.DetailsURL)
+		links[i] = CheckLink{Name: r.Failing[i], URL: c.DetailsURL, Rerunnable: actions}
+	}
 	return &PRView{
 		Number: pr.Number, URL: pr.URL, State: pr.State, Draft: pr.IsDraft, Review: pr.ReviewDecision,
-		Pass: r.Pass, Fail: r.Fail, Pending: r.Pending, Failing: r.Failing, MergeSHA: pr.MergeSHA(),
+		Pass: r.Pass, Fail: r.Fail, Pending: r.Pending, Failing: r.Failing, FailedChecks: links, MergeSHA: pr.MergeSHA(),
 	}
 }
 

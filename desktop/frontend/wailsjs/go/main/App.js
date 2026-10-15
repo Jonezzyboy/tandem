@@ -162,6 +162,10 @@ export function Repos() {
   return window['go']['main']['App']['Repos']();
 }
 
+export function RerunFailed(arg1, arg2) {
+  return window['go']['main']['App']['RerunFailed'](arg1, arg2);
+}
+
 export function RunSetupFix(arg1) {
   return window['go']['main']['App']['RunSetupFix'](arg1);
 }

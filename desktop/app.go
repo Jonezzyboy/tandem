@@ -347,16 +347,18 @@ func (a *App) persist(v core.ChangeView) {
 type ChangeSummary struct {
 	ID string `json:"id"`
 	// CheckedOut means every leg's repo has the change's branch checked out.
-	CheckedOut bool      `json:"checkedOut"`
-	Worktrees  bool      `json:"worktrees"`
-	Title      string    `json:"title"`
-	Legs       int       `json:"legs"`
-	Blocked    int       `json:"blocked"`
-	Failing    int       `json:"failing"`
-	Remote     bool      `json:"remote"`
-	Headline   string    `json:"headline"`
-	Tone       string    `json:"tone"`
-	Created    time.Time `json:"created"`
+	CheckedOut bool   `json:"checkedOut"`
+	Worktrees  bool   `json:"worktrees"`
+	Title      string `json:"title"`
+	Legs       int    `json:"legs"`
+	Blocked    int    `json:"blocked"`
+	Failing    int    `json:"failing"`
+	Remote     bool   `json:"remote"`
+	// Merged means every leg's PR has merged.
+	Merged   bool      `json:"merged"`
+	Headline string    `json:"headline"`
+	Tone     string    `json:"tone"`
+	Created  time.Time `json:"created"`
 }
 
 // Changes lists every change, newest first, summarised from the cached views.
@@ -393,7 +395,7 @@ func (a *App) Changes() []ChangeSummary {
 			}
 			switch {
 			case merged > 0 && merged == len(v.Legs):
-				s.Headline, s.Tone = legs+" · merged", "ok"
+				s.Headline, s.Tone, s.Merged = legs+" · merged", "ok", true
 			case s.Failing > 0:
 				s.Headline, s.Tone = fmt.Sprintf("%s · %d failing", legs, s.Failing), "warn"
 			case s.Blocked > 0:

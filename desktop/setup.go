@@ -88,13 +88,16 @@ func (a *App) setupNotifications() SetupItem {
 }
 
 func (a *App) setupJira() SetupItem {
-	it := SetupItem{ID: "jira", Title: "Jira", Fix: "settings"}
 	s := a.Settings()
+	it := SetupItem{ID: "jira", Title: "Jira", Fix: "settings", Required: s.Mode == "tester"}
 	if s.Jira.Site != "" && s.Jira.Email != "" && jiraToken(s.Jira.Email) != "" {
 		it.OK, it.Fix, it.Detail = true, "", "Signed in to "+strings.TrimPrefix(s.Jira.Site, "https://")
 		return it
 	}
 	it.Detail = "Fills a change's title and description from its ticket."
+	if it.Required {
+		it.Detail = "Tester mode finds tickets to test in Jira. Add your site, email and an API token."
+	}
 	return it
 }
 

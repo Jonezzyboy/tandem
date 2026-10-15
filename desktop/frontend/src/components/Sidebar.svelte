@@ -1,7 +1,7 @@
 <script lang="ts">
   import { tick } from 'svelte'
   import { api } from '@lib/api'
-  import { app, checkOut, fail, navigate, switching } from '@lib/state.svelte'
+  import { activeChanges, app, checkOut, fail, navigate, switching } from '@lib/state.svelte'
   import Icon from './Icon.svelte'
   import Kbd from './Kbd.svelte'
   import Avatar from './Avatar.svelte'
@@ -9,6 +9,22 @@
   import type { ChangeSummary } from '@lib/types'
 
   const reviewCount = $derived(app.inbox?.review?.length ?? 0)
+  const active = $derived(activeChanges())
+  const landed = $derived(app.changes.filter((c) => c.merged))
+
+  let query = $state('')
+  const matches = $derived.by(() => {
+    const terms = query.toLowerCase().split(/\s+/).filter(Boolean)
+    return app.changes.filter((c) => terms.every((t) => `${c.id} ${c.title}`.toLowerCase().includes(t)))
+  })
+
+  function onSearchKey(e: KeyboardEvent) {
+    if (e.key === 'Escape') query = ''
+    else if (e.key === 'Enter' && matches[0]) {
+      navigate({ name: 'change', id: matches[0].id })
+      query = ''
+    }
+  }
 
   // Pointer-driven rather than HTML5 drag-and-drop. A grabbed row lifts off as a floating card that
   // follows the pointer anywhere; its place in the list becomes an invisible placeholder that the
@@ -29,11 +45,12 @@
   let justDragged = false
 
   async function move(id: string, to: number) {
-    const ids = app.changes.map((c) => c.id)
+    const ids = active.map((c) => c.id)
     const from = ids.indexOf(id)
     if (from < 0 || to < 0 || to > ids.length || to === from || to === from + 1) return
     ids.splice(from, 1)
     ids.splice(to > from ? to - 1 : to, 0, id)
+    ids.push(...landed.map((c) => c.id))
     const prev = app.changes
     app.changes = ids.map((i) => prev.find((c) => c.id === i)!)
     try {
@@ -190,8 +207,24 @@
 
   <div class="group changes grow-list">
     <div class="eyebrow label" id="my-changes">My changes</div>
+    {#if app.changes.length > 4}
+      <input class="input search" type="search" bind:value={query} onkeydown={onSearchKey} placeholder="Filter changes"
+        aria-label="Filter changes" spellcheck="false" />
+    {/if}
+    {#if query.trim()}
+      <div class="list" role="list" aria-label="Matching changes">
+        {#each matches as c (c.id)}
+          <div class="change-wrap" role="listitem">
+            <button class="change" class:active={app.route.name === 'change' && app.route.id === c.id}
+              onclick={() => { navigate({ name: 'change', id: c.id }); query = '' }}>{@render rowBody(c, 99)}</button>
+          </div>
+        {:else}
+          <p class="empty">No change matches “{query.trim()}”.</p>
+        {/each}
+      </div>
+    {:else}
     <div class="list" role="list" aria-labelledby="my-changes" bind:this={listEl} class:dragging={drag?.moved}>
-    {#each app.changes as c, i (c.id)}
+    {#each active as c, i (c.id)}
       <div class="change-wrap" role="listitem" class:placeholder={(drag?.moved && drag.id === c.id) || landing?.id === c.id}
         style:transform={shift(i)} onpointerdown={(e) => onPointerDown(e, c.id, i)}>
         <button
@@ -212,17 +245,33 @@
         {/if}
       </div>
     {:else}
-      <p class="empty">No changes yet. <button class="link" onclick={() => navigate({ name: 'new' })}>Start one</button> to put several repos on one branch.</p>
+      {#if !landed.length}
+        <p class="empty">No changes yet. <button class="link" onclick={() => navigate({ name: 'new' })}>Start one</button> to put several repos on one branch.</p>
+      {/if}
     {/each}
     </div>
+    {#if landed.length}
+      <details class="landed" open={landed.some((c) => app.route.name === 'change' && app.route.id === c.id)}>
+        <summary class="eyebrow label">Landed · {landed.length}</summary>
+        <div class="list" role="list">
+          {#each landed as c (c.id)}
+            <div class="change-wrap" role="listitem">
+              <button class="change" class:active={app.route.name === 'change' && app.route.id === c.id}
+                onclick={() => navigate({ name: 'change', id: c.id })}>{@render rowBody(c, 99)}</button>
+            </div>
+          {/each}
+        </div>
+      </details>
+    {/if}
+    {/if}
   </div>
-  {#if (drag?.moved || landing) && app.changes.find((c) => c.id === (drag?.id ?? landing?.id))}
-    {@const c = app.changes.find((x) => x.id === (drag?.id ?? landing?.id))!}
+  {#if (drag?.moved || landing) && active.find((c) => c.id === (drag?.id ?? landing?.id))}
+    {@const c = active.find((x) => x.id === (drag?.id ?? landing?.id))!}
     {@const at = drag?.moved ? cardAt(drag) : landing!}
     <div class="drag-card" class:landing={!drag?.moved} aria-hidden="true"
       style:width="{drag?.width ?? listEl?.querySelector('.change-wrap')?.getBoundingClientRect().width}px"
       style:transform="translate({at.left}px, {at.top}px)">
-      <div class="change">{@render rowBody(c, drag?.moved ? drag.to : app.changes.indexOf(c))}</div>
+      <div class="change">{@render rowBody(c, drag?.moved ? drag.to : active.indexOf(c))}</div>
     </div>
   {/if}
   {#if prefs.update?.newer}
@@ -336,6 +385,12 @@
   .empty .link { border: 0; background: none; padding: 0; font: inherit; color: var(--accent-text); cursor: pointer; }
   .empty { margin: 0; padding: 0 10px; font-size: 13px; color: var(--muted); line-height: 1.5; }
   .grow-list { flex: 1; min-height: 0; overflow-y: auto; }
+  .search { margin: 0 4px 8px; height: 30px; font-size: 12.5px; }
+  .landed { margin-top: 14px; }
+  .landed summary { cursor: pointer; list-style: none; }
+  .landed summary::-webkit-details-marker { display: none; }
+  .landed summary::before { content: '▸ '; }
+  .landed[open] summary::before { content: '▾ '; }
   .account {
     display: flex; align-items: center; gap: 4px; margin: 0 -12px -16px; padding: 10px 12px 12px;
     border-top: 1px solid var(--line); background: var(--nav);
