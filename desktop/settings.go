@@ -41,6 +41,13 @@ type Settings struct {
 	// Mode is "developer" or "tester": which sidebar and pages the app shows.
 	Mode   string         `json:"mode"`
 	Tester TesterSettings `json:"tester"`
+	// Roots are the folders holding <vendor>/<repo> clones. Empty means
+	// $TANDEM_ROOT, else ~/code, which is also what td uses.
+	Roots []string `json:"roots"`
+	// Notify switches each notification kind on or off.
+	Notify map[string]bool `json:"notify"`
+	// SetupSeen is set once the first-run checklist has been closed.
+	SetupSeen bool `json:"setupSeen"`
 }
 
 // JiraSettings holds the Atlassian account; its API token is in the Keychain.
@@ -158,7 +165,34 @@ func normalize(s Settings) Settings {
 		statuses = []string{}
 	}
 	t.Statuses = statuses
+	var roots []string
+	for _, r := range s.Roots {
+		if r = expandHome(strings.TrimSpace(r)); r != "" && !slices.Contains(roots, r) {
+			roots = append(roots, r)
+		}
+	}
+	if roots == nil {
+		roots = []string{}
+	}
+	s.Roots = roots
+	notify := map[string]bool{}
+	for _, k := range notifyKinds {
+		on, set := s.Notify[k]
+		notify[k] = on || !set
+	}
+	s.Notify = notify
 	return s
+}
+
+func expandHome(path string) string {
+	if path == "~" || strings.HasPrefix(path, "~/") {
+		home, _ := os.UserHomeDir()
+		path = filepath.Join(home, path[1:])
+	}
+	if path == "" {
+		return ""
+	}
+	return filepath.Clean(path)
 }
 
 func saveSettings(s Settings) error {
@@ -224,6 +258,11 @@ func (a *App) Settings() Settings {
 
 func (a *App) SaveSettings(s Settings) (Settings, error) {
 	s = normalize(s)
+	for _, r := range s.Roots {
+		if fi, err := os.Stat(r); err != nil || !fi.IsDir() {
+			return a.Settings(), fmt.Errorf("%s is not a folder", r)
+		}
+	}
 	if err := saveSettings(s); err != nil {
 		return a.Settings(), err
 	}

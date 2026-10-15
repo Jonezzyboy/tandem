@@ -165,7 +165,7 @@ export interface Activity {
 }
 
 export type Route =
-  | { name: 'inbox' } | { name: 'change'; id: string } | { name: 'new' } | { name: 'settings' }
+  | { name: 'inbox' } | { name: 'change'; id: string } | { name: 'new' } | { name: 'settings' } | { name: 'setup' }
   | { name: 'ready' } | { name: 'test'; id: string } | { name: 'recent' }
 
 export interface PinItem {
@@ -407,4 +407,23 @@ export interface VerdictOption {
   name: string
   to: string
   outcome: 'passed' | 'failed' | 'moved'
+}
+
+export interface SetupItem {
+  id: string
+  title: string
+  detail: string
+  ok: boolean
+  required: boolean
+  fix?: 'terminal' | 'folder' | 'notifications' | 'settings'
+}
+
+export interface RootInfo {
+  path: string
+  repos: number
+}
+
+export interface NotifyStatus {
+  available: boolean
+  allowed: boolean
 }

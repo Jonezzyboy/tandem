@@ -109,5 +109,11 @@ export function init() {
   on<TrainEvent>('train', recordTrain)
   on<{ change: string; text: string; tone: Activity['tone'] }>('activity', (a) => log(a.change, a.text, a.tone))
   on<string>('error', (e) => { app.error = e })
-  window.addEventListener('focus', () => api.focus(currentId()))
+  on<string>('open', (id) => navigate(id ? { name: 'change', id } : { name: 'inbox' }))
+  window.addEventListener('focus', () => {
+    api.windowActive(true)
+    api.focus(currentId())
+  })
+  window.addEventListener('blur', () => api.windowActive(false))
+  api.windowActive(document.hasFocus())
 }

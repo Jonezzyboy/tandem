@@ -9,6 +9,8 @@ export function Account():Promise<main.Account>;
 
 export function AddRepos(arg1:string,arg2:Array<string>):Promise<Array<main.StartItem>>;
 
+export function AllowNotifications():Promise<main.NotifyStatus>;
+
 export function BranchRepos(arg1:string):Promise<Array<main.BranchInfo>>;
 
 export function CancelTrain(arg1:string):Promise<void>;
@@ -19,11 +21,17 @@ export function Changes():Promise<Array<main.ChangeSummary>>;
 
 export function Check(arg1:string,arg2:string):Promise<Array<main.CheckEvent>>;
 
+export function ChooseFolder(arg1:string):Promise<string>;
+
 export function Clean(arg1:Array<string>):Promise<Array<main.CleanResult>>;
 
 export function CleanPlan():Promise<Array<main.CleanItem>>;
 
+export function CodeRoots():Promise<Array<main.RootInfo>>;
+
 export function CommitPins(arg1:string):Promise<Array<main.LegResult>>;
+
+export function DefaultRoots():Promise<Array<string>>;
 
 export function Discard(arg1:string):Promise<main.CleanResult>;
 
@@ -45,9 +53,13 @@ export function JiraStatuses():Promise<Array<string>>;
 
 export function Link(arg1:string,arg2:string,arg3:string):Promise<void>;
 
+export function NotificationStatus():Promise<main.NotifyStatus>;
+
 export function OpenEditor(arg1:string):Promise<void>;
 
 export function OpenFolder(arg1:string):Promise<void>;
+
+export function OpenNotificationSettings():Promise<void>;
 
 export function OpenURL(arg1:string):Promise<void>;
 
@@ -67,6 +79,8 @@ export function Reorder(arg1:Array<string>):Promise<void>;
 
 export function Repos():Promise<Array<main.RepoInfo>>;
 
+export function RunSetupFix(arg1:string):Promise<void>;
+
 export function SaveJira(arg1:string,arg2:string):Promise<main.JiraAccount>;
 
 export function SaveSettings(arg1:main.Settings):Promise<main.Settings>;
@@ -76,6 +90,8 @@ export function SetTicket(arg1:string,arg2:string):Promise<void>;
 export function Settings():Promise<main.Settings>;
 
 export function SettingsPath():Promise<string>;
+
+export function Setup():Promise<Array<main.SetupItem>>;
 
 export function Start(arg1:main.StartRequest):Promise<Array<main.StartItem>>;
 
@@ -88,6 +104,8 @@ export function Sync(arg1:string):Promise<Array<main.LegResult>>;
 export function SystemDark():Promise<boolean>;
 
 export function TandemHome():Promise<string>;
+
+export function TestNotification():Promise<void>;
 
 export function TestTriage(arg1:triage.Config):Promise<string>;
 
@@ -122,3 +140,5 @@ export function TrainPlan(arg1:string):Promise<main.TrainPlan>;
 export function Unlink(arg1:string,arg2:string,arg3:string):Promise<void>;
 
 export function Version():Promise<string>;
+
+export function WindowActive(arg1:boolean):Promise<void>;

@@ -552,6 +552,20 @@ export namespace main {
 	        this.message = source["message"];
 	    }
 	}
+	export class NotifyStatus {
+	    available: boolean;
+	    allowed: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new NotifyStatus(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.available = source["available"];
+	        this.allowed = source["allowed"];
+	    }
+	}
 	export class PlanItem {
 	    repo: string;
 	    name: string;
@@ -823,6 +837,20 @@ export namespace main {
 	        this.path = source["path"];
 	    }
 	}
+	export class RootInfo {
+	    path: string;
+	    repos: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new RootInfo(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.path = source["path"];
+	        this.repos = source["repos"];
+	    }
+	}
 	export class TesterSettings {
 	    statuses: string[];
 	    cloneMissing: boolean;
@@ -850,6 +878,9 @@ export namespace main {
 	    jira: JiraSettings;
 	    mode: string;
 	    tester: TesterSettings;
+	    roots: string[];
+	    notify: Record<string, boolean>;
+	    setupSeen: boolean;
 	
 	    static createFrom(source: any = {}) {
 	        return new Settings(source);
@@ -867,6 +898,9 @@ export namespace main {
 	        this.jira = this.convertValues(source["jira"], JiraSettings);
 	        this.mode = source["mode"];
 	        this.tester = this.convertValues(source["tester"], TesterSettings);
+	        this.roots = source["roots"];
+	        this.notify = source["notify"];
+	        this.setupSeen = source["setupSeen"];
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
@@ -886,6 +920,28 @@ export namespace main {
 		    }
 		    return a;
 		}
+	}
+	export class SetupItem {
+	    id: string;
+	    title: string;
+	    detail: string;
+	    ok: boolean;
+	    required: boolean;
+	    fix?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new SetupItem(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.title = source["title"];
+	        this.detail = source["detail"];
+	        this.ok = source["ok"];
+	        this.required = source["required"];
+	        this.fix = source["fix"];
+	    }
 	}
 	export class StartItem {
 	    repo: string;

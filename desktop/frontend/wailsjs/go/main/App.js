@@ -10,6 +10,10 @@ export function AddRepos(arg1, arg2) {
   return window['go']['main']['App']['AddRepos'](arg1, arg2);
 }
 
+export function AllowNotifications() {
+  return window['go']['main']['App']['AllowNotifications']();
+}
+
 export function BranchRepos(arg1) {
   return window['go']['main']['App']['BranchRepos'](arg1);
 }
@@ -30,6 +34,10 @@ export function Check(arg1, arg2) {
   return window['go']['main']['App']['Check'](arg1, arg2);
 }
 
+export function ChooseFolder(arg1) {
+  return window['go']['main']['App']['ChooseFolder'](arg1);
+}
+
 export function Clean(arg1) {
   return window['go']['main']['App']['Clean'](arg1);
 }
@@ -38,8 +46,16 @@ export function CleanPlan() {
   return window['go']['main']['App']['CleanPlan']();
 }
 
+export function CodeRoots() {
+  return window['go']['main']['App']['CodeRoots']();
+}
+
 export function CommitPins(arg1) {
   return window['go']['main']['App']['CommitPins'](arg1);
+}
+
+export function DefaultRoots() {
+  return window['go']['main']['App']['DefaultRoots']();
 }
 
 export function Discard(arg1) {
@@ -82,12 +98,20 @@ export function Link(arg1, arg2, arg3) {
   return window['go']['main']['App']['Link'](arg1, arg2, arg3);
 }
 
+export function NotificationStatus() {
+  return window['go']['main']['App']['NotificationStatus']();
+}
+
 export function OpenEditor(arg1) {
   return window['go']['main']['App']['OpenEditor'](arg1);
 }
 
 export function OpenFolder(arg1) {
   return window['go']['main']['App']['OpenFolder'](arg1);
+}
+
+export function OpenNotificationSettings() {
+  return window['go']['main']['App']['OpenNotificationSettings']();
 }
 
 export function OpenURL(arg1) {
@@ -126,6 +150,10 @@ export function Repos() {
   return window['go']['main']['App']['Repos']();
 }
 
+export function RunSetupFix(arg1) {
+  return window['go']['main']['App']['RunSetupFix'](arg1);
+}
+
 export function SaveJira(arg1, arg2) {
   return window['go']['main']['App']['SaveJira'](arg1, arg2);
 }
@@ -144,6 +172,10 @@ export function Settings() {
 
 export function SettingsPath() {
   return window['go']['main']['App']['SettingsPath']();
+}
+
+export function Setup() {
+  return window['go']['main']['App']['Setup']();
 }
 
 export function Start(arg1) {
@@ -168,6 +200,10 @@ export function SystemDark() {
 
 export function TandemHome() {
   return window['go']['main']['App']['TandemHome']();
+}
+
+export function TestNotification() {
+  return window['go']['main']['App']['TestNotification']();
 }
 
 export function TestTriage(arg1) {
@@ -236,4 +272,8 @@ export function Unlink(arg1, arg2, arg3) {
 
 export function Version() {
   return window['go']['main']['App']['Version']();
+}
+
+export function WindowActive(arg1) {
+  return window['go']['main']['App']['WindowActive'](arg1);
 }

@@ -1,12 +1,14 @@
 <script lang="ts">
   import { onMount } from 'svelte'
   import { app, currentId, init, loadInbox, navigate } from './lib/state.svelte'
-  import { actions, initSettings, prefs, shortcutFor, shortcutFromEvent } from './lib/settings.svelte'
+  import { actions, initSettings, prefs, saveSettings, shortcutFor, shortcutFromEvent } from './lib/settings.svelte'
+  import { api } from './lib/api'
   import Sidebar from './components/Sidebar.svelte'
   import ChangeView from './components/ChangeView.svelte'
   import InboxView from './components/InboxView.svelte'
   import NewChange from './components/NewChange.svelte'
   import SettingsView from './components/SettingsView.svelte'
+  import SetupView from './components/SetupView.svelte'
   import TesterSidebar from './components/TesterSidebar.svelte'
   import TesterHome from './components/TesterHome.svelte'
   import TesterChange from './components/TesterChange.svelte'
@@ -20,8 +22,18 @@
     await initSettings()
     init()
     initTester()
-    navigate(home())
+    navigate(await firstRoute())
   })
+
+  // The checklist opens once: on a fresh install, or for an existing user
+  // whose machine is missing something Tandem needs.
+  async function firstRoute() {
+    if (prefs.settings.setupSeen) return home()
+    const [items, changes] = await Promise.all([api.setup(), api.changes()]).catch(() => [[], []])
+    if (!changes.length || items.some((i) => i.required && !i.ok)) return { name: 'setup' as const }
+    saveSettings({ setupSeen: true })
+    return home()
+  }
 
   function home() {
     return prefs.settings.mode === 'tester' ? { name: 'ready' as const } : { name: 'inbox' as const }
@@ -79,6 +91,8 @@
   <main>
     {#if app.route.name === 'settings'}
       <SettingsView />
+    {:else if app.route.name === 'setup'}
+      <SetupView />
     {:else if testerMode}
       {#if app.route.name === 'test'}
         {#key app.route.id}<TesterChange id={app.route.id} />{/key}
