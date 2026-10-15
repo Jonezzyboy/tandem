@@ -32,6 +32,20 @@
   </header>
   <div class="scroll">
 
+  {#if !app.changes.length}
+    <section class="welcome">
+      <h2>Start your first change</h2>
+      <p class="muted">A change is one piece of work across several repos: one branch in each, PRs opened and linked together, and merges in dependency order.</p>
+      <ol class="muted">
+        <li>Give it an ID, usually the ticket, which also names the branch.</li>
+        <li>Pick the repos it touches. Each gets the branch from a fresh <span class="mono">main</span>.</li>
+        <li>Commit as usual, then open every PR at once and merge them with the merge train.</li>
+      </ol>
+      <p class="muted small">Already made the branch by hand? Type its name as the ID and the repos that have it are listed for you.</p>
+      <div><button class="btn primary" onclick={() => navigate({ name: 'new' })}><Icon name="plus" />New change</button></div>
+    </section>
+  {/if}
+
   <section>
     <div class="eyebrow warnlabel">Waiting on your review · {review.length}</div>
     {#if app.inbox?.reviewError}<div class="row muted">GitHub: {app.inbox.reviewError}</div>{/if}
@@ -119,6 +133,10 @@
     padding: 13px 18px; background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
     text-align: left; color: var(--text);
   }
+  .welcome { display: flex; flex-direction: column; gap: 10px; padding: 20px 22px; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; font-size: 14px; line-height: 1.55; }
+  .welcome h2 { margin: 0; font-size: 17px; font-weight: 600; }
+  .welcome p, .welcome ol { margin: 0; }
+  .welcome ol { padding-left: 1.3em; display: flex; flex-direction: column; gap: 4px; }
   .row.empty { display: block; background: transparent; border-style: dashed; }
   .row.dashed { background: transparent; border-style: dashed; }
   .row.link { cursor: pointer; }

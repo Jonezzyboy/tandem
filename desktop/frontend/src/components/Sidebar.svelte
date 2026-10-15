@@ -212,7 +212,7 @@
         {/if}
       </div>
     {:else}
-      <p class="empty">No changes yet. Start one to put several repos on one branch.</p>
+      <p class="empty">No changes yet. <button class="link" onclick={() => navigate({ name: 'new' })}>Start one</button> to put several repos on one branch.</p>
     {/each}
     </div>
   </div>
@@ -225,8 +225,13 @@
       <div class="change">{@render rowBody(c, drag?.moved ? drag.to : app.changes.indexOf(c))}</div>
     </div>
   {/if}
+  {#if prefs.update?.newer}
+    <button class="update" onclick={() => navigate({ name: 'settings' })} title="See how to update">
+      <Icon name="send" size={14} />Tandem {prefs.update.version} is out
+    </button>
+  {/if}
   <div class="account">
-    <button class="who" onclick={() => navigate({ name: 'settings' })} aria-label="Account and settings">
+    <button class="who" onclick={() => navigate({ name: prefs.account?.error ? 'setup' : 'settings' })} aria-label="Account and settings">
       <Avatar account={prefs.account} size={28} />
       <span class="who-text">
         {#if prefs.account && !prefs.account.error}
@@ -234,7 +239,7 @@
           <span class="who-login mono">@{prefs.account.login}</span>
         {:else}
           <span class="who-name">Not signed in</span>
-          <span class="who-login warn">{prefs.account?.error ? 'run gh auth login' : 'checking gh…'}</span>
+          <span class="who-login warn">{prefs.account?.error ? 'finish setup' : 'checking gh…'}</span>
         {/if}
       </span>
     </button>
@@ -323,6 +328,12 @@
   .headline { font-size: 12px; color: var(--muted); }
   .headline.warn { color: var(--warn-text); }
   .headline.ok { color: var(--ok-text); }
+  .update {
+    margin: 0 12px 10px; display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 8px;
+    background: var(--accent-bg); border: 1px solid var(--accent); color: var(--accent-text); font-size: 12.5px; cursor: pointer; text-align: left;
+  }
+  .update:hover { color: var(--link-hover); }
+  .empty .link { border: 0; background: none; padding: 0; font: inherit; color: var(--accent-text); cursor: pointer; }
   .empty { margin: 0; padding: 0 10px; font-size: 13px; color: var(--muted); line-height: 1.5; }
   .grow-list { flex: 1; min-height: 0; overflow-y: auto; }
   .account {

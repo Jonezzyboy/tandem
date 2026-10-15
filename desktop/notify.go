@@ -151,8 +151,7 @@ func (a *App) NotificationStatus() NotifyStatus {
 	if !a.notifyReady {
 		return NotifyStatus{}
 	}
-	ok, _ := runtime.CheckNotificationAuthorization(a.ctx)
-	return NotifyStatus{Available: true, Allowed: ok}
+	return NotifyStatus{Available: true, Allowed: notificationsAllowed()}
 }
 
 // AllowNotifications asks macOS for permission. Once refused, macOS stops
@@ -161,8 +160,10 @@ func (a *App) AllowNotifications() (NotifyStatus, error) {
 	if !a.notifyReady {
 		return NotifyStatus{}, fmt.Errorf("notifications aren't available in this build")
 	}
-	ok, err := runtime.RequestNotificationAuthorization(a.ctx)
-	return NotifyStatus{Available: true, Allowed: ok}, err
+	if _, err := runtime.RequestNotificationAuthorization(a.ctx); err != nil {
+		return NotifyStatus{Available: true}, err
+	}
+	return a.NotificationStatus(), nil
 }
 
 // OpenNotificationSettings opens macOS's Notifications settings, where a

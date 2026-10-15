@@ -427,3 +427,15 @@ export interface NotifyStatus {
   available: boolean
   allowed: boolean
 }
+
+export interface PRDraft {
+  title: string
+  body: string
+  reviewers: string
+}
+
+export interface Update {
+  version: string
+  url: string
+  newer: boolean
+}

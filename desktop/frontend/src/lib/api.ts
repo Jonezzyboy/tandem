@@ -3,7 +3,7 @@ import { EventsOn } from '@wailsjs/runtime/runtime'
 import type {
   BranchInfo, ChangeSummary, ChangeView, CheckEvent, CleanItem, CleanResult, Inbox, JiraAccount, JiraTicket, LegResult, PinItem, PRPreview, PRRequest,
   BuildTarget, TestCheck, TestFinish, TesterPlan, TesterQueue, TesterState, TestRepoStatus, TestStep, VerdictOption,
-  NotifyStatus, RepoInfo, RootInfo, SetupItem, StartItem, TrainPlan,
+  NotifyStatus, PRDraft, RepoInfo, RootInfo, SetupItem, StartItem, TrainPlan, Update,
 } from './types'
 
 // The generated bindings type results as model classes; the JSON is plain
@@ -72,6 +72,10 @@ export const api = {
   testNotification: () => App.TestNotification(),
   openNotificationSettings: () => App.OpenNotificationSettings(),
   windowActive: (active: boolean) => App.WindowActive(active),
+  draft: (id: string) => App.Draft(id) as unknown as Promise<PRDraft | null>,
+  saveDraft: (id: string, d: PRDraft) => App.SaveDraft(id, d as never),
+  discardDraft: (id: string) => App.DiscardDraft(id),
+  checkUpdate: () => App.CheckUpdate() as unknown as Promise<Update>,
 }
 
 export function on<T>(event: string, fn: (data: T) => void): () => void {

@@ -134,6 +134,16 @@
   })
   const pinProblems = $derived(pinLegs.flatMap((l) => l.pins!.filter((p) => !p.applied).map((p) => `${l.name}: ${pinProblem(p)}`)))
   const unpublished = $derived((view?.legs ?? []).some((l) => !l.pr || l.pr.draft))
+  // What stands between the change and the merge train, beside its button.
+  const trainState = $derived.by(() => {
+    const legs = view?.legs ?? []
+    if (!legs.some((l) => l.pr)) return { tone: 'muted', short: 'open PRs first', full: 'The merge train needs open PRs: open them with Open PRs.' }
+    if (legs.every((l) => l.pr?.state === 'MERGED')) return { tone: 'ok', short: 'merged', full: 'Every PR has merged.' }
+    if (!view?.remote) return { tone: 'muted', short: 'reading GitHub…', full: '' }
+    const lines = legs.filter((l) => l.blockers.length).map((l) => `${l.name}: ${l.blockers.join(', ')}`)
+    if (!lines.length) return { tone: 'ok', short: 'ready', full: 'Every PR is ready to merge.' }
+    return { tone: 'warn', short: lines.length === 1 ? lines[0] : `${lines.length} legs blocked`, full: lines.join('\n') }
+  })
   const switching = $derived(switchingIds[id] ?? false)
   const switchTo = (toBase: boolean) => checkOut(id, toBase)
 
@@ -318,6 +328,8 @@
           <span title="Local git state is watched every few seconds; GitHub is read every minute">
             {view.remote ? `GitHub ${ago(view.remoteAt, now)} ago` : 'GitHub not read yet'}
           </span>
+          <span>·</span>
+          <span class={trainState.tone} title={trainState.full}>merge train: {trainState.short}</span>
           {#if view.worktrees}
             <span>·</span>
             <span title="Each repo has its own worktree under the change, so the clones stay on their branches">worktrees</span>
@@ -356,9 +368,11 @@
         <button class="btn" onclick={() => runChecks()} disabled={checking !== null}>
           <Icon name="play" spin={checking === '*'} />Run checks
         </button>
-        <button class="btn" onclick={() => (app.trainOpen = true)} disabled={!view.legs.some((l) => l.pr)}>
-          <Icon name="branch" spin={trainRunning} />{trainRunning ? 'Train running' : 'Merge train'}
-        </button>
+        <span class="tip" title={trainState.full}>
+          <button class="btn" onclick={() => (app.trainOpen = true)} disabled={!view.legs.some((l) => l.pr)}>
+            <Icon name="branch" spin={trainRunning} />{trainRunning ? 'Train running' : 'Merge train'}
+          </button>
+        </span>
         {#if unpublished}
           <button class="btn primary" onclick={() => (app.composer = true)}>
             <Icon name="send" />{view.legs.some((l) => !l.pr) ? 'Open PRs' : 'Publish PRs'}
@@ -621,6 +635,7 @@
     color: inherit; background: var(--nav); outline: none; box-shadow: 0 0 0 4px var(--nav), 0 0 0 5px var(--accent-text);
   }
   .actions { display: flex; gap: 8px; align-items: center; flex-shrink: 0; margin-left: auto; }
+  .tip { display: inline-flex; }
   .ticket-id { display: inline-flex; align-items: center; gap: 4px; }
   .ticket-strip {
     display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; padding: 10px 12px 10px 16px; border-radius: 12px;
