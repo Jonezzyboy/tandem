@@ -85,6 +85,8 @@ export function Reorder(arg1:Array<string>):Promise<void>;
 
 export function Repos():Promise<Array<main.RepoInfo>>;
 
+export function RerunFailed(arg1:string,arg2:string):Promise<number>;
+
 export function RunSetupFix(arg1:string):Promise<void>;
 
 export function SaveDraft(arg1:string,arg2:main.PRDraft):Promise<void>;
@@ -113,7 +115,7 @@ export function SystemDark():Promise<boolean>;
 
 export function TandemHome():Promise<string>;
 
-export function TestNotification():Promise<void>;
+export function TestNotification():Promise<string>;
 
 export function TestTriage(arg1:triage.Config):Promise<string>;
 

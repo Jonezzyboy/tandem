@@ -78,6 +78,11 @@ edge comes from and lets you declare the ones no manifest knows about yet.
 
 ![Edit merge order: the current order, edges inferred from manifests, and declared edges](docs/images/edit-order.png)
 
+A failing check links to its CI job, and the rerun button next to it reruns the
+PR's failed GitHub Actions jobs. Changes whose PRs have all merged move to a
+collapsed Landed group in the sidebar, and a filter appears once you have more
+than four.
+
 ### Local checks across every repo
 
 `go build`, `go vet` and `go test`, phpstan and phpunit, your `package.json`
@@ -325,6 +330,7 @@ is the fallback when a chosen app is missing.
 
 | Shortcut | Action |
 |---|---|
+| ⌘K | Command palette: jump to a change, PR or action |
 | ⌘N / ⌘0 / ⌘, / ⌘R | New change / Inbox / Settings / refresh |
 | ⌘1–⌘9 | Jump to a change |
 | ⌘⇧O | Check out the change in every repo |

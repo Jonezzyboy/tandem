@@ -303,6 +303,18 @@
     return { icon: 'check' as const, color: 'var(--ok)', text: `${pr.pass}/${total} passing` }
   }
 
+  let rerunning = $state<Record<string, boolean>>({})
+  async function rerun(leg: string) {
+    rerunning[leg] = true
+    try {
+      await api.rerunFailed(id, leg)
+    } catch (e) {
+      fail(e)
+    } finally {
+      rerunning[leg] = false
+    }
+  }
+
   function reviewIcon(review: string) {
     if (review === 'APPROVED') return { icon: 'check' as const, color: 'var(--ok)' }
     if (review === 'CHANGES_REQUESTED') return { icon: 'alert' as const, color: 'var(--warn)' }
@@ -527,7 +539,19 @@
             {/if}
           </div>
           <div class="cell">
-            {#if ci}<Icon name={ci.icon} color={ci.color} /><span class:warn={ci.icon === 'x'}>{ci.text}</span>{:else}<span class="muted">—</span>{/if}
+            {#if ci && l.pr?.failedChecks?.length && l.pr.state === 'OPEN'}
+              <Icon name="x" color="var(--warn)" />
+              <span class="failed">
+                {#each l.pr.failedChecks as fc, i (i)}
+                  {#if i}<span class="warn">{', '}</span>{/if}{#if fc.url.startsWith('https://')}<a href={fc.url} class="warn" title="Open the failing job"
+                    onclick={(e) => { e.preventDefault(); api.openURL(fc.url) }}>{fc.name}</a>{:else}<span class="warn">{fc.name}</span>{/if}
+                {/each}
+              </span>
+              {#if l.pr.failedChecks.some((f) => f.rerunnable)}
+                <button class="icon-btn rerun" aria-label="Rerun failed jobs on {l.name}" title="Rerun failed jobs"
+                  disabled={rerunning[l.name]} onclick={() => rerun(l.name)}><Icon name="refresh" size={14} spin={rerunning[l.name]} /></button>
+              {/if}
+            {:else if ci}<Icon name={ci.icon} color={ci.color} /><span class:warn={ci.icon === 'x'}>{ci.text}</span>{:else}<span class="muted">—</span>{/if}
           </div>
           <div class="cell">
             {#if l.pr && l.pr.state === 'OPEN'}
@@ -636,6 +660,9 @@
   }
   .actions { display: flex; gap: 8px; align-items: center; flex-shrink: 0; margin-left: auto; }
   .tip { display: inline-flex; }
+  .failed { min-width: 0; overflow-wrap: anywhere; }
+  .failed a { text-decoration: underline; text-decoration-color: var(--warn-border); text-underline-offset: 2px; }
+  .rerun { width: 24px; height: 24px; flex-shrink: 0; }
   .ticket-id { display: inline-flex; align-items: center; gap: 4px; }
   .ticket-strip {
     display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; padding: 10px 12px 10px 16px; border-radius: 12px;

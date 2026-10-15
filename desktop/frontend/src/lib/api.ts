@@ -75,6 +75,7 @@ export const api = {
   draft: (id: string) => App.Draft(id) as unknown as Promise<PRDraft | null>,
   saveDraft: (id: string, d: PRDraft) => App.SaveDraft(id, d as never),
   discardDraft: (id: string) => App.DiscardDraft(id),
+  rerunFailed: (id: string, leg: string) => App.RerunFailed(id, leg),
   checkUpdate: () => App.CheckUpdate() as unknown as Promise<Update>,
 }
 

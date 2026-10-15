@@ -8,6 +8,7 @@ export interface PRView {
   fail: number
   pending: number
   failing: string[] | null
+  failedChecks?: { name: string; url: string; rerunnable: boolean }[] | null
   mergeSha?: string
 }
 
@@ -73,6 +74,7 @@ export interface ChangeSummary {
   blocked: number
   failing: number
   remote: boolean
+  merged: boolean
   headline: string
   tone: 'ok' | 'warn' | 'muted'
   created: string

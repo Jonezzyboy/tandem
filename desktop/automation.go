@@ -3,10 +3,14 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
+	"slices"
 	"strings"
+	"time"
 
 	"github.com/jonezzyboy/tandem/internal/change"
 	"github.com/jonezzyboy/tandem/internal/core"
+	"github.com/jonezzyboy/tandem/internal/gh"
 	"github.com/jonezzyboy/tandem/internal/triage"
 )
 
@@ -407,4 +411,43 @@ func (a *App) Unlink(id, upstream, downstream string) error {
 	}
 	go a.refresh(id, false)
 	return nil
+}
+
+// RerunFailed reruns the failed GitHub Actions jobs on a leg's PR, once per
+// workflow run, and reports how many runs it restarted.
+func (a *App) RerunFailed(id, leg string) (int, error) {
+	c, err := a.store.Load(id)
+	if err != nil {
+		return 0, err
+	}
+	l, err := c.Leg(leg)
+	if err != nil {
+		return 0, err
+	}
+	ctx, cancel := context.WithTimeout(a.ctx, 30*time.Second)
+	defer cancel()
+	pr, err := core.ViewPR(ctx, c, l)
+	if err != nil {
+		return 0, err
+	}
+	if pr == nil {
+		return 0, fmt.Errorf("%s has no PR", l.Name())
+	}
+	var runs []string
+	for _, fc := range pr.Rollup().FailedChecks {
+		if run, _, ok := gh.ActionsJob(fc.DetailsURL); ok && !slices.Contains(runs, run) {
+			runs = append(runs, run)
+		}
+	}
+	if len(runs) == 0 {
+		return 0, fmt.Errorf("%s has no failed GitHub Actions jobs to rerun", l.Name())
+	}
+	for _, run := range runs {
+		if err := gh.RerunFailed(ctx, l.Dir(), run); err != nil {
+			return 0, err
+		}
+	}
+	a.activity(id, fmt.Sprintf("%s: reran failed jobs in %d workflow run(s)", l.Name(), len(runs)), "muted")
+	go a.refresh(id, true)
+	return len(runs), nil
 }
