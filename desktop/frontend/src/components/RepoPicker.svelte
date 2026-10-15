@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte'
   import { api } from '@lib/api'
-  import { fail } from '@lib/state.svelte'
+  import { fail, navigate } from '@lib/state.svelte'
   import type { RepoInfo } from '@lib/types'
 
   // exclude lists repos already in the change; they are shown but can't be picked.
@@ -9,6 +9,7 @@
 
   const shown = 150
   let repos = $state<RepoInfo[]>([])
+  let loaded = $state(false)
   let filter = $state('')
 
   const matches = $derived.by(() => {
@@ -17,7 +18,7 @@
   })
 
   onMount(() => {
-    api.repos().then((r) => (repos = r)).catch(fail)
+    api.repos().then((r) => (repos = r)).catch(fail).finally(() => (loaded = true))
   })
 
   function toggle(name: string) {
@@ -46,6 +47,11 @@
         {#if inChange}<span class="small muted">already in this change</span>{/if}
       </label>
     {/each}
+    {#if loaded && !repos.length}
+      <div class="small muted more">
+        No clones found. <button class="link" onclick={() => navigate({ name: 'settings' })}>Choose where your repos live</button> in Settings.
+      </div>
+    {/if}
     {#if matches.length > shown}<div class="small muted more">{matches.length - shown} more · keep typing to narrow</div>{/if}
   </div>
 </div>
@@ -62,4 +68,5 @@
   .repo input { accent-color: var(--accent); }
   .repo .muted { margin-left: auto; }
   .more { padding: 8px 10px; }
+  .link { border: 0; background: none; padding: 0; font: inherit; color: var(--accent-text); cursor: pointer; }
 </style>

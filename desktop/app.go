@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -58,6 +59,10 @@ type App struct {
 	goup     map[string]string
 	settings Settings
 	account  *Account
+	// active is whether the window has focus; send delivers a notification.
+	active      bool
+	send        func(Note)
+	notifyReady bool
 
 	restoreOnce sync.Once
 	// testMu serialises tester-mode switches, so two can't race on the repos.
@@ -70,7 +75,7 @@ type App struct {
 }
 
 func NewApp(store change.Store, roots []string) *App {
-	return &App{
+	a := &App{
 		store:    store,
 		roots:    roots,
 		emit:     func(string, any) {},
@@ -83,12 +88,15 @@ func NewApp(store change.Store, roots []string) *App {
 		goup:     map[string]string{},
 		settings: defaultSettings(),
 	}
+	a.send = a.sendNative
+	return a
 }
 
 func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
 	a.emit = func(event string, data any) { runtime.EventsEmit(ctx, event, data) }
 	a.loadCached()
+	a.initNotifications()
 	go a.poll(ctx)
 }
 
@@ -229,7 +237,16 @@ func (a *App) buildView(id string, remote bool) (core.ChangeView, error) {
 	if remote {
 		a.remoteAt[id] = time.Now()
 	}
+	_, training := a.trains[id]
 	a.mu.Unlock()
+	if remote && had {
+		notes := changeNotes(prev, v)
+		if training {
+			// The train reports its own merges.
+			notes = slices.DeleteFunc(notes, func(n Note) bool { return n.Kind == notifyMerged })
+		}
+		a.notify(notes...)
+	}
 
 	if changed {
 		a.persist(v)
@@ -270,6 +287,7 @@ func (a *App) goUp(ctx context.Context, id string, c *change.Change, v *core.Cha
 				a.activity(id, lv.Name+": "+msg, "warn")
 			} else {
 				a.activity(id, fmt.Sprintf("%s: %s merged, so %s is now at %s (uncommitted)", lv.Name, p.Upstream, p.Module, short(p.Rev)), "ok")
+				a.notify(Note{Kind: notifyPins, Change: id, Body: fmt.Sprintf("%s merged, so %s now requires it. Commit & push to update the PR.", p.Upstream, lv.Name)})
 			}
 			a.mu.Lock()
 			a.goup[key] = msg
@@ -696,8 +714,10 @@ func (a *App) fetchInbox() Inbox {
 	}
 	in.FetchedAt = time.Now()
 	a.mu.Lock()
+	prev := a.inbox
 	a.inbox, a.inboxAt = &in, in.FetchedAt
 	a.mu.Unlock()
+	a.notify(reviewRequests(prev, in)...)
 	a.emit("inbox", in)
 	return in
 }
@@ -708,7 +728,7 @@ type RepoInfo struct {
 }
 
 func (a *App) Repos() []RepoInfo {
-	repos := workspace.List(a.roots)
+	repos := workspace.List(a.codeRoots())
 	out := make([]RepoInfo, len(repos))
 	for i, r := range repos {
 		out[i] = RepoInfo{Name: r.Name, Path: r.Path}
@@ -732,7 +752,7 @@ func (a *App) BranchRepos(branch string) []BranchInfo {
 	if change.ValidateID(branch) != nil {
 		return []BranchInfo{}
 	}
-	found := core.FindBranch(a.ctx, workspace.List(a.roots), branch)
+	found := core.FindBranch(a.ctx, workspace.List(a.codeRoots()), branch)
 	out := make([]BranchInfo, len(found))
 	for i, b := range found {
 		out[i] = BranchInfo{Name: b.Repo.Name, Local: b.Local, Remote: b.Remote, Ahead: b.Ahead, Current: b.Current}
@@ -775,7 +795,7 @@ func (a *App) Start(req StartRequest) ([]StartItem, error) {
 	}
 	var repos []workspace.Repo
 	for _, name := range req.Repos {
-		r, err := workspace.Resolve(a.roots, name)
+		r, err := workspace.Resolve(a.codeRoots(), name)
 		if err != nil {
 			return nil, err
 		}
@@ -884,7 +904,7 @@ func (a *App) within(path string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	allowed := []string{a.store.Home}
+	allowed := append([]string{a.store.Home}, a.codeRoots()...)
 	if all, err := a.store.List(); err == nil {
 		for _, c := range all {
 			for _, l := range c.Legs {

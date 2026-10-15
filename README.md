@@ -123,6 +123,9 @@ and the CLI need `git` and an authenticated `gh`.
 
 ## Quick start
 
+On first launch, a setup checklist checks for `git`, a signed-in `gh` and your
+clones, and offers notifications and Jira. Settings → About opens it again.
+
 **In the app:** click **New change**, give it an ID (your ticket, e.g. `ABC-123`)
 and a title, pick the repos, and create it. Commit in your repos as usual. Then:
 
@@ -300,6 +303,12 @@ covers:
   follow macOS.
 - **Keyboard shortcuts:** click **Change** and press the new keys.
 - **Editors:** which app opens each language.
+- **Repositories:** the folders searched for `<owner>/<repo>` clones. With none
+  chosen, the app uses `$TANDEM_ROOT` or `~/code`, as `td` does.
+- **Notifications:** CI failing or passing, approvals and requested changes,
+  merges, `go.mod` updates after an upstream merges, the merge train finishing or
+  stopping, and new review requests. Each can be turned off. Clicking one opens
+  its change.
 - **Defaults:** the merge method, and whether new PRs open as drafts.
 - **Merge train triage:** the local model that decides whether a red check is
   flaky and worth rerunning, with **Test connection** to check it's pulled and

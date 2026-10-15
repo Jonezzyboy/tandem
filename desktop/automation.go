@@ -195,6 +195,11 @@ func (a *App) StartTrain(id, method string) error {
 	if errors.Is(err, context.Canceled) {
 		return errors.New("train stopped; merged legs stay merged, and running it again carries on")
 	}
+	if err != nil {
+		a.notify(Note{Kind: notifyTrain, Change: id, Title: "Merge train stopped · " + id, Body: core.FirstLine(err.Error())})
+	} else {
+		a.notify(Note{Kind: notifyTrain, Change: id, Title: "Merge train finished · " + id, Body: "Every leg has merged."})
+	}
 	return err
 }
 

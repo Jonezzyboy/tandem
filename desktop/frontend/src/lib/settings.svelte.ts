@@ -16,7 +16,22 @@ export interface Settings {
   mode: 'developer' | 'tester'
   // Jira statuses whose tickets are ready to test.
   tester: { statuses: string[]; cloneMissing: boolean }
+  // Folders holding <owner>/<repo> clones; empty means $TANDEM_ROOT or ~/code.
+  roots: string[]
+  notify: Record<NotifyKind, boolean>
+  setupSeen: boolean
 }
+
+export type NotifyKind = 'ci' | 'review' | 'merged' | 'pins' | 'train' | 'requests'
+
+export const notifyKinds: { id: NotifyKind; label: string }[] = [
+  { id: 'ci', label: 'CI on your PRs fails, or passes after running' },
+  { id: 'review', label: 'A PR is approved or has changes requested' },
+  { id: 'merged', label: 'A PR merges outside the merge train' },
+  { id: 'pins', label: 'An upstream merged and go.mod was updated for you' },
+  { id: 'train', label: 'The merge train finishes or stops' },
+  { id: 'requests', label: 'Someone requests your review' },
+]
 
 export interface TriageSettings {
   enabled: boolean
@@ -95,6 +110,9 @@ export const prefs = $state({
     jira: { email: '', site: '' },
     mode: 'developer',
     tester: { statuses: [], cloneMissing: true },
+    roots: [],
+    notify: { ci: true, review: true, merged: true, pins: true, train: true, requests: true },
+    setupSeen: true,
   } as Settings,
   account: null as Account | null,
   editorApps: [] as EditorApp[],
@@ -185,6 +203,16 @@ export async function initSettings() {
   App.SettingsPath().then((p) => { prefs.path = p })
   App.TandemHome().then((h) => { prefs.home = h })
   window.addEventListener('focus', refreshSystemAppearance)
+}
+
+// addRoot asks for a folder of clones and searches it too. With replace, it
+// takes the place of the default folder rather than joining it.
+export async function addRoot(replace = false): Promise<boolean> {
+  const path = await App.ChooseFolder('Choose the folder that holds your clones')
+  if (!path) return false
+  const base = prefs.settings.roots.length || replace ? prefs.settings.roots : await App.DefaultRoots()
+  await saveSettings({ roots: [...base, path] })
+  return !prefs.error
 }
 
 // editorLabel names what "Open in editor" will use for a repo of lang,

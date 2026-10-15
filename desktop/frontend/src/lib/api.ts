@@ -3,7 +3,7 @@ import { EventsOn } from '@wailsjs/runtime/runtime'
 import type {
   BranchInfo, ChangeSummary, ChangeView, CheckEvent, CleanItem, CleanResult, Inbox, JiraAccount, JiraTicket, LegResult, PinItem, PRPreview, PRRequest,
   BuildTarget, TestCheck, TestFinish, TesterPlan, TesterQueue, TesterState, TestRepoStatus, TestStep, VerdictOption,
-  RepoInfo, StartItem, TrainPlan,
+  NotifyStatus, RepoInfo, RootInfo, SetupItem, StartItem, TrainPlan,
 } from './types'
 
 // The generated bindings type results as model classes; the JSON is plain
@@ -62,6 +62,16 @@ export const api = {
   clean: (ids: string[]) => App.Clean(ids) as unknown as Promise<CleanResult[]>,
   discardPlan: (id: string) => App.DiscardPlan(id) as unknown as Promise<CleanItem>,
   discard: (id: string) => App.Discard(id) as unknown as Promise<CleanResult>,
+  setup: () => App.Setup() as unknown as Promise<SetupItem[]>,
+  runSetupFix: (id: string) => App.RunSetupFix(id),
+  codeRoots: () => App.CodeRoots() as unknown as Promise<RootInfo[]>,
+  defaultRoots: () => App.DefaultRoots(),
+  chooseFolder: (title: string) => App.ChooseFolder(title),
+  notificationStatus: () => App.NotificationStatus() as unknown as Promise<NotifyStatus>,
+  allowNotifications: () => App.AllowNotifications() as unknown as Promise<NotifyStatus>,
+  testNotification: () => App.TestNotification(),
+  openNotificationSettings: () => App.OpenNotificationSettings(),
+  windowActive: (active: boolean) => App.WindowActive(active),
 }
 
 export function on<T>(event: string, fn: (data: T) => void): () => void {

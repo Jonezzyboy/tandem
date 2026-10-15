@@ -79,7 +79,7 @@ func (a *App) jiraClient() jira.Client {
 func (a *App) owners() []string {
 	seen := map[string]bool{}
 	var out []string
-	for _, r := range workspace.List(a.roots) {
+	for _, r := range workspace.List(a.codeRoots()) {
 		owner, _, _ := strings.Cut(r.Name, "/")
 		if o := strings.ToLower(owner); !seen[o] {
 			seen[o] = true
@@ -341,7 +341,7 @@ func (a *App) TesterPlan(key string) (TesterPlan, error) {
 		all, err := a.openPRs(ctx)
 		prs, prErr = prsFor(all, key), err
 	})
-	wg.Go(func() { local = core.FindBranch(ctx, workspace.List(a.roots), key) })
+	wg.Go(func() { local = core.FindBranch(ctx, workspace.List(a.codeRoots()), key) })
 	if s.Jira.Site != "" {
 		wg.Go(func() {
 			p.Ticket, _ = a.JiraLookup(jira.Ref{Site: s.Jira.Site, Key: key}.URL())
@@ -352,7 +352,7 @@ func (a *App) TesterPlan(key string) (TesterPlan, error) {
 		for i, t := range p.Last.Repos {
 			wg.Go(func() {
 				c := RepoChanges{Repo: t.Name, Commits: []testrun.Commit{}}
-				if repo, err := workspace.Resolve(a.roots, t.Name); err != nil {
+				if repo, err := workspace.Resolve(a.codeRoots(), t.Name); err != nil {
 					c.Error = "not cloned on this machine"
 				} else if c.Commits, err = testrun.Since(ctx, repo.Path, t.Branch, t.SHA); err != nil {
 					c.Error = core.FirstLine(err.Error())
@@ -402,7 +402,7 @@ func (a *App) TesterPlan(key string) (TesterPlan, error) {
 		}
 	}
 	for _, r := range byName {
-		if repo, err := workspace.Resolve(a.roots, r.Name); err == nil {
+		if repo, err := workspace.Resolve(a.codeRoots(), r.Name); err == nil {
 			r.Cloned = true
 			r.Current = gitx.CurrentBranch(ctx, repo.Path)
 			if st, err := gitx.Run(ctx, repo.Path, "status", "--porcelain", "--untracked-files=no"); err == nil && st != "" {
@@ -424,10 +424,11 @@ func onOrigin(ctx context.Context, dir, branch string) bool {
 }
 
 func (a *App) cloneRoot() string {
-	if !a.Settings().Tester.CloneMissing || len(a.roots) == 0 {
+	roots := a.codeRoots()
+	if !a.Settings().Tester.CloneMissing || len(roots) == 0 {
 		return ""
 	}
-	return a.roots[0]
+	return roots[0]
 }
 
 func (a *App) testStore() testrun.Store {
@@ -476,7 +477,7 @@ func (a *App) TesterStart(req TestStartRequest) ([]testrun.Step, error) {
 	targets := make([]testrun.Target, len(req.Repos))
 	for i, sr := range req.Repos {
 		targets[i] = testrun.Target{Name: sr.Name, Branch: sr.Branch}
-		if r, err := workspace.Resolve(a.roots, sr.Name); err == nil {
+		if r, err := workspace.Resolve(a.codeRoots(), sr.Name); err == nil {
 			targets[i].Dir = r.Path
 		}
 	}

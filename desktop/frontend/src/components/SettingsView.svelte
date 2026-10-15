@@ -1,11 +1,13 @@
 <script lang="ts">
   import { onDestroy, untrack } from 'svelte'
   import {
-    actions, keycaps, languages, prefs, problem, saveSettings, shortcutFor, shortcutFromEvent, themes, type ThemeId, type TriageSettings,
+    actions, addRoot, keycaps, languages, notifyKinds, prefs, problem, saveSettings, shortcutFor, shortcutFromEvent, themes,
+    type NotifyKind, type ThemeId, type TriageSettings,
   } from '@lib/settings.svelte'
   import * as App from '@wailsjs/go/main/App'
   import { api, errorText } from '@lib/api'
-  import type { JiraAccount } from '@lib/types'
+  import type { JiraAccount, NotifyStatus, RootInfo } from '@lib/types'
+  import { navigate } from '@lib/state.svelte'
   import Avatar from './Avatar.svelte'
   import Kbd from './Kbd.svelte'
   import StatusPicker from './StatusPicker.svelte'
@@ -133,9 +135,40 @@
   })
 
   const customised = $derived(Object.keys(prefs.settings.keys).length)
+
+  let roots = $state<RootInfo[] | null>(null)
+  const loadRoots = () => api.codeRoots().then((r) => (roots = r))
+  loadRoots()
+
+  async function pickRoot() {
+    if (await addRoot()) loadRoots()
+  }
+
+  async function setRoots(next: string[]) {
+    await saveSettings({ roots: next })
+    loadRoots()
+  }
+
+  let notifyStatus = $state<NotifyStatus | null>(null)
+  let notifyRefused = $state(false)
+  api.notificationStatus().then((s) => (notifyStatus = s))
+
+  async function allowNotifications() {
+    try {
+      if (notifyRefused) return await api.openNotificationSettings()
+      notifyStatus = await api.allowNotifications()
+      notifyRefused = !notifyStatus.allowed
+    } catch (e) {
+      prefs.error = errorText(e)
+    }
+  }
+
+  function setNotify(kind: NotifyKind, on: boolean) {
+    saveSettings({ notify: { ...prefs.settings.notify, [kind]: on } })
+  }
 </script>
 
-<svelte:window onkeydowncapture={onKey} />
+<svelte:window onkeydowncapture={onKey} onfocus={() => api.notificationStatus().then((s) => (notifyStatus = s))} />
 
 <div class="page">
   <header style="--wails-draggable: drag">
@@ -206,6 +239,30 @@
           <span class="warn small">{prefs.account?.error ?? 'Checking gh…'}</span>
         </div>
       {/if}
+    </div>
+  </section>
+
+  <section aria-labelledby="s-roots">
+    <div class="section-head">
+      <h2 id="s-roots">Repositories</h2>
+      {#if prefs.settings.roots.length}<button class="btn small" onclick={() => setRoots([])}>Use the default</button>{/if}
+    </div>
+    <div class="card general">
+      <p class="muted small intro">Folders holding your clones as <span class="mono">&lt;owner&gt;/&lt;repo&gt;</span>. New changes pick repos from here.{' '}{#if !prefs.settings.roots.length}This is the default; <span class="mono">td</span> uses it too.{:else}<span class="mono">td</span> reads <span class="mono">$TANDEM_ROOT</span> instead.{/if}</p>
+      <ul class="roots">
+        {#each roots ?? [] as r (r.path)}
+          <li>
+            <Icon name="folder" color="var(--muted)" />
+            <span class="mono grow selectable">{r.path}</span>
+            <span class="small" class:muted={r.repos > 0} class:warn={r.repos === 0}>{r.repos === 1 ? '1 repo' : `${r.repos} repos`}</span>
+            <button class="icon-btn" aria-label="Show {r.path} in Finder" title="Show in Finder" onclick={() => api.openFolder(r.path)}><Icon name="external" /></button>
+            {#if prefs.settings.roots.length}
+              <button class="icon-btn" aria-label="Stop searching {r.path}" title="Remove" onclick={() => setRoots(prefs.settings.roots.filter((p) => p !== r.path))}><Icon name="trash" /></button>
+            {/if}
+          </li>
+        {/each}
+      </ul>
+      <div><button class="btn small" onclick={pickRoot}><Icon name="plus" />Add folder</button></div>
     </div>
   </section>
 
@@ -360,6 +417,28 @@
     </div>
   </section>
 
+  <section aria-labelledby="s-notifications">
+    <h2 id="s-notifications">Notifications</h2>
+    <div class="card general">
+      {#if notifyStatus && !notifyStatus.available}
+        <p class="muted small intro">Notifications need the installed app; this build can't send them.</p>
+      {:else if notifyStatus && !notifyStatus.allowed}
+        <div class="triage-test">
+          <span class="warn small">macOS isn't letting Tandem notify you.</span>
+          <button class="btn small" onclick={allowNotifications}>{notifyRefused ? 'Open System Settings' : 'Allow notifications'}</button>
+        </div>
+      {/if}
+      <p class="muted small intro">Sent while you're elsewhere. Changes are rechecked on GitHub every few minutes, and the one on screen every minute.</p>
+      {#each notifyKinds as k (k.id)}
+        <label class="choice">
+          <input type="checkbox" checked={prefs.settings.notify[k.id]} onchange={(e) => setNotify(k.id, e.currentTarget.checked)} />
+          {k.label}
+        </label>
+      {/each}
+      <div><button class="btn small" disabled={!notifyStatus?.allowed} onclick={() => api.testNotification()}>Send a test notification</button></div>
+    </div>
+  </section>
+
   <section aria-labelledby="s-triage">
     <h2 id="s-triage">Merge train triage</h2>
     <div class="card general">
@@ -403,6 +482,7 @@
       <div><span class="muted">Version</span><span class="mono">{prefs.version || '…'}</span></div>
       <div><span class="muted">Settings file</span><span class="mono selectable">{prefs.path}</span></div>
       <div><span class="muted">Change records</span><span class="mono selectable">{prefs.home}</span></div>
+      <div><span class="muted">Setup</span><span><button class="link" onclick={() => navigate({ name: 'setup' })}>Open the setup checklist</button></span></div>
     </div>
   </section>
 </div>
@@ -481,6 +561,9 @@
   .mode .small { line-height: 1.5; }
   .statuses { display: flex; flex-direction: column; gap: 10px; font-size: 14px; }
   .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+  .roots { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+  .roots li { display: flex; align-items: center; gap: 10px; min-height: 36px; padding: 0 4px 0 10px; border: 1px solid var(--line); border-radius: 8px; font-size: 13px; }
+  .roots li .grow { min-width: 0; overflow-wrap: anywhere; }
   .about { display: flex; flex-direction: column; gap: 8px; font-size: 13px; }
   .about div { display: grid; grid-template-columns: 180px minmax(0, 1fr); gap: 12px; }
 </style>
