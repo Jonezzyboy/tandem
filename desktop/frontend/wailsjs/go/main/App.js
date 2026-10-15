@@ -34,6 +34,10 @@ export function Check(arg1, arg2) {
   return window['go']['main']['App']['Check'](arg1, arg2);
 }
 
+export function CheckUpdate() {
+  return window['go']['main']['App']['CheckUpdate']();
+}
+
 export function ChooseFolder(arg1) {
   return window['go']['main']['App']['ChooseFolder'](arg1);
 }
@@ -62,8 +66,16 @@ export function Discard(arg1) {
   return window['go']['main']['App']['Discard'](arg1);
 }
 
+export function DiscardDraft(arg1) {
+  return window['go']['main']['App']['DiscardDraft'](arg1);
+}
+
 export function DiscardPlan(arg1) {
   return window['go']['main']['App']['DiscardPlan'](arg1);
+}
+
+export function Draft(arg1) {
+  return window['go']['main']['App']['Draft'](arg1);
 }
 
 export function Editors() {
@@ -152,6 +164,10 @@ export function Repos() {
 
 export function RunSetupFix(arg1) {
   return window['go']['main']['App']['RunSetupFix'](arg1);
+}
+
+export function SaveDraft(arg1, arg2) {
+  return window['go']['main']['App']['SaveDraft'](arg1, arg2);
 }
 
 export function SaveJira(arg1, arg2) {

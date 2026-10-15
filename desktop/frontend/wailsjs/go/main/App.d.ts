@@ -21,6 +21,8 @@ export function Changes():Promise<Array<main.ChangeSummary>>;
 
 export function Check(arg1:string,arg2:string):Promise<Array<main.CheckEvent>>;
 
+export function CheckUpdate():Promise<main.Update>;
+
 export function ChooseFolder(arg1:string):Promise<string>;
 
 export function Clean(arg1:Array<string>):Promise<Array<main.CleanResult>>;
@@ -35,7 +37,11 @@ export function DefaultRoots():Promise<Array<string>>;
 
 export function Discard(arg1:string):Promise<main.CleanResult>;
 
+export function DiscardDraft(arg1:string):Promise<void>;
+
 export function DiscardPlan(arg1:string):Promise<main.CleanItem>;
+
+export function Draft(arg1:string):Promise<main.PRDraft>;
 
 export function Editors():Promise<Array<main.EditorApp>>;
 
@@ -80,6 +86,8 @@ export function Reorder(arg1:Array<string>):Promise<void>;
 export function Repos():Promise<Array<main.RepoInfo>>;
 
 export function RunSetupFix(arg1:string):Promise<void>;
+
+export function SaveDraft(arg1:string,arg2:main.PRDraft):Promise<void>;
 
 export function SaveJira(arg1:string,arg2:string):Promise<main.JiraAccount>;
 

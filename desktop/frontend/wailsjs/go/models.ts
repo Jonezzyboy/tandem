@@ -566,6 +566,22 @@ export namespace main {
 	        this.allowed = source["allowed"];
 	    }
 	}
+	export class PRDraft {
+	    title: string;
+	    body: string;
+	    reviewers: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new PRDraft(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.title = source["title"];
+	        this.body = source["body"];
+	        this.reviewers = source["reviewers"];
+	    }
+	}
 	export class PlanItem {
 	    repo: string;
 	    name: string;
@@ -1212,6 +1228,22 @@ export namespace main {
 		    }
 		    return a;
 		}
+	}
+	export class Update {
+	    version: string;
+	    url: string;
+	    newer: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new Update(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.version = source["version"];
+	        this.url = source["url"];
+	        this.newer = source["newer"];
+	    }
 	}
 	export class VerdictOption {
 	    id: string;

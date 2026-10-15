@@ -55,7 +55,8 @@ that belong to a change open that change.
 
 ### Write once, open every PR
 
-One title, description and reviewer list for the whole change. Each repo shows
+One title, description and reviewer list for the whole change, kept as a
+draft until you publish. Each repo shows
 what will happen before anything is pushed, including uncommitted files that
 would be left out.
 
@@ -310,6 +311,8 @@ covers:
   stopping, and new review requests. Each can be turned off. Clicking one opens
   its change.
 - **Defaults:** the merge method, and whether new PRs open as drafts.
+- **About:** the version, and whether a newer release is out (the sidebar says so
+  too).
 - **Merge train triage:** the local model that decides whether a red check is
   flaky and worth rerunning, with **Test connection** to check it's pulled and
   answering.

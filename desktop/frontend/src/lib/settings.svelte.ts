@@ -1,5 +1,6 @@
 import * as App from '@wailsjs/go/main/App'
 import { errorText } from './api'
+import type { Update } from './types'
 
 export type ThemeId = 'system' | 'graphite' | 'paper' | 'midnight' | 'forest' | 'contrast'
 
@@ -115,6 +116,8 @@ export const prefs = $state({
     setupSeen: true,
   } as Settings,
   account: null as Account | null,
+  update: null as Update | null,
+  updateError: '',
   editorApps: [] as EditorApp[],
   systemDark: true,
   version: '',
@@ -203,7 +206,20 @@ export async function initSettings() {
   App.SettingsPath().then((p) => { prefs.path = p })
   App.TandemHome().then((h) => { prefs.home = h })
   window.addEventListener('focus', refreshSystemAppearance)
+  checkUpdate()
+  setInterval(checkUpdate, 6 * 60 * 60 * 1000)
 }
+
+export async function checkUpdate() {
+  try {
+    prefs.update = (await App.CheckUpdate()) as unknown as Update
+    prefs.updateError = ''
+  } catch (e) {
+    prefs.updateError = errorText(e)
+  }
+}
+
+export const upgradeCommand = 'brew upgrade --cask tandem-repos'
 
 // addRoot asks for a folder of clones and searches it too. With replace, it
 // takes the place of the default folder rather than joining it.

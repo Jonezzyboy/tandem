@@ -53,6 +53,7 @@
     publishing = true
     try {
       done = await api.publishPRs(view.id, request())
+      api.discardDraft(view.id).catch(fail)
       for (const it of done.items) {
         if (it.error) log(view.id, `${it.name}: ${it.error}`, 'warn')
         else if (it.action !== 'skip' && it.url) log(view.id, `${it.name}: ${it.action === 'create' ? 'opened' : it.ready ? 'ready for review' : 'updated'} ${it.url}`, 'ok')
@@ -64,7 +65,29 @@
     }
   }
 
-  onMount(plan)
+  // Unpublished text is kept per change, so closing the composer loses nothing.
+  let draftLoaded = $state(false)
+  const original = untrack(() => ({ title: view.title, body: view.body, reviewers: (view.reviewers ?? []).join(', ') }))
+  const edited = $derived(title !== original.title || body !== original.body || reviewers !== original.reviewers)
+
+  onMount(async () => {
+    const d = await api.draft(view.id).catch(() => null)
+    if (d) ({ title, body, reviewers } = d)
+    draftLoaded = true
+    plan()
+  })
+
+  $effect(() => {
+    if (!draftLoaded || done) return
+    const d = { title, body, reviewers }
+    const changed = edited
+    const t = setTimeout(() => (changed ? api.saveDraft(view.id, d) : api.discardDraft(view.id)).catch(fail), 400)
+    return () => clearTimeout(t)
+  })
+
+  function revert() {
+    ;({ title, body, reviewers } = original)
+  }
 
   // Every PR of the change, including legs this publish skipped.
   const slackText = $derived(done ? slackMessage(ticketKey || view.id, title, done.items) : '')
@@ -130,7 +153,10 @@
           <span class="muted small">Sent as “{view.id} {title.replace(view.id, '').trim() || '…'}”</span>
         </div>
         <div class="field grow">
-          <label for="pr-body">Description</label>
+          <div class="label-row">
+            <label for="pr-body">Description</label>
+            {#if edited}<span class="muted small">Draft kept until you publish · <button class="link" onclick={revert}>Revert</button></span>{/if}
+          </div>
           <MarkdownEditor id="pr-body" bind:value={body} placeholder="What was wrong, what changed, how it was verified" />
         </div>
         <div class="field">
@@ -211,6 +237,8 @@
   .form, .plan { display: flex; flex-direction: column; gap: 14px; min-height: 0; }
   .form { padding: 18px; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; }
   .grow { flex: 1; min-height: 0; }
+  .label-row { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
+  .link { border: 0; background: none; padding: 0; font: inherit; color: var(--accent-text); cursor: pointer; }
   .toggles { display: flex; flex-direction: column; gap: 8px; }
   .toggle { display: flex; gap: 10px; align-items: center; font-size: 13px; cursor: pointer; }
   .toggle input { width: 16px; height: 16px; accent-color: var(--accent); }

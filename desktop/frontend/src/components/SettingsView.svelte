@@ -1,13 +1,14 @@
 <script lang="ts">
   import { onDestroy, untrack } from 'svelte'
   import {
-    actions, addRoot, keycaps, languages, notifyKinds, prefs, problem, saveSettings, shortcutFor, shortcutFromEvent, themes,
-    type NotifyKind, type ThemeId, type TriageSettings,
+    actions, addRoot, checkUpdate, keycaps, languages, notifyKinds, prefs, problem, saveSettings, shortcutFor, shortcutFromEvent, themes,
+    upgradeCommand, type NotifyKind, type ThemeId, type TriageSettings,
   } from '@lib/settings.svelte'
   import * as App from '@wailsjs/go/main/App'
   import { api, errorText } from '@lib/api'
   import type { JiraAccount, NotifyStatus, RootInfo } from '@lib/types'
   import { navigate } from '@lib/state.svelte'
+  import { ClipboardSetText } from '@wailsjs/runtime/runtime'
   import Avatar from './Avatar.svelte'
   import Kbd from './Kbd.svelte'
   import StatusPicker from './StatusPicker.svelte'
@@ -161,6 +162,13 @@
     } catch (e) {
       prefs.error = errorText(e)
     }
+  }
+
+  let copiedUpgrade = $state(false)
+  async function copyUpgrade() {
+    await ClipboardSetText(upgradeCommand)
+    copiedUpgrade = true
+    setTimeout(() => (copiedUpgrade = false), 1600)
   }
 
   function setNotify(kind: NotifyKind, on: boolean) {
@@ -480,6 +488,23 @@
     <h2 id="s-about">About</h2>
     <div class="card about">
       <div><span class="muted">Version</span><span class="mono">{prefs.version || '…'}</span></div>
+      <div>
+        <span class="muted">Updates</span>
+        <span class="update-row">
+          {#if prefs.update?.newer}
+            <span class="ok">{prefs.update.version} is available.</span>
+            <span>Run <button class="link mono" title="Copy" onclick={copyUpgrade}>{upgradeCommand}</button>{copiedUpgrade ? ' · copied' : ''}</span>
+            <button class="link" onclick={() => api.openURL(prefs.update!.url)}>What's new</button>
+          {:else if prefs.update}
+            <span>Up to date{prefs.version === 'dev' ? ' (dev build)' : ''}</span>
+          {:else if prefs.updateError}
+            <span class="warn">Couldn't check: {prefs.updateError}</span>
+          {:else}
+            <span class="muted">Checking…</span>
+          {/if}
+          <button class="link" onclick={checkUpdate}>Check now</button>
+        </span>
+      </div>
       <div><span class="muted">Settings file</span><span class="mono selectable">{prefs.path}</span></div>
       <div><span class="muted">Change records</span><span class="mono selectable">{prefs.home}</span></div>
       <div><span class="muted">Setup</span><span><button class="link" onclick={() => navigate({ name: 'setup' })}>Open the setup checklist</button></span></div>
@@ -565,5 +590,6 @@
   .roots li { display: flex; align-items: center; gap: 10px; min-height: 36px; padding: 0 4px 0 10px; border: 1px solid var(--line); border-radius: 8px; font-size: 13px; }
   .roots li .grow { min-width: 0; overflow-wrap: anywhere; }
   .about { display: flex; flex-direction: column; gap: 8px; font-size: 13px; }
+  .update-row { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; }
   .about div { display: grid; grid-template-columns: 180px minmax(0, 1fr); gap: 12px; }
 </style>
