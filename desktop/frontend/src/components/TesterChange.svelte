@@ -444,7 +444,7 @@
             {@const m = machine(r)}
             <div class="row" class:warnrow={!r.cloned}>
               <span class="stack"><span class="mono">{r.name}</span>{#if r.branch && r.branch !== id}<span class="mono small muted">{r.branch}</span>{/if}</span>
-              <div>{#if r.pr}<button class="link mono" onclick={() => api.openURL(r.pr!.url)}>#{r.pr.number}</button> {/if}<span class={ci.tone}>{r.pr ? '· ' : ''}{ci.text}</span></div>
+              <div>{#if r.pr}<button class="link mono" onclick={() => api.openURL(r.pr!.url)}>#{r.pr.number}</button>{' · '}{/if}<span class={ci.tone}>{ci.text}</span></div>
               <span class={m.tone}>{m.text}</span>
             </div>
           {/each}

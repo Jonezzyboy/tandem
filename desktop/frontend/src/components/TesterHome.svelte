@@ -144,7 +144,7 @@
     </div>
     <form class="find" style="--wails-draggable: no-drag" onsubmit={(e) => { e.preventDefault(); open() }}>
       <Icon name="link" />
-      <input class="input mono" bind:value={find} placeholder="Paste a tester or Jira link, or DEV-123" aria-label="Find a change to test" />
+      <input class="input mono" bind:value={find} placeholder="Paste a tester or Jira link" aria-label="Find a change to test" />
     </form>
   </header>
   {#if findError}<div class="small warn">{findError}</div>{/if}

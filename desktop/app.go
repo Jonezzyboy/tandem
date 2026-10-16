@@ -69,6 +69,10 @@ type App struct {
 	// installed, waiting for a restart.
 	installing  bool
 	updateReady string
+	// histMu serialises history files.
+	histMu sync.Mutex
+	// reviewers are suggestions by the change's sorted repos.
+	reviewers map[string]reviewerCache
 
 	restoreOnce sync.Once
 	// testMu serialises tester-mode switches, so two can't race on the repos.
@@ -82,17 +86,18 @@ type App struct {
 
 func NewApp(store change.Store, roots []string) *App {
 	a := &App{
-		store:    store,
-		roots:    roots,
-		emit:     func(string, any) {},
-		views:    map[string]core.ChangeView{},
-		remoteAt: map[string]time.Time{},
-		inflight: map[string]bool{},
-		ops:      map[string]*sync.Mutex{},
-		trains:   map[string]context.CancelFunc{},
-		builds:   map[string]context.CancelFunc{},
-		goup:     map[string]string{},
-		settings: defaultSettings(),
+		store:     store,
+		roots:     roots,
+		emit:      func(string, any) {},
+		views:     map[string]core.ChangeView{},
+		remoteAt:  map[string]time.Time{},
+		inflight:  map[string]bool{},
+		ops:       map[string]*sync.Mutex{},
+		trains:    map[string]context.CancelFunc{},
+		builds:    map[string]context.CancelFunc{},
+		goup:      map[string]string{},
+		reviewers: map[string]reviewerCache{},
+		settings:  defaultSettings(),
 	}
 	a.send = a.sendNative
 	return a
@@ -247,6 +252,15 @@ func (a *App) buildView(id string, remote bool) (core.ChangeView, error) {
 	a.mu.Unlock()
 	if remote && had {
 		notes := changeNotes(prev, v)
+		for _, n := range notes {
+			tone := "muted"
+			if strings.Contains(n.Body, "failing") || strings.Contains(n.Body, "changes requested") {
+				tone = "warn"
+			} else if n.Kind != notifyCI || strings.Contains(n.Body, "passed") {
+				tone = "ok"
+			}
+			a.activity(id, n.Body, tone)
+		}
 		if training {
 			// The train reports its own merges.
 			notes = slices.DeleteFunc(notes, func(n Note) bool { return n.Kind == notifyMerged })
@@ -328,6 +342,7 @@ type ActivityUpdate struct {
 }
 
 func (a *App) activity(id, text, tone string) {
+	a.Record(id, text, tone)
 	a.emit("activity", ActivityUpdate{Change: id, Text: text, Tone: tone})
 }
 
@@ -477,8 +492,10 @@ func (a *App) Sync(id string) ([]LegResult, error) {
 		return nil, err
 	}
 	g, _ := core.BuildGraph(c)
+	results := core.Sync(a.ctx, c, core.OrderedLegs(c, g.Levels))
+	a.saveSyncUndo(id, results)
 	var out []LegResult
-	for _, r := range core.Sync(a.ctx, c, core.OrderedLegs(c, g.Levels)) {
+	for _, r := range results {
 		out = append(out, LegResult{Leg: r.Leg.Name(), OK: r.OK, Message: r.Message})
 	}
 	go a.refresh(id, false)
@@ -635,6 +652,7 @@ func (a *App) PublishPRs(id string, req PRRequest) (PRPreview, error) {
 	}
 	plans := core.PlanPRs(a.ctx, c, g, req.options())
 	core.PublishPRs(a.ctx, c, plans, title, req.options())
+	a.dropSyncUndo(id)
 	if err := a.store.Save(c); err != nil {
 		return PRPreview{}, err
 	}

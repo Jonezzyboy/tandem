@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -253,7 +254,8 @@ func TestUpstreamMergeTriggersGoupThenCommitAndPush(t *testing.T) {
 		t.Errorf("pkg-hosted has pins: %+v", p)
 	}
 	f.mu.Lock()
-	if len(f.events) != 2 || !strings.Contains(f.events[0].Text, "pkg-hosted merged") || f.events[0].Tone != "ok" {
+	goups := slices.DeleteFunc(slices.Clone(f.events), func(e ActivityUpdate) bool { return !strings.Contains(e.Text, "is now at") })
+	if len(goups) != 2 || !strings.Contains(goups[0].Text, "pkg-hosted merged") || goups[0].Tone != "ok" {
 		t.Errorf("activity = %+v", f.events)
 	}
 	f.mu.Unlock()

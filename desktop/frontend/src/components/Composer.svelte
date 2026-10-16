@@ -8,6 +8,7 @@
   import CopySlack from './CopySlack.svelte'
   import Icon from './Icon.svelte'
   import MarkdownEditor from './MarkdownEditor.svelte'
+  import ReviewerPicker from './ReviewerPicker.svelte'
 
   let { view, onclose, ticketKey = '' }: { view: ChangeView; onclose: () => void; ticketKey?: string } = $props()
 
@@ -185,7 +186,7 @@
         </div>
         <div class="field">
           <label for="pr-reviewers">Reviewers</label>
-          <input id="pr-reviewers" class="input" bind:value={reviewers} placeholder="user, org/team" />
+          <ReviewerPicker id="pr-reviewers" changeId={view.id} bind:value={reviewers} />
         </div>
         <div class="toggles">
           <label class="toggle"><input type="checkbox" bind:checked={draft} onchange={plan} />Open new PRs as drafts</label>

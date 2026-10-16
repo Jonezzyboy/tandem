@@ -458,3 +458,11 @@ export interface ShareLinks {
   web: string
   app: string
 }
+
+export interface Reviewer {
+  login: string
+  name: string
+  team: boolean
+  // How many of your recent PRs in these repos they reviewed or were asked to.
+  recent: number
+}
