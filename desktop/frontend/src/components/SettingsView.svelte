@@ -503,50 +503,66 @@
     </div>
   </section>
 
+  <section aria-labelledby="s-updates">
+    <h2 id="s-updates">Updates</h2>
+    <div class="card updates">
+      <div class="update-head">
+        <div class="stack">
+          <span class="version">Tandem <span class="mono">{prefs.version || '…'}</span></span>
+          <span class="small" class:ok={prefs.update?.newer || prefs.install.phase === 'ready'} class:warn={!!prefs.updateError && !prefs.update} class:muted={!prefs.update?.newer && prefs.install.phase !== 'ready'} role="status">
+            {#if prefs.install.phase === 'ready'}{prefs.install.version} is installed. Restart to start using it.
+            {:else if prefs.install.phase === 'installing'}Installing {prefs.install.version}…
+            {:else if prefs.updateChecking}Checking for updates…
+            {:else if prefs.update?.newer}{prefs.update.version} is available.
+            {:else if prefs.update}Up to date{prefs.version === 'dev' ? ' (dev build)' : ''}{prefs.updateCheckedAt ? ` · checked ${new Date(prefs.updateCheckedAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}` : ''}
+            {:else if prefs.updateError}Couldn't check for updates: {prefs.updateError}
+            {:else}Checking for updates…{/if}
+          </span>
+        </div>
+        <div class="update-actions">
+          {#if prefs.update?.newer && prefs.install.phase !== 'ready'}
+            <button class="link small" onclick={() => api.openURL(prefs.update!.url)}>What's new</button>
+          {/if}
+          {#if prefs.install.phase === 'ready'}
+            <button class="btn small primary" onclick={restartToUpdate}>Restart to update</button>
+          {:else if prefs.install.phase === 'installing'}
+            <button class="btn small" disabled><Icon name="running" size={14} spin />Installing</button>
+          {:else if prefs.update?.newer}
+            <button class="btn small primary" onclick={installUpdate}>Update now</button>
+          {:else}
+            <button class="btn small" disabled={prefs.updateChecking} onclick={checkUpdate}><Icon name="refresh" size={14} spin={prefs.updateChecking} />Check for updates</button>
+          {/if}
+        </div>
+      </div>
+      {#if prefs.install.phase === 'installing' && prefs.install.line}
+        <div class="mono small muted install-line">{prefs.install.line}</div>
+      {:else if prefs.install.phase === 'failed' || (prefs.install.phase === 'ready' && prefs.install.line)}
+        <div class="install-error">
+          <span class="small warn">{prefs.install.line}</span>
+          {#if prefs.install.phase === 'failed'}
+            <span class="small muted">You can also run <button class="link mono" title="Copy" onclick={copyUpgrade}>{upgradeCommand}</button>{copiedUpgrade ? ' · copied' : ''} in Terminal.</span>
+          {/if}
+        </div>
+      {/if}
+      <label class="toggle-row">
+        <span class="stack">
+          <span>Install updates automatically</span>
+          <span class="small muted">New versions install in the background and take effect when Tandem restarts.</span>
+        </span>
+        <input type="checkbox" class="switch" checked={prefs.settings.autoUpdate} onchange={(e) => saveSettings({ autoUpdate: e.currentTarget.checked })} />
+      </label>
+    </div>
+  </section>
+
   <section aria-labelledby="s-about">
     <h2 id="s-about">About</h2>
     <div class="card about">
-      <div><span class="muted">Version</span><span class="mono">{prefs.version || '…'}</span></div>
-      <div>
-        <span class="muted">Updates</span>
-        <span class="update-col">
-          <span class="update-row">
-            {#if prefs.install.phase === 'ready'}
-              <span class="ok">{prefs.install.version} is installed.</span>
-              <button class="btn small primary" onclick={restartToUpdate}>Restart to update</button>
-            {:else if prefs.install.phase === 'installing'}
-              <span class="muted">Updating to {prefs.install.version}…</span>
-            {:else if prefs.update?.newer}
-              <span class="ok">{prefs.update.version} is available.</span>
-              <button class="btn small primary" onclick={installUpdate}>Update now</button>
-              <button class="link" onclick={() => api.openURL(prefs.update!.url)}>What's new</button>
-            {:else if prefs.update}
-              <span>Up to date{prefs.version === 'dev' ? ' (dev build)' : ''}</span>
-            {:else if prefs.updateError}
-              <span class="warn">Couldn't check: {prefs.updateError}</span>
-            {/if}
-            {#if prefs.install.phase !== 'installing' && prefs.install.phase !== 'ready'}
-              <button class="link" disabled={prefs.updateChecking} onclick={checkUpdate}>{prefs.updateChecking ? 'Checking…' : 'Check now'}</button>
-              {#if !prefs.updateChecking && prefs.updateCheckedAt}<span class="muted small">checked {new Date(prefs.updateCheckedAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</span>{/if}
-            {/if}
-          </span>
-          {#if prefs.install.phase === 'installing' && prefs.install.line}
-            <span class="mono small muted install-line">{prefs.install.line}</span>
-          {:else if prefs.install.phase === 'failed'}
-            <span class="small warn">{prefs.install.line}</span>
-            <span class="small muted">You can also run <button class="link mono" title="Copy" onclick={copyUpgrade}>{upgradeCommand}</button>{copiedUpgrade ? ' · copied' : ''} in Terminal.</span>
-          {:else if prefs.install.phase === 'ready' && prefs.install.line}
-            <span class="small warn">{prefs.install.line}</span>
-          {/if}
-          <label class="choice small-choice">
-            <input type="checkbox" checked={prefs.settings.autoUpdate} onchange={(e) => saveSettings({ autoUpdate: e.currentTarget.checked })} />
-            Install updates automatically; they take effect when Tandem restarts
-          </label>
-        </span>
+      <div class="about-row"><span class="muted">Settings file</span><span class="mono path selectable">{prefs.path}</span></div>
+      <div class="about-row"><span class="muted">Change records</span><span class="mono path selectable">{prefs.home}</span></div>
+      <div class="about-row">
+        <span class="muted">Setup checklist</span>
+        <span><button class="btn small" onclick={() => navigate({ name: 'setup' })}>Open</button></span>
       </div>
-      <div><span class="muted">Settings file</span><span class="mono selectable">{prefs.path}</span></div>
-      <div><span class="muted">Change records</span><span class="mono selectable">{prefs.home}</span></div>
-      <div><span class="muted">Setup</span><span><button class="link" onclick={() => navigate({ name: 'setup' })}>Open the setup checklist</button></span></div>
     </div>
   </section>
 </div>
@@ -628,10 +644,27 @@
   .roots { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
   .roots li { display: flex; align-items: center; gap: 10px; min-height: 36px; padding: 0 4px 0 10px; border: 1px solid var(--line); border-radius: 8px; font-size: 13px; }
   .roots li .grow { min-width: 0; overflow-wrap: anywhere; }
-  .about { display: flex; flex-direction: column; gap: 8px; font-size: 13px; }
-  .update-col { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
-  .update-row { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; }
-  .install-line { overflow-wrap: anywhere; }
-  .small-choice { font-size: 13px; }
-  .about div { display: grid; grid-template-columns: 180px minmax(0, 1fr); gap: 12px; }
+  .updates { display: flex; flex-direction: column; gap: 14px; }
+  .update-head { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+  .version { font-size: 15px; font-weight: 600; }
+  .version .mono { font-weight: 500; }
+  .update-actions { display: flex; align-items: center; gap: 14px; flex-shrink: 0; }
+  .install-line { overflow-wrap: anywhere; padding: 8px 10px; border-radius: 8px; background: var(--nav); }
+  .install-error { display: flex; flex-direction: column; gap: 4px; }
+  .toggle-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding-top: 14px; border-top: 1px solid var(--line); font-size: 14px; cursor: pointer; }
+  .switch {
+    appearance: none; flex-shrink: 0; width: 34px; height: 20px; border-radius: 999px; position: relative; cursor: pointer;
+    background: var(--line-2); transition: background 0.15s;
+  }
+  .switch::after {
+    content: ''; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%;
+    background: var(--text); transition: transform 0.15s;
+  }
+  .switch:checked { background: var(--accent); }
+  .switch:checked::after { transform: translateX(14px); background: var(--on-accent); }
+  .switch:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .about { display: flex; flex-direction: column; font-size: 13px; padding-top: 6px; padding-bottom: 6px; }
+  .about-row { display: grid; grid-template-columns: 180px minmax(0, 1fr); gap: 12px; align-items: center; min-height: 40px; }
+  .about-row + .about-row { border-top: 1px solid var(--line); }
+  .path { font-size: 12px; color: var(--text-2); overflow-wrap: anywhere; }
 </style>
