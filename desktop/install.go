@@ -69,8 +69,15 @@ func (a *App) InstallUpdate() error {
 	ctx, cancel := context.WithTimeout(a.ctx, 15*time.Minute)
 	defer cancel()
 	if brew := brewPath(); brew != "" && inApplications(bundle) && caskInstalled(ctx, brew) {
-		report("installing", "brew upgrade --cask "+caskName)
-		err = streamCommand(ctx, func(line string) { report("installing", line) }, brew, "upgrade", "--cask", caskName)
+		line := func(l string) { report("installing", l) }
+		// brew upgrade refreshes taps only every day or so, so it can miss a
+		// release that's hours old.
+		report("installing", "brew update")
+		err = streamCommand(ctx, line, brew, "update")
+		if err == nil {
+			report("installing", "brew upgrade --cask "+caskName)
+			err = streamCommand(ctx, line, brew, "upgrade", "--cask", caskName)
+		}
 	} else {
 		err = installZip(ctx, u.Version, bundle, func(line string) { report("installing", line) })
 	}
@@ -79,7 +86,7 @@ func (a *App) InstallUpdate() error {
 	}
 	got := bundleVersion(bundle)
 	if got != u.Version {
-		return fail(fmt.Errorf("the install finished but %s is still %s; Homebrew may not have seen the release yet, so try again in a few minutes", filepath.Base(bundle), got))
+		return fail(fmt.Errorf("the install finished but %s is still %s, not %s", filepath.Base(bundle), got, u.Version))
 	}
 	a.mu.Lock()
 	a.updateReady = got
