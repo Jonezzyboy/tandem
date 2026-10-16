@@ -223,6 +223,16 @@
     </div>
   </header>
 
+  {#if plan?.share && (plan.share.from || plan.share.note)}
+    <div class="shared">
+      <Icon name="link" color="var(--accent-text)" />
+      <div class="shared-text">
+        <span class="small muted">Shared{plan.share.from ? ` by @${plan.share.from}` : ''} · its repos and branches come from the link</span>
+        {#if plan.share.note}<span class="shared-note selectable">{plan.share.note}</span>{/if}
+      </div>
+    </div>
+  {/if}
+
   {#if planError}
     <div class="note warn selectable"><Icon name="alert" color="var(--warn)" />{planError}</div>
   {/if}
@@ -527,6 +537,9 @@
 {/snippet}
 
 <style>
+  .shared { display: flex; gap: 10px; align-items: flex-start; padding: 12px 14px; border-radius: 10px; background: var(--accent-bg); border: 1px solid var(--accent); }
+  .shared-text { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+  .shared-note { white-space: pre-wrap; font-size: 13.5px; line-height: 1.5; }
   /* Each column scrolls on its own, so a long checklist never scrolls the page. */
   .page { height: 100%; box-sizing: border-box; overflow-y: auto; padding: 0 32px 24px; display: flex; flex-direction: column; gap: 18px; }
   .page > * { flex-shrink: 0; }

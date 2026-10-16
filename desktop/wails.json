@@ -12,6 +12,13 @@
   "info": {
     "productName": "Tandem",
     "productVersion": "0.29.0",
-    "comments": "One change, many repos."
+    "comments": "One change, many repos.",
+    "protocols": [
+      {
+        "scheme": "tandem",
+        "description": "Tandem tester links",
+        "role": "Viewer"
+      }
+    ]
   }
 }

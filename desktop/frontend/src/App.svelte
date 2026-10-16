@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte'
-  import { activeChanges, app, currentId, init, loadInbox, navigate } from './lib/state.svelte'
+  import { activeChanges, app, currentId, init, loadInbox, navigate, takeLink } from './lib/state.svelte'
   import { actions, initSettings, prefs, saveSettings, shortcutFor, shortcutFromEvent } from './lib/settings.svelte'
   import { api } from './lib/api'
   import Sidebar from './components/Sidebar.svelte'
@@ -24,6 +24,7 @@
     init()
     initTester()
     navigate(await firstRoute())
+    takeLink()
   })
 
   // The checklist opens once: on a fresh install, or for an existing user

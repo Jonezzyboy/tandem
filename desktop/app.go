@@ -63,6 +63,8 @@ type App struct {
 	active      bool
 	send        func(Note)
 	notifyReady bool
+	// pendingLink is a tandem:// link the app was opened with, until taken.
+	pendingLink string
 
 	restoreOnce sync.Once
 	// testMu serialises tester-mode switches, so two can't race on the repos.

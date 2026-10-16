@@ -308,6 +308,8 @@ type TesterPlan struct {
 	// what was pushed to each of its repos since.
 	Last    *testrun.Record `json:"last"`
 	Changes []RepoChanges   `json:"changes"`
+	// Share is the developer's link this plan came from, if any.
+	Share *Share `json:"share"`
 }
 
 type RepoChanges struct {
@@ -323,11 +325,15 @@ func (a *App) TesterPlan(key string) (TesterPlan, error) {
 	if r, ok := jira.Parse(key); ok {
 		key = r.Key
 	}
-	if !jira.IsKey(key) {
+	share, shared := a.shares()[key]
+	if !jira.IsKey(key) && !shared {
 		return TesterPlan{}, fmt.Errorf("%q isn't a Jira ticket key or link", key)
 	}
 	s := a.Settings()
 	p := TesterPlan{Repos: []PlanRepo{}, CloneRoot: a.cloneRoot(), Checklist: []testrun.Check{}, Changes: []RepoChanges{}}
+	if shared {
+		p.Share = &share
+	}
 	if st, err := a.testStore().Load(); err == nil {
 		p.Last = st.Last(key)
 	}
@@ -342,7 +348,10 @@ func (a *App) TesterPlan(key string) (TesterPlan, error) {
 		prs, prErr = prsFor(all, key), err
 	})
 	wg.Go(func() { local = core.FindBranch(ctx, workspace.List(a.codeRoots()), key) })
-	if s.Jira.Site != "" {
+	switch {
+	case shared && share.Ticket != "":
+		wg.Go(func() { p.Ticket, _ = a.JiraLookup(share.Ticket) })
+	case s.Jira.Site != "" && jira.IsKey(key):
 		wg.Go(func() {
 			p.Ticket, _ = a.JiraLookup(jira.Ref{Site: s.Jira.Site, Key: key}.URL())
 		})
@@ -365,6 +374,12 @@ func (a *App) TesterPlan(key string) (TesterPlan, error) {
 	p.Checklist = checklist(p.Ticket.Description)
 	if p.Ticket.Key == "" {
 		p.Ticket = JiraTicket{Key: key, Error: "Add your Jira site in Settings to see the ticket."}
+	}
+	if shared && p.Ticket.Summary == "" {
+		p.Ticket.Summary = share.Title
+		if p.Ticket.URL == "" {
+			p.Ticket.URL = share.Ticket
+		}
 	}
 	if prErr != nil {
 		p.Error = "Couldn't search GitHub: " + core.FirstLine(prErr.Error())
@@ -399,6 +414,15 @@ func (a *App) TesterPlan(key string) (TesterPlan, error) {
 			if r := add(b.Repo.Name); r.Branch == "" {
 				r.Branch = key
 			}
+		}
+	}
+	// A shared change names its repos and branches outright, so they win
+	// over what searching found.
+	for _, sr := range share.Repos {
+		r := add(sr.Name)
+		r.Branch = sr.Branch
+		if r.PR == nil && sr.PR > 0 {
+			r.PR = &TestPR{Repo: sr.Name, Branch: sr.Branch, Number: sr.PR, URL: sr.URL}
 		}
 	}
 	for _, r := range byName {

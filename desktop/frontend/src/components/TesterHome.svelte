@@ -2,7 +2,7 @@
   import { onDestroy, onMount } from 'svelte'
   import { api } from '@lib/api'
   import { parseTicket } from '@lib/jira'
-  import { navigate } from '@lib/state.svelte'
+  import { looksShared, navigate, openShared } from '@lib/state.svelte'
   import { isRetest, lastTest, loadQueue, loadState, queueCI, tester, type QueueSort, type QueueView } from '@lib/tester.svelte'
   import { ago, shortRepo } from '@lib/format'
   import type { QueueItem } from '@lib/types'
@@ -24,9 +24,14 @@
   let findError = $state('')
   function open() {
     const text = find.trim()
+    if (looksShared(text)) {
+      find = findError = ''
+      openShared(text)
+      return
+    }
     const key = parseTicket(text)?.key ?? text.toUpperCase()
     if (!/^[A-Z][A-Z0-9_]+-[0-9]+$/.test(key)) {
-      findError = 'Paste a Jira link, or type a key like DEV-123'
+      findError = 'Paste a Jira link or a tester link, or type a key like DEV-123'
       return
     }
     find = findError = ''
@@ -139,7 +144,7 @@
     </div>
     <form class="find" style="--wails-draggable: no-drag" onsubmit={(e) => { e.preventDefault(); open() }}>
       <Icon name="link" />
-      <input class="input mono" bind:value={find} placeholder="Paste a Jira link, or type DEV-123" aria-label="Find a change to test" />
+      <input class="input mono" bind:value={find} placeholder="Paste a tester or Jira link, or DEV-123" aria-label="Find a change to test" />
     </form>
   </header>
   {#if findError}<div class="small warn">{findError}</div>{/if}

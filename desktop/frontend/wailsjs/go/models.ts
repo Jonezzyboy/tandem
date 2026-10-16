@@ -998,6 +998,115 @@ export namespace main {
 	        this.fix = source["fix"];
 	    }
 	}
+	export class ShareRepo {
+	    name: string;
+	    branch: string;
+	    base?: string;
+	    pr?: number;
+	    url?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new ShareRepo(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.name = source["name"];
+	        this.branch = source["branch"];
+	        this.base = source["base"];
+	        this.pr = source["pr"];
+	        this.url = source["url"];
+	    }
+	}
+	export class Share {
+	    v: number;
+	    id: string;
+	    title?: string;
+	    ticket?: string;
+	    from?: string;
+	    note?: string;
+	    repos: ShareRepo[];
+	
+	    static createFrom(source: any = {}) {
+	        return new Share(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.v = source["v"];
+	        this.id = source["id"];
+	        this.title = source["title"];
+	        this.ticket = source["ticket"];
+	        this.from = source["from"];
+	        this.note = source["note"];
+	        this.repos = this.convertValues(source["repos"], ShareRepo);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class ShareLinks {
+	    web: string;
+	    app: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new ShareLinks(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.web = source["web"];
+	        this.app = source["app"];
+	    }
+	}
+	
+	export class SharedChange {
+	    key: string;
+	    share: Share;
+	
+	    static createFrom(source: any = {}) {
+	        return new SharedChange(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.key = source["key"];
+	        this.share = this.convertValues(source["share"], Share);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
 	export class StartItem {
 	    repo: string;
 	    ok: boolean;
@@ -1131,6 +1240,7 @@ export namespace main {
 	    checklist: testrun.Check[];
 	    last?: testrun.Record;
 	    changes: RepoChanges[];
+	    share?: Share;
 	
 	    static createFrom(source: any = {}) {
 	        return new TesterPlan(source);
@@ -1145,6 +1255,7 @@ export namespace main {
 	        this.checklist = this.convertValues(source["checklist"], testrun.Check);
 	        this.last = this.convertValues(source["last"], testrun.Record);
 	        this.changes = this.convertValues(source["changes"], RepoChanges);
+	        this.share = this.convertValues(source["share"], Share);
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {

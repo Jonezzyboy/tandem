@@ -126,6 +126,10 @@ export function OpenNotificationSettings() {
   return window['go']['main']['App']['OpenNotificationSettings']();
 }
 
+export function OpenShare(arg1) {
+  return window['go']['main']['App']['OpenShare'](arg1);
+}
+
 export function OpenURL(arg1) {
   return window['go']['main']['App']['OpenURL'](arg1);
 }
@@ -198,6 +202,10 @@ export function Setup() {
   return window['go']['main']['App']['Setup']();
 }
 
+export function ShareLink(arg1, arg2) {
+  return window['go']['main']['App']['ShareLink'](arg1, arg2);
+}
+
 export function Start(arg1) {
   return window['go']['main']['App']['Start'](arg1);
 }
@@ -216,6 +224,10 @@ export function Sync(arg1) {
 
 export function SystemDark() {
   return window['go']['main']['App']['SystemDark']();
+}
+
+export function TakeShareLink() {
+  return window['go']['main']['App']['TakeShareLink']();
 }
 
 export function TandemHome() {

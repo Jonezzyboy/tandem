@@ -1,4 +1,5 @@
 import { api, errorText, on } from './api'
+import { prefs, saveSettings } from './settings.svelte'
 import type { Activity, ChangeSummary, ChangeView, CheckEvent, CleanItem, Inbox, Route, TrainEvent, TrainRun } from './types'
 
 export const app = $state({
@@ -106,6 +107,30 @@ function recordCheck(ev: CheckEvent) {
   app.checks[ev.change] = list
 }
 
+// looksShared tells a developer's tester link from a Jira link or key.
+export function looksShared(text: string): boolean {
+  const t = text.trim()
+  return t.startsWith('tandem://') || t.includes('github.io/tandem/test') || /^[A-Za-z0-9_-]{40,}$/.test(t)
+}
+
+// openShared opens a developer's tester link on its tester page, switching
+// to tester mode for it.
+export async function openShared(text: string) {
+  try {
+    const { key } = await api.openShare(text)
+    if (prefs.settings.mode !== 'tester') await saveSettings({ mode: 'tester' })
+    navigate({ name: 'test', id: key })
+  } catch (e) {
+    fail(e)
+  }
+}
+
+// takeLink opens the link macOS started or woke the app with, if any.
+export async function takeLink() {
+  const link = await api.takeShareLink()
+  if (link) openShared(link)
+}
+
 export function init() {
   api.changes().then((c) => { app.changes = c }).catch(fail)
   loadInbox(false)
@@ -116,6 +141,7 @@ export function init() {
   on<TrainEvent>('train', recordTrain)
   on<{ change: string; text: string; tone: Activity['tone'] }>('activity', (a) => log(a.change, a.text, a.tone))
   on<string>('error', (e) => { app.error = e })
+  on('share-link', takeLink)
   on<string>('open', (id) => navigate(id ? { name: 'change', id } : { name: 'inbox' }))
   window.addEventListener('focus', () => {
     api.windowActive(true)

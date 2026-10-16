@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Open in Tandem</title>
+<link rel="icon" href="../images/icon.png">
+<style>
+  :root { --bg: #f3f1ea; --panel: #fffdf7; --line: #dedbd0; --text: #1d1d1b; --muted: #6b6a64; --accent: #2a4fd6; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #111216; --panel: #16171c; --line: #25272e; --text: #eceae4; --muted: #9c9ea8; --accent: #3a5ee4; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+  main { max-width: 640px; margin: 0 auto; padding: 56px 16px; display: flex; flex-direction: column; gap: 20px; }
+  header { display: flex; align-items: center; gap: 14px; }
+  header img { width: 52px; height: 52px; }
+  h1 { margin: 0; font-size: 24px; }
+  p { margin: 0; }
+  .muted { color: var(--muted); }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 16px 18px; display: flex; flex-direction: column; gap: 10px; }
+  .btn { align-self: flex-start; display: inline-block; padding: 9px 16px; border-radius: 9px; background: var(--accent); color: #fff; text-decoration: none; font-weight: 500; }
+  code, .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px; }
+  code { padding: 2px 6px; border-radius: 5px; background: var(--bg); border: 1px solid var(--line); overflow-wrap: anywhere; }
+  table { border-collapse: collapse; width: 100%; font-size: 14px; }
+  td { padding: 6px 0; border-top: 1px solid var(--line); vertical-align: top; }
+  td + td { padding-left: 16px; }
+  .note { white-space: pre-wrap; }
+  [hidden] { display: none; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <img src="../images/icon.png" alt="">
+    <div>
+      <h1 id="heading">Opening Tandem…</h1>
+      <p class="muted" id="sub">A developer shared a change for you to test.</p>
+    </div>
+  </header>
+
+  <section class="card" id="change" hidden>
+    <div><span class="mono" id="id"></span> <strong id="title"></strong></div>
+    <p class="muted" id="from" hidden></p>
+    <p class="note" id="note" hidden></p>
+    <table><tbody id="repos"></tbody></table>
+    <p id="ticket" hidden><a target="_blank" rel="noopener">Open the ticket in Jira</a></p>
+  </section>
+
+  <section class="card" id="open" hidden>
+    <a class="btn" id="open-link">Open in Tandem</a>
+    <p class="muted">Nothing happened? Copy this page's address and paste it into the box at the top of Tandem's <strong>Ready to test</strong> page.</p>
+  </section>
+
+  <section class="card">
+    <p><strong>Don't have Tandem yet?</strong> Install it on your Mac, then open this link again:</p>
+    <p><code>brew install --cask Jonezzyboy/tandem/tandem-repos</code></p>
+    <p class="muted">More at <a href="https://github.com/Jonezzyboy/tandem">github.com/Jonezzyboy/tandem</a>.</p>
+  </section>
+</main>
+<script>
+  // The change rides in the fragment, which never leaves this browser. Every
+  // value is written with textContent, never as HTML.
+  const payload = location.hash.slice(1)
+  const $ = (id) => document.getElementById(id)
+  function decode(p) {
+    try {
+      const b64 = p.replace(/-/g, '+').replace(/_/g, '/')
+      const bytes = Uint8Array.from(atob(b64 + '='.repeat((4 - (b64.length % 4)) % 4)), (c) => c.charCodeAt(0))
+      return JSON.parse(new TextDecoder().decode(bytes))
+    } catch {
+      return null
+    }
+  }
+  const share = payload ? decode(payload) : null
+  if (!share || share.v !== 1) {
+    $('heading').textContent = 'This link is incomplete'
+    $('sub').textContent = 'Ask for the tester link again; part of it may have been cut off.'
+  } else {
+    const app = 'tandem://test#' + payload
+    $('open-link').href = app
+    $('open').hidden = false
+    $('change').hidden = false
+    $('id').textContent = share.id
+    $('title').textContent = share.title || ''
+    if (share.from) { $('from').textContent = 'Shared by @' + share.from; $('from').hidden = false }
+    if (share.note) { $('note').textContent = share.note; $('note').hidden = false }
+    if (typeof share.ticket === 'string' && share.ticket.startsWith('https://')) {
+      $('ticket').querySelector('a').href = share.ticket
+      $('ticket').hidden = false
+    }
+    for (const r of share.repos || []) {
+      const tr = document.createElement('tr')
+      const name = document.createElement('td')
+      name.className = 'mono'
+      name.textContent = r.name
+      const branch = document.createElement('td')
+      branch.className = 'mono'
+      branch.textContent = r.branch + (r.pr ? `  ·  #${r.pr}` : '')
+      tr.append(name, branch)
+      $('repos').append(tr)
+    }
+    location.href = app
+    setTimeout(() => { $('heading').textContent = 'Open this change in Tandem' }, 1500)
+  }
+</script>
+</body>
+</html>
