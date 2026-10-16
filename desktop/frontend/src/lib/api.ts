@@ -3,7 +3,7 @@ import { EventsOn } from '@wailsjs/runtime/runtime'
 import type {
   BranchInfo, ChangeSummary, ChangeView, CheckEvent, CleanItem, CleanResult, Inbox, JiraAccount, JiraTicket, LegResult, PinItem, PRPreview, PRRequest,
   BuildTarget, TestCheck, TestFinish, TesterPlan, TesterQueue, TesterState, TestRepoStatus, TestStep, VerdictOption,
-  NotifyStatus, PRDraft, Share, ShareLinks, RepoInfo, RootInfo, SetupItem, StartItem, TrainPlan, Update,
+  NotifyStatus, PRDraft, Reviewer, Share, ShareLinks, RepoInfo, RootInfo, SetupItem, StartItem, TrainPlan, Update,
 } from './types'
 
 // The generated bindings type results as model classes; the JSON is plain
@@ -16,6 +16,12 @@ export const api = {
   sync: (id: string) => App.Sync(id) as unknown as Promise<LegResult[]>,
   check: (id: string, leg = '', changedOnly = false) => App.Check(id, leg, changedOnly) as unknown as Promise<CheckEvent[]>,
   draftDescription: (id: string) => App.DraftDescription(id),
+  syncPlan: (id: string) => App.SyncPlan(id) as unknown as Promise<{ leg: string; commands: string[]; skip: string }[]>,
+  undoSync: (id: string) => App.UndoSync(id) as unknown as Promise<LegResult[]>,
+  canUndoSync: (id: string) => App.CanUndoSync(id),
+  history: (id: string) => App.History(id) as unknown as Promise<{ at: string; text: string; tone: 'ok' | 'warn' | 'muted' }[]>,
+  record: (id: string, text: string, tone: string) => App.Record(id, text, tone),
+  reviewers: (id: string) => App.Reviewers(id) as unknown as Promise<Reviewer[]>,
   planPRs: (id: string, req: PRRequest) => App.PlanPRs(id, req as never) as unknown as Promise<PRPreview>,
   publishPRs: (id: string, req: PRRequest) => App.PublishPRs(id, req as never) as unknown as Promise<PRPreview>,
   inbox: (force = false) => App.Inbox(force) as unknown as Promise<Inbox>,

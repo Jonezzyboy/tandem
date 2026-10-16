@@ -18,6 +18,10 @@ export function BranchRepos(arg1) {
   return window['go']['main']['App']['BranchRepos'](arg1);
 }
 
+export function CanUndoSync(arg1) {
+  return window['go']['main']['App']['CanUndoSync'](arg1);
+}
+
 export function CancelTrain(arg1) {
   return window['go']['main']['App']['CancelTrain'](arg1);
 }
@@ -94,6 +98,10 @@ export function GuessTicket(arg1) {
   return window['go']['main']['App']['GuessTicket'](arg1);
 }
 
+export function History(arg1) {
+  return window['go']['main']['App']['History'](arg1);
+}
+
 export function Inbox(arg1) {
   return window['go']['main']['App']['Inbox'](arg1);
 }
@@ -154,6 +162,10 @@ export function PublishPRs(arg1, arg2) {
   return window['go']['main']['App']['PublishPRs'](arg1, arg2);
 }
 
+export function Record(arg1, arg2, arg3) {
+  return window['go']['main']['App']['Record'](arg1, arg2, arg3);
+}
+
 export function Refresh(arg1) {
   return window['go']['main']['App']['Refresh'](arg1);
 }
@@ -180,6 +192,10 @@ export function RerunFailed(arg1, arg2) {
 
 export function RestartToUpdate() {
   return window['go']['main']['App']['RestartToUpdate']();
+}
+
+export function Reviewers(arg1) {
+  return window['go']['main']['App']['Reviewers'](arg1);
 }
 
 export function RunSetupFix(arg1) {
@@ -232,6 +248,10 @@ export function Switch(arg1, arg2) {
 
 export function Sync(arg1) {
   return window['go']['main']['App']['Sync'](arg1);
+}
+
+export function SyncPlan(arg1) {
+  return window['go']['main']['App']['SyncPlan'](arg1);
 }
 
 export function SystemDark() {
@@ -308,6 +328,10 @@ export function TesterVerdicts(arg1) {
 
 export function TrainPlan(arg1) {
   return window['go']['main']['App']['TrainPlan'](arg1);
+}
+
+export function UndoSync(arg1) {
+  return window['go']['main']['App']['UndoSync'](arg1);
 }
 
 export function Unlink(arg1, arg2, arg3) {

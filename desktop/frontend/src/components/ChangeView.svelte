@@ -2,11 +2,12 @@
   import { onDestroy, onMount } from 'svelte'
   import { api } from '@lib/api'
   import { ago, reviewLabel, slackMessage } from '@lib/format'
-  import { app, checkOut, fail, loadCleanPlan, log, navigate, switching as switchingIds } from '@lib/state.svelte'
+  import { app, checkOut, fail, loadCleanPlan, loadHistory, log, navigate, switching as switchingIds } from '@lib/state.svelte'
   import { editorLabel, keycaps, shortcutFor } from '@lib/settings.svelte'
   import type { CleanItem, JiraTicket, LegView } from '@lib/types'
   import Description from './Description.svelte'
   import ShareDialog from './ShareDialog.svelte'
+  import SyncDialog from './SyncDialog.svelte'
   import Composer from './Composer.svelte'
   import CopySlack from './CopySlack.svelte'
   import TrainDialog from './TrainDialog.svelte'
@@ -199,13 +200,13 @@
       if (view && !refreshing) refresh()
       return
     }
-    if (!view || app.composer || app.trainOpen || shareOpen) return
+    if (!view || app.composer || app.trainOpen || shareOpen || syncOpen) return
     switch (command) {
       case 'shareTester':
         shareOpen = true
         break
       case 'syncAll':
-        if (!syncing) sync()
+        if (!syncing) syncOpen = true
         break
       case 'runChecks':
         if (checking === null) runChecks()
@@ -221,7 +222,44 @@
         break
     }
   }
+  let syncOpen = $state(false)
+  let undoLegs = $state<string[]>([])
+  let undoing = $state(false)
+  const loadUndo = () => api.canUndoSync(id).then((l) => (undoLegs = l))
+
+  async function undoSync() {
+    undoing = true
+    try {
+      for (const r of await api.undoSync(id)) log(id, `${r.leg}: ${r.message}`, r.ok ? 'ok' : 'warn')
+    } catch (e) {
+      fail(e)
+    } finally {
+      undoing = false
+      loadUndo()
+    }
+  }
+
+  // Publishing ends the window in which a sync can be undone.
+  $effect(() => {
+    if (!app.composer) loadUndo()
+  })
+
+  // Activity entries grouped under a heading per day.
+  const activityDays = $derived.by(() => {
+    const days: { label: string; items: typeof activity }[] = []
+    const today = new Date().toDateString()
+    const yesterday = new Date(Date.now() - 86_400_000).toDateString()
+    for (const a of activity) {
+      const d = new Date(a.at).toDateString()
+      const label = d === today ? 'Today' : d === yesterday ? 'Yesterday' : new Date(a.at).toLocaleDateString([], { weekday: 'short', day: 'numeric', month: 'short' })
+      if (days.at(-1)?.label !== label) days.push({ label, items: [] })
+      days.at(-1)!.items.push(a)
+    }
+    return days
+  })
+
   onMount(() => {
+    loadHistory(id).catch(fail)
     window.addEventListener('tandem:command', onCommand)
     return () => window.removeEventListener('tandem:command', onCommand)
   })
@@ -266,6 +304,7 @@
       fail(e)
     } finally {
       syncing = false
+      loadUndo()
     }
   }
 
@@ -400,7 +439,11 @@
         <button class="icon-btn" aria-label="Refresh from GitHub" title="Refresh (⌘R)" disabled={refreshing} onclick={refresh}>
           <Icon name={refreshing ? 'running' : 'refresh'} spin={refreshing} />
         </button>
-        <button class="btn" onclick={sync} disabled={syncing}>
+        {#if undoLegs.length && !syncing}
+          <button class="link small undo" disabled={undoing} onclick={undoSync}
+            title="Put {undoLegs.join(', ')} back on the commits they had before the last sync">{undoing ? 'Undoing…' : 'Undo sync'}</button>
+        {/if}
+        <button class="btn" onclick={() => (syncOpen = true)} disabled={syncing} title="Preview, then rebase each clean leg onto its base">
           <Icon name="sync" spin={syncing} />Sync all
         </button>
         <button class="btn" onclick={() => runChecks()} disabled={checking !== null} title="Runs checks in legs changed since their checks last passed">
@@ -619,7 +662,7 @@
           <div class="panel-title">Local checks</div>
           {#if failingChecks.length}<span class="small warn">{failingChecks.length} failing</span>{/if}
           {#if checks.some((c) => c.name === 'unchanged') && checking === null}
-            <button class="link small run-all" onclick={() => runChecks('', true)} title="Run every leg's checks, unchanged ones too">Run all</button>
+            <button class="link small" onclick={() => runChecks('', true)} title="Run every leg's checks, unchanged ones too">Run all</button>
           {/if}
         </div>
         {#if checks.length === 0}
@@ -645,15 +688,24 @@
       </section>
       <section class="panel activity" aria-label="Activity">
         <div class="panel-head"><div class="panel-title">Activity</div></div>
-        {#each activity as a (a.at + a.text)}
-          <div class="act"><span class="muted mono">{ago(a.at, now)}</span><span class={a.tone}>{a.text}</span></div>
+        {#each activityDays as day (day.label)}
+          <div class="day eyebrow">{day.label}</div>
+          {#each day.items as a (a.at + a.text)}
+            <div class="act">
+              <span class="muted mono" title={new Date(a.at).toLocaleString()}>{day.label === 'Today' ? ago(a.at, now) : new Date(a.at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</span>
+              <span class={a.tone}>{a.text}</span>
+            </div>
+          {/each}
         {:else}
-          <p class="muted small">Syncs, check runs and published PRs from this session show up here.</p>
+          <p class="muted small">Syncs, checks, PRs, CI and reviews for this change are kept here.</p>
         {/each}
       </section>
     </div>
   </div>
 
+  {#if syncOpen}
+    <SyncDialog {id} onclose={() => (syncOpen = false)} onsync={sync} />
+  {/if}
   {#if shareOpen}
     <ShareDialog {view} onclose={() => (shareOpen = false)} />
   {/if}
@@ -696,7 +748,9 @@
   }
   .actions { display: flex; gap: 8px; align-items: center; flex-shrink: 0; margin-left: auto; }
   .tip { display: inline-flex; }
-  .run-all { margin-left: auto; }
+  .undo { margin-right: 4px; }
+  .day { margin: 10px 0 4px; }
+  .day:first-of-type { margin-top: 0; }
   .failed { min-width: 0; overflow-wrap: anywhere; }
   .failed a { text-decoration: underline; text-decoration-color: var(--warn-border); text-underline-offset: 2px; }
   .rerun { width: 24px; height: 24px; flex-shrink: 0; }
@@ -769,7 +823,8 @@
   .panel > * { flex-shrink: 0; }
   .output { background: var(--nav); }
   .activity { background: var(--panel); }
-  .panel-head { display: flex; justify-content: space-between; align-items: center; }
+  .panel-head { display: flex; align-items: center; gap: 12px; }
+  .panel-head > :first-child { margin-right: auto; }
   .panel-title { font-weight: 600; }
   .panel p { margin: 0; }
   .check-list { display: flex; flex-direction: column; gap: 6px; }

@@ -30,95 +30,139 @@ and linked to each other, CI checked in four tabs, and remembering which one has
 to merge first. Then you bump a `go.mod` after the upstream lands, and do it
 all again.
 
-Tandem makes the **change**, not the repo, the thing you work on:
+Tandem makes the **change**, not the repo, the thing you work on.
 
-- **One branch, every repo.** Start a change and each repo gets its branch from a
-  freshly fetched `main`, checked out in the clone, so local services run the
-  change's code. Or ask for a worktree per repo instead.
-- **Merge order worked out for you,** from `go.mod`, `composer.json` and
-  `package.json`, with anything the manifests can't see declared by hand.
-- **Write the PR once.** Every repo gets its PR, and each one carries a "Related
-  PRs, merge in this order" section that Tandem keeps up to date.
-- **A merge train** that merges level by level, re-pins downstream Go modules to
-  the merge commit, and waits for CI on the new pin before merging it.
-- **Everything in one place:** each repo's local state, PR, CI and review, the PRs
-  waiting on you, and local Go, PHP, JS and buf checks run across every repo at once.
+## What it does
+
+| | |
+|---|---|
+| **One branch, every repo** | Each repo gets the change's branch from a freshly fetched `main`, checked out in your clone or in a worktree. Branches you started by hand are picked up. |
+| **Merge order, worked out** | From `go.mod`, `composer.json` and `package.json`, plus any dependency you declare. |
+| **Write the PR once** | One title, description and reviewer list opens every PR, each with a "Related PRs, merge in this order" section kept up to date. |
+| **A merge train** | Merges level by level, re-pins downstream Go modules to the merge commit, and waits for CI on the new pin. |
+| **One view of everything** | Each repo's local state, PR, CI and review, the PRs waiting on you, and local checks across every repo. |
+| **Hand-off to testers** | A link opens the change in a tester's Tandem with every branch and PR filled in. |
+| **Stays out of your way** | Notifications for CI, reviews and merges, ⌘K to jump anywhere, Jira status that moves itself, and in-app updates. |
 
 ## A tour
 
+### The change
+
+Every repo in the change, in merge order: its branch and local state, its PR, CI
+and review, and what's blocking the merge train. A failing check links to its CI
+job, with a button to rerun the failed GitHub Actions jobs. Hover any status for
+what it means. Local checks and the change's history sit underneath, as in the
+screenshot at the top.
+
 ### Your inbox
 
-Review requests, longest-waiting first, then your changes and your open PRs. PRs
-that belong to a change open that change.
+Review requests, longest-waiting first, then your changes and your open PRs.
+PRs that belong to a change open that change, and landed changes can be cleaned
+up from here.
 
-![Inbox: PRs waiting on your review, your changes, and your open PRs](docs/images/inbox.png)
+![Inbox: PRs waiting on your review, your changes, and housekeeping](docs/images/inbox.png)
+
+### Start a change
+
+Type the ticket or paste its Jira link: the title fills in from Jira, and repos
+that already have the branch are listed for you. Pick repos from everything in
+your code folder, as branches or worktrees.
+
+![New change: a Jira ticket filled in, three repos picked](docs/images/new-change.png)
 
 ### Write once, open every PR
 
-One title, description and reviewer list for the whole change, kept as a
-draft until you publish. **Draft from commits** fills the description from the
-Jira ticket's opening paragraph and each repo's commits, leaving out Tandem's own
-re-pin commits. Each repo shows
-what will happen before anything is pushed, including uncommitted files that
-would be left out.
+One title, description and reviewer list for the whole change, kept as a draft
+until you publish.
 
-![PR composer: a shared description, a per-repo plan in merge order, and the Related PRs section](docs/images/composer.png)
+- **Markdown with a preview.** Rich text pastes as Markdown, lists continue on
+  Enter, and Tab indents.
+- **Draft from commits** fills the description from the ticket's opening
+  paragraph and each repo's commits.
+- **Reviewers** are suggested from who reviewed your recent PRs in these repos,
+  then teams, then everyone who can be assigned.
+- **A plan per repo** before anything is pushed, including uncommitted files that
+  would be left out.
+
+![PR composer: a shared description, reviewers, a per-repo plan in merge order, and the Related PRs section](docs/images/composer.png)
+
+### Sync with a preview, and undo
+
+**Sync all** fetches every repo and shows the exact git commands it will run,
+or why a repo will be left alone. **Undo sync** puts each rebased repo back on
+its old commit until you next publish.
+
+![Sync preview: the git commands per repo, and the ones skipped](docs/images/sync.png)
 
 ### Merge in dependency order
 
 The train checks every PR first, so drafts, missing approvals and red CI stop it
-before anything merges. Then it merges level by level. Stopping part-way is
-safe: running it again carries on.
+before anything merges. Then it merges level by level. Stopping part-way is safe:
+running it again carries on.
 
 ![Merge train: three levels, each repo's status, and what blocks the train](docs/images/merge-train.png)
 
 ### Change the plan as you go
 
 Forgot a repo? **Add repos** gives it the branch and slots it into the merge
-order as soon as another repo depends on it. **Edit order** shows where each
-edge comes from and lets you declare the ones no manifest knows about yet.
+order. **Edit order** shows where each dependency comes from and lets you declare
+the ones no manifest knows about yet.
 
-![Edit merge order: the current order, edges inferred from manifests, and declared edges](docs/images/edit-order.png)
-
-A failing check links to its CI job, and the rerun button next to it reruns the
-PR's failed GitHub Actions jobs. Changes whose PRs have all merged move to a
-collapsed Landed group in the sidebar, and a filter appears once you have more
-than four.
-
-### Hand a change to a tester
-
-**Share with a tester** (the link icon on a change, or ⌘⇧T) copies a link with
-the Jira ticket, each repo's branch and PR, and an optional note. Opening it
-starts Tandem in tester mode on that change, so the tester doesn't need to find
-the branches or rely on Jira being up to date. The link goes through a small page
-at `jonezzyboy.github.io/tandem/test/` that hands off to the app, or shows how to
-install it; the change rides in the part after `#`, which browsers never send to
-a server. Testers can also paste the link into the box on **Ready to test**.
+![Edit merge order: the current order, dependencies from manifests, and declared ones](docs/images/edit-order.png)
 
 ### Local checks across every repo
 
 `go build`, `go vet` and `go test`, phpstan and phpunit, your `package.json`
-scripts, and `buf lint`, run for every repo at once, with the output of anything
-that fails.
-**Run checks** skips repos untouched since their checks last passed (same
-commit, same uncommitted changes); **Run all** runs everything.
+scripts, and `buf lint`, for every repo at once. Repos untouched since their
+checks last passed are skipped; **Run all** runs everything.
 
-![Local checks: results per repo, with a failing test's output](docs/images/checks.png)
+![Local checks: results per repo, an unchanged repo skipped, and a failing test's output](docs/images/checks.png)
 
-### New changes, themes and settings
+### Hand a change to a tester
+
+**Share with a tester** (⌘⇧T) copies a link with the Jira ticket, each repo's
+branch and PR, and a note. Opening it starts Tandem in tester mode on that
+change, so the tester doesn't hunt for branches or rely on Jira being up to date.
+The link goes through a small page at `jonezzyboy.github.io/tandem/test/` that
+hands off to the app or shows how to install it; the change rides after the `#`,
+which browsers never send to a server.
 
 <table>
   <tr>
-    <td width="50%"><img src="docs/images/new-change.png" alt="New change: an ID, a title and repos picked from everything under ~/code"></td>
-    <td width="50%"><img src="docs/images/settings.png" alt="Settings: six themes and re-recordable keyboard shortcuts"></td>
+    <td width="50%"><img src="docs/images/share.png" alt="Share with a tester: a note, what the link sets up, and the link"></td>
+    <td width="50%"><img src="docs/images/tester.png" alt="Tester view of the shared change: repos, PRs, the note and a checklist from the ticket"></td>
   </tr>
   <tr>
-    <td>Pick repos from everything under <code>~/code</code>, and choose branches or worktrees.</td>
-    <td>Six themes, shortcuts you can re-record, and the right IDE per language.</td>
+    <td>The developer adds a note and copies the link.</td>
+    <td>The tester sees every repo and branch, the note, and a checklist from the ticket, then switches with one click.</td>
   </tr>
 </table>
 
-![The same change in the Paper light theme](docs/images/change-paper.png)
+Tester mode also lists the tickets ready to test, with their PRs and CI, and
+records verdicts back on the ticket.
+
+![Ready to test: tickets in the QA status with their PRs and CI](docs/images/tester-home.png)
+
+### Jump anywhere, set up once
+
+<table>
+  <tr>
+    <td width="50%"><img src="docs/images/palette.png" alt="Command palette: changes, actions and PRs"></td>
+    <td width="50%"><img src="docs/images/setup.png" alt="Setup checklist: mode, git, GitHub CLI, repos, notifications and Jira"></td>
+  </tr>
+  <tr>
+    <td><strong>⌘K</strong> jumps to any change, PR or action.</td>
+    <td>A checklist on first launch makes sure git, <code>gh</code> and your repos are ready, with a fix for each.</td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="docs/images/settings.png" alt="Settings: mode, account, repositories and Jira"></td>
+    <td width="50%"><img src="docs/images/change-paper.png" alt="The same change in the Paper light theme"></td>
+  </tr>
+  <tr>
+    <td>Settings cover repos, Jira, notifications, editors, shortcuts and updates.</td>
+    <td>Six themes, including Paper for light mode.</td>
+  </tr>
+</table>
 
 ## Install
 

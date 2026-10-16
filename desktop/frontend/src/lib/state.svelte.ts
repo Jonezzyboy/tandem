@@ -88,9 +88,17 @@ export function loadInbox(force: boolean) {
     .finally(() => (app.inboxLoading = false))
 }
 
-export function log(id: string, text: string, tone: Activity['tone'] = 'muted') {
+// log adds to a change's activity and its saved history; entries the backend
+// sends were saved there already.
+export function log(id: string, text: string, tone: Activity['tone'] = 'muted', saved = false) {
   const list = app.activity[id] ?? []
-  app.activity[id] = [{ at: Date.now(), text, tone }, ...list].slice(0, 50)
+  app.activity[id] = [{ at: Date.now(), text, tone }, ...list].slice(0, 300)
+  if (!saved) api.record(id, text, tone)
+}
+
+export async function loadHistory(id: string) {
+  const entries = await api.history(id)
+  app.activity[id] = entries.slice(0, 300).map((e) => ({ at: Date.parse(e.at), text: e.text, tone: e.tone }))
 }
 
 export function fail(e: unknown) {
@@ -139,7 +147,7 @@ export function init() {
   on<Inbox>('inbox', (i) => { app.inbox = i })
   on<CheckEvent>('check', recordCheck)
   on<TrainEvent>('train', recordTrain)
-  on<{ change: string; text: string; tone: Activity['tone'] }>('activity', (a) => log(a.change, a.text, a.tone))
+  on<{ change: string; text: string; tone: Activity['tone'] }>('activity', (a) => log(a.change, a.text, a.tone, true))
   on<string>('error', (e) => { app.error = e })
   on('share-link', takeLink)
   on<string>('open', (id) => navigate(id ? { name: 'change', id } : { name: 'inbox' }))
