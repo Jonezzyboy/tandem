@@ -5,9 +5,8 @@
 
   let { name, size = 16, color = 'currentColor', spin = false }: { name: Name; size?: number; color?: string; spin?: boolean } = $props()
 
-  // Only round glyphs read as spinning; anything else becomes the busy ring.
-  const round: Name[] = ['refresh', 'sync', 'running']
-  const shown = $derived(spin && !round.includes(name) ? 'running' : name)
+  // Anything busy shows the dotted ring spinning.
+  const shown = $derived(spin ? 'running' : name)
 </script>
 
 <svg class="icon" class:spin width={size} height={size} viewBox="0 0 16 16" fill="none" stroke={color} stroke-width="1.6"

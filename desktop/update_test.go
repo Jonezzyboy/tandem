@@ -1,6 +1,15 @@
 package main
 
-import "testing"
+import (
+	"context"
+	"fmt"
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"testing"
+
+	"github.com/jonezzyboy/tandem/internal/change"
+)
 
 func TestNewerVersion(t *testing.T) {
 	for _, c := range []struct {
@@ -36,5 +45,22 @@ func TestBundleOf(t *testing.T) {
 		if _, err := bundleOf(exe); err == nil {
 			t.Errorf("bundleOf(%q) accepted", exe)
 		}
+	}
+}
+
+func TestCheckUpdateReadsCask(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprint(w, "# comment\ncask \"tandem-repos\" do\n  version \"9.9.9\"\n  sha256 \"abc\"\nend\n")
+	}))
+	defer srv.Close()
+	defer func(old string) { caskURL = old }(caskURL)
+	caskURL = srv.URL
+	defer func(old string) { version = old }(version)
+	version = "1.0.0"
+	a := NewApp(change.Store{Home: t.TempDir()}, nil)
+	a.ctx = context.Background()
+	u, err := a.CheckUpdate()
+	if err != nil || u.Version != "9.9.9" || !u.Newer || !strings.HasSuffix(u.URL, "/releases/tag/v9.9.9") {
+		t.Errorf("CheckUpdate = %+v, %v", u, err)
 	}
 }
