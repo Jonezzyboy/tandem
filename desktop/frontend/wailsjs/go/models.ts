@@ -936,6 +936,7 @@ export namespace main {
 	    roots: string[];
 	    notify: Record<string, boolean>;
 	    setupSeen: boolean;
+	    autoUpdate: boolean;
 	
 	    static createFrom(source: any = {}) {
 	        return new Settings(source);
@@ -956,6 +957,7 @@ export namespace main {
 	        this.roots = source["roots"];
 	        this.notify = source["notify"];
 	        this.setupSeen = source["setupSeen"];
+	        this.autoUpdate = source["autoUpdate"];
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {

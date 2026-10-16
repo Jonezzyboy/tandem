@@ -94,6 +94,10 @@ export function Inbox(arg1) {
   return window['go']['main']['App']['Inbox'](arg1);
 }
 
+export function InstallUpdate() {
+  return window['go']['main']['App']['InstallUpdate']();
+}
+
 export function JiraAccount() {
   return window['go']['main']['App']['JiraAccount']();
 }
@@ -168,6 +172,10 @@ export function Repos() {
 
 export function RerunFailed(arg1, arg2) {
   return window['go']['main']['App']['RerunFailed'](arg1, arg2);
+}
+
+export function RestartToUpdate() {
+  return window['go']['main']['App']['RestartToUpdate']();
 }
 
 export function RunSetupFix(arg1) {
@@ -300,6 +308,10 @@ export function TrainPlan(arg1) {
 
 export function Unlink(arg1, arg2, arg3) {
   return window['go']['main']['App']['Unlink'](arg1, arg2, arg3);
+}
+
+export function UpdateReady() {
+  return window['go']['main']['App']['UpdateReady']();
 }
 
 export function Version() {

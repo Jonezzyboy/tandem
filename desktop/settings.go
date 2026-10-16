@@ -48,6 +48,9 @@ type Settings struct {
 	Notify map[string]bool `json:"notify"`
 	// SetupSeen is set once the first-run checklist has been closed.
 	SetupSeen bool `json:"setupSeen"`
+	// AutoUpdate installs new releases as they're found; they take effect
+	// on the next restart.
+	AutoUpdate bool `json:"autoUpdate"`
 }
 
 // JiraSettings holds the Atlassian account; its API token is in the Keychain.

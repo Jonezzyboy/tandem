@@ -20,3 +20,21 @@ func TestNewerVersion(t *testing.T) {
 		}
 	}
 }
+
+func TestParseChecksums(t *testing.T) {
+	got := parseChecksums("AB12  Tandem_v1.0.0_macos_universal.zip\ncd34 *td.tar.gz\n\nbroken line here\n")
+	if got["Tandem_v1.0.0_macos_universal.zip"] != "ab12" || got["td.tar.gz"] != "cd34" || len(got) != 2 {
+		t.Errorf("parseChecksums = %v", got)
+	}
+}
+
+func TestBundleOf(t *testing.T) {
+	if b, err := bundleOf("/Applications/Tandem.app/Contents/MacOS/Tandem"); err != nil || b != "/Applications/Tandem.app" {
+		t.Errorf("bundleOf = %q, %v", b, err)
+	}
+	for _, exe := range []string{"/tmp/go-build/desktop", "/x/Tandem/Contents/MacOS/Tandem", "/x/Tandem.app/MacOS/Tandem"} {
+		if _, err := bundleOf(exe); err == nil {
+			t.Errorf("bundleOf(%q) accepted", exe)
+		}
+	}
+}

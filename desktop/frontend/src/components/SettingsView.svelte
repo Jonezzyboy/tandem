@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onDestroy, untrack } from 'svelte'
   import {
-    actions, addRoot, checkUpdate, keycaps, languages, notifyKinds, prefs, problem, saveSettings, shortcutFor, shortcutFromEvent, themes,
+    actions, addRoot, checkUpdate, installUpdate, keycaps, restartToUpdate, languages, notifyKinds, prefs, problem, saveSettings, shortcutFor, shortcutFromEvent, themes,
     upgradeCommand, type NotifyKind, type ThemeId, type TriageSettings,
   } from '@lib/settings.svelte'
   import * as App from '@wailsjs/go/main/App'
@@ -509,18 +509,39 @@
       <div><span class="muted">Version</span><span class="mono">{prefs.version || '…'}</span></div>
       <div>
         <span class="muted">Updates</span>
-        <span class="update-row">
-          {#if prefs.update?.newer}
-            <span class="ok">{prefs.update.version} is available.</span>
-            <span>Run <button class="link mono" title="Copy" onclick={copyUpgrade}>{upgradeCommand}</button>{copiedUpgrade ? ' · copied' : ''}</span>
-            <button class="link" onclick={() => api.openURL(prefs.update!.url)}>What's new</button>
-          {:else if prefs.update}
-            <span>Up to date{prefs.version === 'dev' ? ' (dev build)' : ''}</span>
-          {:else if prefs.updateError}
-            <span class="warn">Couldn't check: {prefs.updateError}</span>
+        <span class="update-col">
+          <span class="update-row">
+            {#if prefs.install.phase === 'ready'}
+              <span class="ok">{prefs.install.version} is installed.</span>
+              <button class="btn small primary" onclick={restartToUpdate}>Restart to update</button>
+            {:else if prefs.install.phase === 'installing'}
+              <span class="muted">Updating to {prefs.install.version}…</span>
+            {:else if prefs.update?.newer}
+              <span class="ok">{prefs.update.version} is available.</span>
+              <button class="btn small primary" onclick={installUpdate}>Update now</button>
+              <button class="link" onclick={() => api.openURL(prefs.update!.url)}>What's new</button>
+            {:else if prefs.update}
+              <span>Up to date{prefs.version === 'dev' ? ' (dev build)' : ''}</span>
+            {:else if prefs.updateError}
+              <span class="warn">Couldn't check: {prefs.updateError}</span>
+            {/if}
+            {#if prefs.install.phase !== 'installing' && prefs.install.phase !== 'ready'}
+              <button class="link" disabled={prefs.updateChecking} onclick={checkUpdate}>{prefs.updateChecking ? 'Checking…' : 'Check now'}</button>
+              {#if !prefs.updateChecking && prefs.updateCheckedAt}<span class="muted small">checked {new Date(prefs.updateCheckedAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</span>{/if}
+            {/if}
+          </span>
+          {#if prefs.install.phase === 'installing' && prefs.install.line}
+            <span class="mono small muted install-line">{prefs.install.line}</span>
+          {:else if prefs.install.phase === 'failed'}
+            <span class="small warn">{prefs.install.line}</span>
+            <span class="small muted">You can also run <button class="link mono" title="Copy" onclick={copyUpgrade}>{upgradeCommand}</button>{copiedUpgrade ? ' · copied' : ''} in Terminal.</span>
+          {:else if prefs.install.phase === 'ready' && prefs.install.line}
+            <span class="small warn">{prefs.install.line}</span>
           {/if}
-          <button class="link" disabled={prefs.updateChecking} onclick={checkUpdate}>{prefs.updateChecking ? 'Checking…' : 'Check now'}</button>
-          {#if !prefs.updateChecking && prefs.updateCheckedAt}<span class="muted small">checked {new Date(prefs.updateCheckedAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</span>{/if}
+          <label class="choice small-choice">
+            <input type="checkbox" checked={prefs.settings.autoUpdate} onchange={(e) => saveSettings({ autoUpdate: e.currentTarget.checked })} />
+            Install updates automatically; they take effect when Tandem restarts
+          </label>
         </span>
       </div>
       <div><span class="muted">Settings file</span><span class="mono selectable">{prefs.path}</span></div>
@@ -608,6 +629,9 @@
   .roots li { display: flex; align-items: center; gap: 10px; min-height: 36px; padding: 0 4px 0 10px; border: 1px solid var(--line); border-radius: 8px; font-size: 13px; }
   .roots li .grow { min-width: 0; overflow-wrap: anywhere; }
   .about { display: flex; flex-direction: column; gap: 8px; font-size: 13px; }
-  .update-row { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; }
+  .update-col { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+  .update-row { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; }
+  .install-line { overflow-wrap: anywhere; }
+  .small-choice { font-size: 13px; }
   .about div { display: grid; grid-template-columns: 180px minmax(0, 1fr); gap: 12px; }
 </style>

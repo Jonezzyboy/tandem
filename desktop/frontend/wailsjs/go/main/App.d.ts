@@ -51,6 +51,8 @@ export function GuessTicket(arg1:string):Promise<main.JiraTicket>;
 
 export function Inbox(arg1:boolean):Promise<main.Inbox>;
 
+export function InstallUpdate():Promise<void>;
+
 export function JiraAccount():Promise<main.JiraAccount>;
 
 export function JiraLookup(arg1:string):Promise<main.JiraTicket>;
@@ -88,6 +90,8 @@ export function Reorder(arg1:Array<string>):Promise<void>;
 export function Repos():Promise<Array<main.RepoInfo>>;
 
 export function RerunFailed(arg1:string,arg2:string):Promise<number>;
+
+export function RestartToUpdate():Promise<void>;
 
 export function RunSetupFix(arg1:string):Promise<void>;
 
@@ -154,6 +158,8 @@ export function TesterVerdicts(arg1:string):Promise<Array<main.VerdictOption>>;
 export function TrainPlan(arg1:string):Promise<main.TrainPlan>;
 
 export function Unlink(arg1:string,arg2:string,arg3:string):Promise<void>;
+
+export function UpdateReady():Promise<string>;
 
 export function Version():Promise<string>;
 
