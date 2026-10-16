@@ -7,9 +7,9 @@
 <title>Open in Tandem</title>
 <link rel="icon" href="../images/icon.png">
 <style>
-  :root { --bg: #f3f1ea; --panel: #fffdf7; --line: #dedbd0; --text: #1d1d1b; --muted: #6b6a64; --accent: #2a4fd6; }
+  :root { --bg: #f3f1ea; --panel: #fffdf7; --line: #dedbd0; --text: #1d1d1b; --muted: #6b6a64; --accent: #2a4fd6; --link: #2a4fd6; --link-hover: #1b3aa8; }
   @media (prefers-color-scheme: dark) {
-    :root { --bg: #111216; --panel: #16171c; --line: #25272e; --text: #eceae4; --muted: #9c9ea8; --accent: #3a5ee4; }
+    :root { --bg: #111216; --panel: #16171c; --line: #25272e; --text: #eceae4; --muted: #9c9ea8; --accent: #3a5ee4; --link: #9db2ff; --link-hover: #c4d1ff; }
   }
   * { box-sizing: border-box; }
   body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
@@ -20,6 +20,9 @@
   p { margin: 0; }
   .muted { color: var(--muted); }
   .card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 16px 18px; display: flex; flex-direction: column; gap: 10px; }
+  a:not(.btn) { color: var(--link); text-decoration: none; }
+  a:not(.btn):hover { color: var(--link-hover); text-decoration: underline; text-underline-offset: 2px; }
+  .btn:hover { filter: brightness(1.1); }
   .btn { align-self: flex-start; display: inline-block; padding: 9px 16px; border-radius: 9px; background: var(--accent); color: #fff; text-decoration: none; font-weight: 500; }
   code, .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px; }
   code { padding: 2px 6px; border-radius: 5px; background: var(--bg); border: 1px solid var(--line); overflow-wrap: anywhere; }

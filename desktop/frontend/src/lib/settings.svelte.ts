@@ -13,7 +13,9 @@ export interface Settings {
   draftPRs: boolean
   triage: TriageSettings
   // The Atlassian account; its API token is in the Keychain, never here.
-  jira: { email: string; site: string }
+  // onPRs and onMerged: statuses the ticket moves to when PRs open and when
+  // the merge train finishes; "" leaves it.
+  jira: { email: string; site: string; onPRs: string; onMerged: string }
   mode: 'developer' | 'tester'
   // Jira statuses whose tickets are ready to test.
   tester: { statuses: string[]; cloneMissing: boolean }
@@ -118,7 +120,7 @@ export const prefs = $state({
   settings: {
     theme: 'graphite', keys: {}, editors: {}, mergeMethod: 'squash', draftPRs: true,
     triage: { enabled: false, url: 'http://localhost:11434', model: 'nimble', minConfidence: 0.85, retries: 1 },
-    jira: { email: '', site: '' },
+    jira: { email: '', site: '', onPRs: '', onMerged: '' },
     mode: 'developer',
     tester: { statuses: [], cloneMissing: true },
     roots: [],

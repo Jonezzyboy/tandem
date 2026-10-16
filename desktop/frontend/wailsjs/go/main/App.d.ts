@@ -19,7 +19,7 @@ export function Change(arg1:string):Promise<core.ChangeView>;
 
 export function Changes():Promise<Array<main.ChangeSummary>>;
 
-export function Check(arg1:string,arg2:string):Promise<Array<main.CheckEvent>>;
+export function Check(arg1:string,arg2:string,arg3:boolean):Promise<Array<main.CheckEvent>>;
 
 export function CheckUpdate():Promise<main.Update>;
 
@@ -42,6 +42,8 @@ export function DiscardDraft(arg1:string):Promise<void>;
 export function DiscardPlan(arg1:string):Promise<main.CleanItem>;
 
 export function Draft(arg1:string):Promise<main.PRDraft>;
+
+export function DraftDescription(arg1:string):Promise<string>;
 
 export function Editors():Promise<Array<main.EditorApp>>;
 

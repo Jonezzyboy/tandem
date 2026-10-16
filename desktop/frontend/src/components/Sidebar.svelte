@@ -186,7 +186,7 @@
     {#if n < 9}<Kbd keys={['⌘', String(n + 1)]} />{/if}
   </span>
   <span class="title">{c.title || 'Untitled change'}</span>
-  <span class="headline {c.tone}">{c.headline}</span>
+  <span class="headline {c.tone}" title="Legs are the change's repos. Blocked ones have a PR that can't merge yet: a draft, failing CI, or awaiting review.">{c.headline}</span>
 {/snippet}
 
 <nav>

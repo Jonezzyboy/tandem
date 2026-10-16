@@ -530,6 +530,8 @@ export namespace main {
 	export class JiraSettings {
 	    email: string;
 	    site: string;
+	    onPRs: string;
+	    onMerged: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new JiraSettings(source);
@@ -539,6 +541,8 @@ export namespace main {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.email = source["email"];
 	        this.site = source["site"];
+	        this.onPRs = source["onPRs"];
+	        this.onMerged = source["onMerged"];
 	    }
 	}
 	export class JiraTicket {
