@@ -2,15 +2,22 @@ package main
 
 import (
 	"context"
-	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
 	"net/http"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
 )
 
-const latestReleaseURL = "https://api.github.com/repos/Jonezzyboy/tandem/releases/latest"
+// caskURL is the Homebrew cask, the source of truth for the latest version:
+// the release workflow rewrites it only after the release's downloads are
+// attached, so a version read from it can always be installed.
+var caskURL = "https://raw.githubusercontent.com/Jonezzyboy/homebrew-tandem/main/Casks/tandem-repos.rb"
+
+var caskVersion = regexp.MustCompile(`(?m)^\s*version\s+"([^"]+)"`)
 
 type Update struct {
 	Version string `json:"version"`
@@ -19,15 +26,16 @@ type Update struct {
 	Newer bool `json:"newer"`
 }
 
-// CheckUpdate reads the latest release from GitHub. A dev build is never behind.
+// CheckUpdate reads the latest installable version from the cask. A dev
+// build is never behind.
 func (a *App) CheckUpdate() (Update, error) {
 	ctx, cancel := context.WithTimeout(a.ctx, 10*time.Second)
 	defer cancel()
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, latestReleaseURL, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, caskURL, nil)
 	if err != nil {
 		return Update{}, err
 	}
-	req.Header.Set("Accept", "application/vnd.github+json")
+	req.Header.Set("Cache-Control", "no-cache")
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return Update{}, err
@@ -36,15 +44,16 @@ func (a *App) CheckUpdate() (Update, error) {
 	if resp.StatusCode != http.StatusOK {
 		return Update{}, fmt.Errorf("GitHub answered %s", resp.Status)
 	}
-	var rel struct {
-		Tag string `json:"tag_name"`
-		URL string `json:"html_url"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&rel); err != nil {
+	body, err := io.ReadAll(io.LimitReader(resp.Body, 64<<10))
+	if err != nil {
 		return Update{}, err
 	}
-	v := strings.TrimPrefix(rel.Tag, "v")
-	return Update{Version: v, URL: rel.URL, Newer: newerVersion(v, version)}, nil
+	m := caskVersion.FindSubmatch(body)
+	if m == nil {
+		return Update{}, errors.New("the Homebrew cask names no version")
+	}
+	v := string(m[1])
+	return Update{Version: v, URL: "https://github.com/Jonezzyboy/tandem/releases/tag/v" + v, Newer: newerVersion(v, version)}, nil
 }
 
 // newerVersion reports whether a is a higher x.y.z than b; anything that
