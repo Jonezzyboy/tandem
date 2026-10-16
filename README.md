@@ -125,7 +125,11 @@ gh auth login   # once, if gh isn't signed in yet
 
 - **Contents:** the cask installs **Tandem.app** and the **`td` CLI**, at the same
   version. It's universal (Apple Silicon and Intel), and it pulls in `gh`.
-- **Updates:** `brew upgrade --cask tandem-repos`.
+- **Updates:** **Update now** in the sidebar or Settings → About installs a new
+  release and **Restart to update** switches to it. It runs
+  `brew upgrade --cask tandem-repos` for the cask's copy, so `td` updates too,
+  and otherwise downloads the release's app and checks it against
+  `checksums.txt`. Settings can install updates automatically.
 - **Use the full name.** A bare `brew install --cask tandem` gets homebrew-cask's
   unrelated Tandem (a virtual office app). homebrew-core's `td` formula (a to-do
   list) also installs a `td` command, so uninstall it first.

@@ -1,5 +1,5 @@
 import * as App from '@wailsjs/go/main/App'
-import { errorText } from './api'
+import { errorText, on } from './api'
 import type { Update } from './types'
 
 export type ThemeId = 'system' | 'graphite' | 'paper' | 'midnight' | 'forest' | 'contrast'
@@ -21,6 +21,14 @@ export interface Settings {
   roots: string[]
   notify: Record<NotifyKind, boolean>
   setupSeen: boolean
+  // Install new releases as they're found, for the next restart.
+  autoUpdate: boolean
+}
+
+export interface Install {
+  phase: 'idle' | 'installing' | 'ready' | 'failed'
+  line: string
+  version: string
 }
 
 export type NotifyKind = 'ci' | 'review' | 'merged' | 'pins' | 'train' | 'requests'
@@ -116,12 +124,14 @@ export const prefs = $state({
     roots: [],
     notify: { ci: true, review: true, merged: true, pins: true, train: true, requests: true },
     setupSeen: true,
+    autoUpdate: false,
   } as Settings,
   account: null as Account | null,
   update: null as Update | null,
   updateError: '',
   updateChecking: false,
   updateCheckedAt: 0,
+  install: { phase: 'idle', line: '', version: '' } as Install,
   editorApps: [] as EditorApp[],
   systemDark: true,
   version: '',
@@ -210,8 +220,30 @@ export async function initSettings() {
   App.SettingsPath().then((p) => { prefs.path = p })
   App.TandemHome().then((h) => { prefs.home = h })
   window.addEventListener('focus', refreshSystemAppearance)
+  on<Install>('update', (u) => {
+    prefs.install = { phase: u.phase, line: u.line || prefs.install.line, version: u.version || prefs.install.version }
+  })
+  App.UpdateReady().then((v) => { if (v) prefs.install = { phase: 'ready', line: '', version: v } })
   checkUpdate()
   setInterval(checkUpdate, 6 * 60 * 60 * 1000)
+}
+
+export async function installUpdate() {
+  if (prefs.install.phase === 'installing') return
+  prefs.install = { phase: 'installing', line: 'Starting…', version: prefs.update?.version ?? '' }
+  try {
+    await App.InstallUpdate()
+  } catch (e) {
+    prefs.install = { ...prefs.install, phase: 'failed', line: errorText(e) }
+  }
+}
+
+export async function restartToUpdate() {
+  try {
+    await App.RestartToUpdate()
+  } catch (e) {
+    prefs.install = { ...prefs.install, line: errorText(e) }
+  }
 }
 
 export async function checkUpdate() {
@@ -219,6 +251,11 @@ export async function checkUpdate() {
   try {
     prefs.update = (await App.CheckUpdate()) as unknown as Update
     prefs.updateError = ''
+    if (prefs.install.phase === 'idle') {
+      const ready = await App.UpdateReady()
+      if (ready) prefs.install = { phase: 'ready', line: '', version: ready }
+      else if (prefs.update.newer && prefs.settings.autoUpdate) installUpdate()
+    }
   } catch (e) {
     prefs.updateError = errorText(e)
   } finally {

@@ -5,7 +5,7 @@
   import Icon from './Icon.svelte'
   import Kbd from './Kbd.svelte'
   import Avatar from './Avatar.svelte'
-  import { keycaps, prefs, shortcutFor } from '@lib/settings.svelte'
+  import { installUpdate, keycaps, prefs, restartToUpdate, shortcutFor } from '@lib/settings.svelte'
   import type { ChangeSummary } from '@lib/types'
 
   const reviewCount = $derived(app.inbox?.review?.length ?? 0)
@@ -274,9 +274,21 @@
       <div class="change">{@render rowBody(c, drag?.moved ? drag.to : active.indexOf(c))}</div>
     </div>
   {/if}
-  {#if prefs.update?.newer}
-    <button class="update" onclick={() => navigate({ name: 'settings' })} title="See how to update">
-      <Icon name="send" size={14} />Tandem {prefs.update.version} is out
+  {#if prefs.install.phase === 'ready'}
+    <button class="update" onclick={restartToUpdate} title={prefs.install.line || 'Quit and reopen on the new version'}>
+      <Icon name="refresh" size={14} />Restart to update to {prefs.install.version}
+    </button>
+  {:else if prefs.install.phase === 'installing'}
+    <div class="update busy" title={prefs.install.line} role="status">
+      <Icon name="running" size={14} spin />Updating to {prefs.install.version}…
+    </div>
+  {:else if prefs.install.phase === 'failed'}
+    <button class="update failed" onclick={() => navigate({ name: 'settings' })} title={prefs.install.line}>
+      <Icon name="alert" size={14} />Update failed · details
+    </button>
+  {:else if prefs.update?.newer}
+    <button class="update" onclick={installUpdate} title="Install it now; it takes effect when you restart">
+      <Icon name="send" size={14} />Update to Tandem {prefs.update.version}
     </button>
   {/if}
   <div class="account">
@@ -382,6 +394,8 @@
     background: var(--accent-bg); border: 1px solid var(--accent); color: var(--accent-text); font-size: 12.5px; cursor: pointer; text-align: left;
   }
   .update:hover { color: var(--link-hover); }
+  .update.busy { cursor: default; }
+  .update.failed { background: var(--warn-bg); border-color: var(--warn-border); color: var(--warn-text); }
   .empty .link { border: 0; background: none; padding: 0; font: inherit; color: var(--accent-text); cursor: pointer; }
   .empty { margin: 0; padding: 0 10px; font-size: 13px; color: var(--muted); line-height: 1.5; }
   .grow-list { flex: 1; min-height: 0; overflow-y: auto; }

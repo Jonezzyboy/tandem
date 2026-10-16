@@ -65,6 +65,10 @@ type App struct {
 	notifyReady bool
 	// pendingLink is a tandem:// link the app was opened with, until taken.
 	pendingLink string
+	// installing guards InstallUpdate; updateReady is the version it
+	// installed, waiting for a restart.
+	installing  bool
+	updateReady string
 
 	restoreOnce sync.Once
 	// testMu serialises tester-mode switches, so two can't race on the repos.
