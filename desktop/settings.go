@@ -59,6 +59,10 @@ type JiraSettings struct {
 	// Site is the Jira Cloud address searched for tickets to test, e.g.
 	// https://acme.atlassian.net.
 	Site string `json:"site"`
+	// OnPRs and OnMerged are the statuses a change's ticket moves to when its
+	// PRs open and when its merge train finishes; "" leaves it alone.
+	OnPRs    string `json:"onPRs"`
+	OnMerged string `json:"onMerged"`
 }
 
 // TesterSettings are the Jira statuses whose tickets are ready to test; the

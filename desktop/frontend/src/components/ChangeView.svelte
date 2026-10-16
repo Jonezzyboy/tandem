@@ -243,6 +243,20 @@
     return { text: [parts.join(' '), detail].filter(Boolean).join(' · '), warn: l.dirty > 0 || l.behind > 0 }
   }
 
+  function localTitle(l: LegView): string {
+    const lines = []
+    if (l.ahead) lines.push(`↑${l.ahead}: ${l.ahead === 1 ? 'a commit' : `${l.ahead} commits`} on ${view?.branch} not yet on ${l.base}`)
+    if (l.behind) lines.push(`↓${l.behind}: ${l.base} has ${l.behind === 1 ? 'a commit' : `${l.behind} commits`} this branch doesn't; Sync all rebases onto it`)
+    if (l.dirty) lines.push(`${l.dirty} uncommitted: files changed but not committed, which Publish PRs leaves out`)
+    if (!l.onBranch) lines.push(`The repo has ${l.current || 'a detached HEAD'} checked out, not ${view?.branch}`)
+    return lines.join('\n') || 'Local state of the repo, watched every few seconds'
+  }
+
+  function chipTitle(l: LegView): string {
+    const t = tone(l)
+    return t === 'ok' ? `${l.repo}: ready to merge` : t === 'warn' ? `${l.repo}: needs attention, see its row below` : l.repo
+  }
+
   async function sync() {
     syncing = true
     try {
@@ -283,14 +297,17 @@
     return p.error || 'go.mod has other uncommitted edits: commit or discard them'
   }
 
-  async function runChecks(leg = '') {
+  // Run checks skips legs unchanged since they last passed; one leg's run, and
+  // Run all, always run everything.
+  async function runChecks(leg = '', all = false) {
     checking = leg || '*'
     app.checks[id] = leg ? checks.filter((c) => c.leg !== leg) : []
     try {
-      const results = await api.check(id, leg)
+      const results = await api.check(id, leg, !leg && !all)
       const failed = results.filter((r) => r.state === 'fail').length
       const passed = results.filter((r) => r.state === 'pass').length
-      log(id, `Checks${leg ? ` on ${leg}` : ''}: ${passed} passed, ${failed} failed`, failed ? 'warn' : 'ok')
+      const unchanged = results.filter((r) => r.name === 'unchanged').length
+      log(id, `Checks${leg ? ` on ${leg}` : ''}: ${passed} passed, ${failed} failed${unchanged ? `, ${unchanged} leg${unchanged === 1 ? '' : 's'} unchanged` : ''}`, failed ? 'warn' : 'ok')
     } catch (e) {
       fail(e)
     } finally {
@@ -386,7 +403,7 @@
         <button class="btn" onclick={sync} disabled={syncing}>
           <Icon name="sync" spin={syncing} />Sync all
         </button>
-        <button class="btn" onclick={() => runChecks()} disabled={checking !== null}>
+        <button class="btn" onclick={() => runChecks()} disabled={checking !== null} title="Runs checks in legs changed since their checks last passed">
           <Icon name="play" spin={checking === '*'} />Run checks
         </button>
         <span class="tip" title={trainState.full}>
@@ -493,12 +510,12 @@
     {/if}
 
     <section class="order" aria-label="Merge order">
-      <div class="eyebrow order-label">Merge order</div>
+      <div class="eyebrow order-label" title="Repos merge left to right: each one waits for those it depends on. Repos stacked together can merge in any order.">Merge order</div>
       {#each levels as legs, i}
         {#if i > 0}<div class="arrow muted">→</div>{/if}
         <div class="level">
           {#each legs as l (l.repo)}
-            <div class="chip mono {tone(l)}">{l.name}</div>
+            <div class="chip mono {tone(l)}" title={chipTitle(l)}>{l.name}</div>
           {/each}
         </div>
       {/each}
@@ -521,7 +538,11 @@
 
     <section class="legs" aria-label="Legs">
       <div class="row head eyebrow">
-        <div>Leg</div><div>Branch · local</div><div>PR</div><div>Checks</div><div>Review</div>
+        <div title="Each repo in the change is a leg">Leg</div>
+        <div title="The change's branch into the repo's base, and what's local: ↑ commits to push, ↓ commits to sync, uncommitted files">Branch · local</div>
+        <div title="The repo's pull request on GitHub">PR</div>
+        <div title="CI on the PR, from GitHub">Checks</div>
+        <div title="The PR's review decision on GitHub">Review</div>
         <div class="head-tools"><button class="btn small add" onclick={() => (addOpen = true)}><Icon name="plus" size={14} />Add repos</button></div>
       </div>
       {#each view.legs as l (l.repo)}
@@ -531,11 +552,11 @@
         <div class="row" class:warnrow={tone(l) === 'warn'}>
           <div class="stack">
             <span class="mono strong">{l.repo}</span>
-            {#if l.blockers.length}<span class="small warn">{l.blockers.join(' · ')}</span>{:else if view.remote && l.pr}<span class="small ok">ready</span>{/if}
+            {#if l.blockers.length}<span class="small warn" title="What has to change before the merge train can merge this PR">{l.blockers.join(' · ')}</span>{:else if view.remote && l.pr}<span class="small ok" title="Nothing stops the merge train merging this PR">ready</span>{/if}
           </div>
           <div class="stack">
             <span class="mono">{view.branch} → {l.base}</span>
-            <span class="small" class:warn={local.warn} class:muted={!local.warn}>{local.text}</span>
+            <span class="small" class:warn={local.warn} class:muted={!local.warn} title={localTitle(l)}>{local.text}</span>
           </div>
           <div class="stack">
             {#if l.pr}
@@ -597,6 +618,9 @@
         <div class="panel-head">
           <div class="panel-title">Local checks</div>
           {#if failingChecks.length}<span class="small warn">{failingChecks.length} failing</span>{/if}
+          {#if checks.some((c) => c.name === 'unchanged') && checking === null}
+            <button class="link small run-all" onclick={() => runChecks('', true)} title="Run every leg's checks, unchanged ones too">Run all</button>
+          {/if}
         </div>
         {#if checks.length === 0}
           <p class="muted small">Run checks to see go, php, js and buf results for every leg here.</p>
@@ -672,6 +696,7 @@
   }
   .actions { display: flex; gap: 8px; align-items: center; flex-shrink: 0; margin-left: auto; }
   .tip { display: inline-flex; }
+  .run-all { margin-left: auto; }
   .failed { min-width: 0; overflow-wrap: anywhere; }
   .failed a { text-decoration: underline; text-decoration-color: var(--warn-border); text-underline-offset: 2px; }
   .rerun { width: 24px; height: 24px; flex-shrink: 0; }

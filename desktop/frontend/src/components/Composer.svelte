@@ -85,6 +85,26 @@
     return () => clearTimeout(t)
   })
 
+  let drafting = $state(false)
+  // A second click replaces text already written.
+  let confirmReplace = $state(false)
+  async function draftFromCommits() {
+    if (body.trim() && body !== original.body && !confirmReplace) {
+      confirmReplace = true
+      setTimeout(() => (confirmReplace = false), 4000)
+      return
+    }
+    confirmReplace = false
+    drafting = true
+    try {
+      body = await api.draftDescription(view.id)
+    } catch (e) {
+      fail(e)
+    } finally {
+      drafting = false
+    }
+  }
+
   function revert() {
     ;({ title, body, reviewers } = original)
   }
@@ -155,7 +175,11 @@
         <div class="field grow">
           <div class="label-row">
             <label for="pr-body">Description</label>
-            {#if edited}<span class="muted small">Draft kept until you publish · <button class="link" onclick={revert}>Revert</button></span>{/if}
+            <span class="muted small label-tools">
+              {#if edited}<span>Draft kept until you publish · <button class="link" onclick={revert}>Revert</button></span>{/if}
+              <button class="link" disabled={drafting} onclick={draftFromCommits}
+                title="Fill in from the Jira ticket and each repo's commits">{drafting ? 'Drafting…' : confirmReplace ? 'Replace the description?' : 'Draft from commits'}</button>
+            </span>
           </div>
           <MarkdownEditor id="pr-body" bind:value={body} placeholder="What was wrong, what changed, how it was verified" />
         </div>
@@ -238,6 +262,7 @@
   .form { padding: 18px; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; }
   .grow { flex: 1; min-height: 0; }
   .label-row { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
+  .label-tools { display: flex; gap: 14px; align-items: baseline; }
   .link { border: 0; background: none; padding: 0; font: inherit; color: var(--accent-text); cursor: pointer; }
   .toggles { display: flex; flex-direction: column; gap: 8px; }
   .toggle { display: flex; gap: 10px; align-items: center; font-size: 13px; cursor: pointer; }

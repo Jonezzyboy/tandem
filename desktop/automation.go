@@ -203,6 +203,7 @@ func (a *App) StartTrain(id, method string) error {
 		a.notify(Note{Kind: notifyTrain, Change: id, Title: "Merge train stopped · " + id, Body: core.FirstLine(err.Error())})
 	} else {
 		a.notify(Note{Kind: notifyTrain, Change: id, Title: "Merge train finished · " + id, Body: "Every leg has merged."})
+		go a.moveTicket(id, a.Settings().Jira.OnMerged)
 	}
 	return err
 }

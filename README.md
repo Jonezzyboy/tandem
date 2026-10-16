@@ -56,7 +56,9 @@ that belong to a change open that change.
 ### Write once, open every PR
 
 One title, description and reviewer list for the whole change, kept as a
-draft until you publish. Each repo shows
+draft until you publish. **Draft from commits** fills the description from the
+Jira ticket's opening paragraph and each repo's commits, leaving out Tandem's own
+re-pin commits. Each repo shows
 what will happen before anything is pushed, including uncommitted files that
 would be left out.
 
@@ -98,6 +100,8 @@ a server. Testers can also paste the link into the box on **Ready to test**.
 `go build`, `go vet` and `go test`, phpstan and phpunit, your `package.json`
 scripts, and `buf lint`, run for every repo at once, with the output of anything
 that fails.
+**Run checks** skips repos untouched since their checks last passed (same
+commit, same uncommitted changes); **Run all** runs everything.
 
 ![Local checks: results per repo, with a failing test's output](docs/images/checks.png)
 
@@ -329,6 +333,8 @@ covers:
   merges, `go.mod` updates after an upstream merges, the merge train finishing or
   stopping, and new review requests. Each can be turned off. Clicking one opens
   its change.
+- **Jira:** your site and token, and optionally the statuses a change's ticket
+  moves to when its PRs open and when its merge train finishes.
 - **Defaults:** the merge method, and whether new PRs open as drafts.
 - **About:** the version, and whether a newer release is out (the sidebar says so
   too).

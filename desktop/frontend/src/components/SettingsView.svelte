@@ -130,7 +130,7 @@
   let jiraStatuses = $state<string[] | null>(null)
   let jiraStatusesError = $state('')
   $effect(() => {
-    if (prefs.settings.mode !== 'tester' || !prefs.settings.jira.site) return
+    if (!prefs.settings.jira.site) return
     jiraStatusesError = ''
     api.jiraStatuses().then((s) => (jiraStatuses = s)).catch((e) => { jiraStatuses = []; jiraStatusesError = errorText(e) })
   })
@@ -311,6 +311,20 @@
           <span class="small muted">No token saved</span>
         {/if}
       </div>
+      {#if prefs.settings.mode === 'developer'}
+        {#each [{ key: 'onPRs', label: 'When a change\'s PRs open, move its ticket to' }, { key: 'onMerged', label: 'When the merge train finishes, move it to' }] as f (f.key)}
+          {@const current = prefs.settings.jira[f.key as 'onPRs' | 'onMerged']}
+          <label class="setting">
+            <span>{f.label}</span>
+            <select class="input" value={current} disabled={!prefs.settings.jira.site}
+              onchange={(e) => saveSettings({ jira: { ...prefs.settings.jira, [f.key]: e.currentTarget.value } })}>
+              <option value="">Leave it where it is</option>
+              {#if current && !(jiraStatuses ?? []).includes(current)}<option value={current}>{current}</option>{/if}
+              {#each jiraStatuses ?? [] as st (st)}<option value={st}>{st}</option>{/each}
+            </select>
+          </label>
+        {/each}
+      {/if}
     </div>
   </section>
 

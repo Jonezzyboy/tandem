@@ -495,8 +495,9 @@ type CheckEvent struct {
 }
 
 // Check runs local checks for one leg, or every leg when leg is empty, and
-// streams each check's progress as "check" events.
-func (a *App) Check(id, leg string) ([]CheckEvent, error) {
+// streams each check's progress as "check" events. With changedOnly, a leg
+// still as it was when its checks last all passed is skipped.
+func (a *App) Check(id, leg string, changedOnly bool) ([]CheckEvent, error) {
 	c, err := a.store.Load(id)
 	if err != nil {
 		return nil, err
@@ -512,21 +513,35 @@ func (a *App) Check(id, leg string) ([]CheckEvent, error) {
 		}
 		legs = []*change.Leg{l}
 	}
+	passed := a.passedChecks(id)
 	var mu sync.Mutex
 	var out []CheckEvent
 	var errs []error
 	var wg sync.WaitGroup
 	for _, l := range legs {
 		wg.Go(func() {
+			state := legState(a.ctx, l.Dir())
+			if changedOnly && passed.same(l.Name(), state) {
+				ev := CheckEvent{Change: id, Leg: l.Name(), Name: "unchanged", State: "skip", Output: "nothing changed since its checks last passed"}
+				a.emit("check", ev)
+				mu.Lock()
+				out = append(out, ev)
+				mu.Unlock()
+				return
+			}
+			ok, ran := true, false
 			_, err := core.RunChecks(a.ctx, c, l, func(r checks.Result, done bool) {
 				ev := checkEvent(id, l.Name(), r, done)
 				a.emit("check", ev)
 				if done {
+					ok = ok && ev.State != "fail"
+					ran = ran || ev.State == "pass"
 					mu.Lock()
 					out = append(out, ev)
 					mu.Unlock()
 				}
 			})
+			passed.record(l.Name(), state, ok && ran && err == nil)
 			if err != nil {
 				mu.Lock()
 				errs = append(errs, fmt.Errorf("%s: %w", l.Name(), err))
@@ -622,6 +637,9 @@ func (a *App) PublishPRs(id string, req PRRequest) (PRPreview, error) {
 	core.PublishPRs(a.ctx, c, plans, title, req.options())
 	if err := a.store.Save(c); err != nil {
 		return PRPreview{}, err
+	}
+	if openedForReview(plans) {
+		go a.moveTicket(id, a.Settings().Jira.OnPRs)
 	}
 	go a.refresh(id, true)
 	return preview(title, plans), nil

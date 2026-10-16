@@ -30,8 +30,8 @@ export function Changes() {
   return window['go']['main']['App']['Changes']();
 }
 
-export function Check(arg1, arg2) {
-  return window['go']['main']['App']['Check'](arg1, arg2);
+export function Check(arg1, arg2, arg3) {
+  return window['go']['main']['App']['Check'](arg1, arg2, arg3);
 }
 
 export function CheckUpdate() {
@@ -76,6 +76,10 @@ export function DiscardPlan(arg1) {
 
 export function Draft(arg1) {
   return window['go']['main']['App']['Draft'](arg1);
+}
+
+export function DraftDescription(arg1) {
+  return window['go']['main']['App']['DraftDescription'](arg1);
 }
 
 export function Editors() {
