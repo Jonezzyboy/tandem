@@ -325,6 +325,8 @@ export interface TesterPlan {
   // The previous test of this ticket here, and what was pushed since.
   last: TestRecord | null
   changes: RepoChanges[]
+  // The developer's link this plan came from, if any.
+  share: Share | null
 }
 
 export interface TestCheck {
@@ -440,4 +442,19 @@ export interface Update {
   version: string
   url: string
   newer: boolean
+}
+
+export interface Share {
+  v: number
+  id: string
+  title?: string
+  ticket?: string
+  from?: string
+  note?: string
+  repos: { name: string; branch: string; base?: string; pr?: number; url?: string }[]
+}
+
+export interface ShareLinks {
+  web: string
+  app: string
 }

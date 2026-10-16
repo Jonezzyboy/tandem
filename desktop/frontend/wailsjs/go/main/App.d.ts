@@ -67,6 +67,8 @@ export function OpenFolder(arg1:string):Promise<void>;
 
 export function OpenNotificationSettings():Promise<void>;
 
+export function OpenShare(arg1:string):Promise<main.SharedChange>;
+
 export function OpenURL(arg1:string):Promise<void>;
 
 export function Pin(arg1:string):Promise<Array<main.PinItem>>;
@@ -103,6 +105,8 @@ export function SettingsPath():Promise<string>;
 
 export function Setup():Promise<Array<main.SetupItem>>;
 
+export function ShareLink(arg1:string,arg2:string):Promise<main.ShareLinks>;
+
 export function Start(arg1:main.StartRequest):Promise<Array<main.StartItem>>;
 
 export function StartTrain(arg1:string,arg2:string):Promise<void>;
@@ -112,6 +116,8 @@ export function Switch(arg1:string,arg2:boolean):Promise<Array<main.LegResult>>;
 export function Sync(arg1:string):Promise<Array<main.LegResult>>;
 
 export function SystemDark():Promise<boolean>;
+
+export function TakeShareLink():Promise<string>;
 
 export function TandemHome():Promise<string>;
 

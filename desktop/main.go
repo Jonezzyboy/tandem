@@ -38,6 +38,7 @@ func main() {
 			TitleBar:   mac.TitleBarHiddenInset(),
 			Appearance: appearance,
 			About:      &mac.AboutInfo{Title: "Tandem", Message: "One change, many repos."},
+			OnUrlOpen:  app.receiveLink,
 		},
 	})
 	if err != nil {

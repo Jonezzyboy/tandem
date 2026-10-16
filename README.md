@@ -83,6 +83,16 @@ PR's failed GitHub Actions jobs. Changes whose PRs have all merged move to a
 collapsed Landed group in the sidebar, and a filter appears once you have more
 than four.
 
+### Hand a change to a tester
+
+**Share with a tester** (the link icon on a change, or ⌘⇧T) copies a link with
+the Jira ticket, each repo's branch and PR, and an optional note. Opening it
+starts Tandem in tester mode on that change, so the tester doesn't need to find
+the branches or rely on Jira being up to date. The link goes through a small page
+at `jonezzyboy.github.io/tandem/test/` that hands off to the app, or shows how to
+install it; the change rides in the part after `#`, which browsers never send to
+a server. Testers can also paste the link into the box on **Ready to test**.
+
 ### Local checks across every repo
 
 `go build`, `go vet` and `go test`, phpstan and phpunit, your `package.json`

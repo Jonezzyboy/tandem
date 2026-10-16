@@ -3,9 +3,10 @@
   import { api } from '@lib/api'
   import { ago, reviewLabel, slackMessage } from '@lib/format'
   import { app, checkOut, fail, loadCleanPlan, log, navigate, switching as switchingIds } from '@lib/state.svelte'
-  import { editorLabel } from '@lib/settings.svelte'
+  import { editorLabel, keycaps, shortcutFor } from '@lib/settings.svelte'
   import type { CleanItem, JiraTicket, LegView } from '@lib/types'
   import Description from './Description.svelte'
+  import ShareDialog from './ShareDialog.svelte'
   import Composer from './Composer.svelte'
   import CopySlack from './CopySlack.svelte'
   import TrainDialog from './TrainDialog.svelte'
@@ -189,6 +190,8 @@
        ['Updated', jira.updated ? `${ago(jira.updated, now)} ago` : '']].filter(([, v]) => v)
     : [])
 
+  let shareOpen = $state(false)
+
   // Change-scoped shortcuts arrive from App's keymap as tandem:command events.
   function onCommand(e: Event) {
     const command = (e as CustomEvent<string>).detail
@@ -196,8 +199,11 @@
       if (view && !refreshing) refresh()
       return
     }
-    if (!view || app.composer || app.trainOpen) return
+    if (!view || app.composer || app.trainOpen || shareOpen) return
     switch (command) {
+      case 'shareTester':
+        shareOpen = true
+        break
       case 'syncAll':
         if (!syncing) sync()
         break
@@ -370,6 +376,9 @@
       <div class="actions" style="--wails-draggable: no-drag">
         <button class="icon-btn" aria-label="Delete this change" title="Delete change" disabled={planningDiscard} onclick={planDiscard}>
           <Icon name="trash" spin={planningDiscard} />
+        </button>
+        <button class="icon-btn" aria-label="Share with a tester" title="Share with a tester ({keycaps(shortcutFor('shareTester')).join('')})" onclick={() => (shareOpen = true)}>
+          <Icon name="link" />
         </button>
         <button class="icon-btn" aria-label="Refresh from GitHub" title="Refresh (⌘R)" disabled={refreshing} onclick={refresh}>
           <Icon name={refreshing ? 'running' : 'refresh'} spin={refreshing} />
@@ -621,6 +630,9 @@
     </div>
   </div>
 
+  {#if shareOpen}
+    <ShareDialog {view} onclose={() => (shareOpen = false)} />
+  {/if}
   {#if app.composer}
     <Composer {view} ticketKey={ticketKey} onclose={() => (app.composer = false)} />
   {/if}
