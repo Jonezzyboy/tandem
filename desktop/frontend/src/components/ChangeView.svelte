@@ -836,5 +836,6 @@
     margin: 2px 0 6px 26px; padding: 10px 12px; background: var(--log-bg); border: 1px solid var(--line);
     border-radius: 8px; font: 12px/1.6 var(--mono); color: var(--text-2); white-space: pre-wrap; max-height: 260px; overflow: auto;
   }
-  .act { display: grid; grid-template-columns: 34px 1fr; gap: 8px; font-size: 13px; line-height: 1.45; }
+  .act { display: grid; grid-template-columns: 44px minmax(0, 1fr); gap: 8px; font-size: 13px; line-height: 1.45; }
+  .act > :last-child { overflow-wrap: anywhere; }
 </style>
