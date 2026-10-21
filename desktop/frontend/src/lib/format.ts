@@ -34,5 +34,5 @@ export function slackMessage(key: string, title: string, prs: { repo: string; ur
   if (!sorted.length) return ''
   const head = `${key}${title ? ` - ${title}` : ''}:`
   if (sorted.length === 1) return `${head} ${sorted[0].url}`
-  return [head, ...sorted.map((p) => `${shortRepo(p.repo)}: ${p.url}`)].join('\n')
+  return [head, ...sorted.map((p) => `• ${shortRepo(p.repo)}: ${p.url}`)].join('\n')
 }
