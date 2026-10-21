@@ -39,7 +39,7 @@ type PROptions struct {
 	ForceWithLease bool
 }
 
-// PRTitle is title, else the change's title, prefixed with the change ID.
+// PRTitle is title, else the change's title, as "<ID>: <title>".
 func PRTitle(c *change.Change, title string) (string, error) {
 	if title == "" {
 		title = c.Title
@@ -47,10 +47,13 @@ func PRTitle(c *change.Change, title string) (string, error) {
 	if title == "" {
 		return "", fmt.Errorf("no title: give the change one, e.g. td start %s --title", c.ID)
 	}
-	if !strings.HasPrefix(title, c.ID) {
-		title = c.ID + " " + title
+	if rest, ok := strings.CutPrefix(title, c.ID); ok {
+		title = strings.TrimLeft(rest, " :")
 	}
-	return title, nil
+	if title == "" {
+		return "", fmt.Errorf("no title after %s: give the change one", c.ID)
+	}
+	return c.ID + ": " + title, nil
 }
 
 // PlanPRs reads every leg's state and decides, per leg, whether to open a PR,

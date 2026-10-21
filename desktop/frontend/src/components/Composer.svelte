@@ -171,7 +171,7 @@
         <div class="field">
           <label for="pr-title">Title</label>
           <input id="pr-title" class="input" bind:value={title} placeholder="What this change does" />
-          <span class="muted small">Sent as “{view.id} {title.replace(view.id, '').trim() || '…'}”</span>
+          <span class="muted small">Sent as “{view.id}: {title.replace(view.id, '').replace(/^[\s:]+/, '').trim() || '…'}”</span>
         </div>
         <div class="field grow">
           <div class="label-row">

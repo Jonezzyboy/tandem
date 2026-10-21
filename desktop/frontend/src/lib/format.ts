@@ -32,5 +32,7 @@ export function shortRepo(repo: string): string {
 export function slackMessage(key: string, title: string, prs: { repo: string; url: string; level: number }[]): string {
   const sorted = prs.filter((p) => p.url).sort((a, b) => a.level - b.level)
   if (!sorted.length) return ''
-  return [`${key}${title ? ` - ${title}` : ''}:`, ...sorted.map((p) => `${shortRepo(p.repo)}: ${p.url}`)].join('\n')
+  const head = `${key}${title ? ` - ${title}` : ''}:`
+  if (sorted.length === 1) return `${head} ${sorted[0].url}`
+  return [head, ...sorted.map((p) => `${shortRepo(p.repo)}: ${p.url}`)].join('\n')
 }
