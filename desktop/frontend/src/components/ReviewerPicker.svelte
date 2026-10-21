@@ -13,6 +13,19 @@
   let open = $state(false)
   let active = $state(0)
   let input = $state<HTMLInputElement>()
+  let picker = $state<HTMLDivElement>()
+  // The menu opens upward when the window has more room above the field, and
+  // never taller than the room it has.
+  let placement = $state<{ up: boolean; max: number }>({ up: false, max: 260 })
+
+  function place() {
+    if (!picker) return
+    const r = picker.getBoundingClientRect()
+    const below = window.innerHeight - r.bottom - 12
+    const above = r.top - 12
+    const up = below < 200 && above > below
+    placement = { up, max: Math.max(120, Math.min(260, up ? above : below)) }
+  }
 
   const chosen = $derived(value.split(',').map((r) => r.trim()).filter(Boolean))
   const matches = $derived.by(() => {
@@ -48,6 +61,7 @@
   async function onKey(e: KeyboardEvent) {
     if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
       e.preventDefault()
+      if (!open) place()
       open = true
       if (matches.length) active = (active + (e.key === 'ArrowDown' ? 1 : matches.length - 1)) % matches.length
     } else if (e.key === 'Enter' || e.key === 'Tab' || e.key === ',') {
@@ -66,7 +80,9 @@
   }
 </script>
 
-<div class="picker" class:focused={open}>
+<svelte:window onresize={() => open && place()} />
+
+<div class="picker" class:focused={open} bind:this={picker}>
   <div class="box" role="presentation" onclick={() => input?.focus()}>
     {#each chosen as c (c)}
       <span class="chip">
@@ -74,12 +90,12 @@
         <button type="button" aria-label="Remove {c}" onclick={(e) => { e.stopPropagation(); remove(c) }}><Icon name="close" size={12} /></button>
       </span>
     {/each}
-    <input {id} bind:this={input} bind:value={query} onkeydown={onKey} onfocus={() => (open = true)} onblur={() => setTimeout(() => (open = false), 120)}
+    <input {id} bind:this={input} bind:value={query} onkeydown={onKey} onfocus={() => { place(); open = true }} onblur={() => setTimeout(() => (open = false), 120)}
       placeholder={chosen.length ? '' : 'Add people or teams'} autocomplete="off" spellcheck="false"
       role="combobox" aria-expanded={open && matches.length > 0} aria-controls="{id}-list" />
   </div>
   {#if open && (matches.length || suggestions === null || loadError)}
-    <div class="menu" id="{id}-list" role="listbox">
+    <div class="menu" class:up={placement.up} style:max-height="{placement.max}px" id="{id}-list" role="listbox">
       {#if suggestions === null}
         <div class="note muted"><Icon name="running" size={13} spin />Finding reviewers…</div>
       {:else if loadError}
@@ -109,9 +125,10 @@
   .chip button { display: grid; place-items: center; width: 18px; height: 18px; border: 0; border-radius: 4px; background: none; color: var(--muted); cursor: pointer; }
   .chip button:hover { background: var(--hover); color: var(--text); }
   .menu {
-    position: absolute; left: 0; right: 0; top: calc(100% + 4px); z-index: 5; padding: 4px; max-height: 260px; overflow-y: auto;
+    position: absolute; left: 0; right: 0; top: calc(100% + 4px); z-index: 5; padding: 4px; overflow-y: auto;
     background: var(--bg); border: 1px solid var(--line-2); border-radius: 10px; box-shadow: 0 12px 30px var(--shadow);
   }
+  .menu.up { top: auto; bottom: calc(100% + 4px); }
   .option { display: flex; align-items: baseline; gap: 10px; width: 100%; padding: 7px 10px; border: 0; border-radius: 6px; background: none; color: var(--text); text-align: left; font-size: 13px; cursor: pointer; }
   .option[aria-selected='true'] { background: var(--selected); }
   .login { flex-shrink: 0; }
