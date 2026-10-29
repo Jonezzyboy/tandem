@@ -75,12 +75,11 @@ func runList(ctx context.Context, e *env, args []string) error {
 		return err
 	}
 	all, err := e.store.List()
-	if err != nil {
-		return err
-	}
 	if len(all) == 0 {
-		fmt.Fprintln(e.out, "no changes yet: run td start <ID> <repo>...")
-		return nil
+		if err == nil {
+			fmt.Fprintln(e.out, "no changes yet: run td start <ID> <repo>...")
+		}
+		return err
 	}
 	rows := [][]ui.Cell{}
 	for _, c := range all {
@@ -89,7 +88,7 @@ func runList(ctx context.Context, e *env, args []string) error {
 		})
 	}
 	e.ui.Table(e.out, "", rows)
-	return nil
+	return err
 }
 
 func runSwitch(ctx context.Context, e *env, args []string) error {

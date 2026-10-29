@@ -70,8 +70,8 @@ type TesterQueue struct {
 }
 
 func (a *App) jiraClient() jira.Client {
-	email := a.Settings().Jira.Email
-	return jira.Client{Email: email, Token: jiraToken(email)}
+	s := a.Settings().Jira
+	return jira.Client{Site: s.Site, Email: s.Email, Token: jiraToken(s.Email)}
 }
 
 // owners are the GitHub owners cloned under the roots: PRs are looked for in

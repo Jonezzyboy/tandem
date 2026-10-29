@@ -77,7 +77,7 @@ func TestIssue(t *testing.T) {
 	defer srv.Close()
 	ref := Ref{Site: srv.URL, Key: "DEV-1"}
 
-	got, err := Client{Email: "me@example.com", Token: "tok"}.Issue(context.Background(), ref)
+	got, err := Client{Site: srv.URL, Email: "me@example.com", Token: "tok"}.Issue(context.Background(), ref)
 	want := Issue{Key: "DEV-1", Summary: "Price Decimal Formatting", Type: "Story", Status: "In Progress", Priority: "High", Assignee: "Sam Lee",
 		Updated:     time.Date(2026, 10, 2, 10, 4, 5, 123e6, time.UTC),
 		Description: "Prices show two decimals.\n\n• Hosted page\n• Ask @Sam\n\nhttps://example.com/spec"}
@@ -88,10 +88,14 @@ func TestIssue(t *testing.T) {
 	if got != want {
 		t.Fatalf("Issue = %#v\nwant    %#v", got, want)
 	}
-	for _, c := range []Client{{}, {Email: "me@example.com", Token: "wrong"}} {
+	for _, c := range []Client{{Site: srv.URL}, {Site: srv.URL, Email: "me@example.com", Token: "wrong"}} {
 		if _, err := c.Issue(context.Background(), ref); !errors.Is(err, ErrNoAccess) {
 			t.Errorf("%+v: err = %v, want ErrNoAccess", c, err)
 		}
+	}
+	other := Client{Site: "https://acme.atlassian.net", Email: "me@example.com", Token: "tok"}
+	if _, err := other.Issue(context.Background(), ref); !errors.Is(err, ErrOtherSite) {
+		t.Errorf("credentials sent to a site other than the client's: err = %v", err)
 	}
 }
 
@@ -138,7 +142,7 @@ func TestSearchMoveToAndComment(t *testing.T) {
 		}
 	}))
 	defer srv.Close()
-	c := Client{Email: "me@example.com", Token: "tok"}
+	c := Client{Site: srv.URL, Email: "me@example.com", Token: "tok"}
 	ref := Ref{Site: srv.URL, Key: "DEV-1"}
 
 	got, err := c.Search(context.Background(), srv.URL+"/", `status = "Ready for Test"`)

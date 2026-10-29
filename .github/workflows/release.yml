@@ -70,6 +70,11 @@ jobs:
       - name: Build Tandem.app with td inside
         run: scripts/build-app.sh "${{ steps.tag.outputs.version }}"
 
+      # desktop is its own module, so the go test above skips it; it embeds
+      # frontend/dist, which the build just made.
+      - run: go test ./...
+        working-directory: desktop
+
       - name: Check the app links against the macOS 26 SDK
         run: |
           sdk=$(otool -arch arm64 -l desktop/build/bin/Tandem.app/Contents/MacOS/Tandem | awk '/LC_BUILD_VERSION/{f=1} f&&/ sdk /{print $2; exit}')

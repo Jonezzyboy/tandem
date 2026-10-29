@@ -177,15 +177,16 @@ func Create(ctx context.Context, dir string, o CreateOpts) (int, string, error) 
 	return n, u, nil
 }
 
-// Merge merges a PR with method squash, merge or rebase. With a merge queue the
-// PR is only queued; callers poll View for MERGED.
-func Merge(ctx context.Context, dir string, number int, method string) error {
+// Merge merges a PR with method squash, merge or rebase, provided its head is
+// still head, the commit the caller checked. With a merge queue the PR is only
+// queued; callers poll View for MERGED.
+func Merge(ctx context.Context, dir string, number int, method, head string) error {
 	switch method {
 	case "squash", "merge", "rebase":
 	default:
 		return fmt.Errorf("unknown merge method %q: use squash, merge or rebase", method)
 	}
-	_, err := run(ctx, dir, "", "pr", "merge", strconv.Itoa(number), "--"+method)
+	_, err := run(ctx, dir, "", "pr", "merge", strconv.Itoa(number), "--"+method, "--match-head-commit", head)
 	return err
 }
 

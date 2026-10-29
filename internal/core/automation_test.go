@@ -16,16 +16,21 @@ import (
 	"github.com/jonezzyboy/tandem/internal/workspace"
 )
 
-// fakeGH serves <repo>.json from FAKE_GH_DIR with __HEAD__ replaced by the
-// branch's pushed commit, and "merges" by rewriting that file.
+// fakeGH serves <repo>.json from FAKE_GH_DIR, or <repo>.<selector>.json when
+// that exists, with __HEAD__ replaced by the
+// branch's pushed commit, and "merges" by rewriting that file, refusing as
+// GitHub does when --match-head-commit isn't that commit.
 const fakeGH = `#!/bin/sh
 repo=$(basename "$PWD")
 f="$FAKE_GH_DIR/$repo.json"
+[ -f "$FAKE_GH_DIR/$repo.$3.json" ] && f="$FAKE_GH_DIR/$repo.$3.json"
+head=$(git for-each-ref --format='%(objectname) %(refname:lstrip=3)' refs/remotes/origin | awk '$2 != "main" && $2 != "HEAD" { print $1; exit }')
 case "$1 $2" in
 "pr view")
   [ -f "$f" ] || { echo "no pull requests found for branch" >&2; exit 1; }
-  sed "s/__HEAD__/$(git rev-parse @{u})/" "$f" ;;
+  sed "s/__HEAD__/$head/" "$f" ;;
 "pr merge")
+  case " $* " in *" --match-head-commit $head "*) ;; *) echo "head branch was modified" >&2; exit 1 ;; esac
   echo "$repo" >> "$FAKE_GH_DIR/merged"
   sha=$(git rev-parse @{u})
   sed -e 's/"state":"OPEN"/"state":"MERGED"/' -e "s/\"mergeCommit\":null/\"mergeCommit\":{\"oid\":\"$sha\"}/" "$f" > "$f.tmp" && mv "$f.tmp" "$f" ;;
@@ -368,6 +373,20 @@ func TestClean(t *testing.T) {
 		t.Fatalf("uncommitted work should block: %+v", cands[0])
 	}
 	run(t, api.Dir(), "git", "checkout", "--", "work.txt")
+
+	// A commit made after the merge, once origin has dropped the branch, is
+	// still work.
+	head := run(t, api.Dir(), "git", "rev-parse", "DEV-1")
+	prJSON, _ := os.ReadFile(filepath.Join(f.ghDir, "api.json"))
+	write(t, filepath.Join(f.ghDir, "api.json"), strings.Replace(string(prJSON), "__HEAD__", head, 1), 0o644)
+	f.commit(*api, "late.txt", "late")
+	run(t, api.Dir(), "git", "update-ref", "-d", "refs/remotes/origin/DEV-1")
+	cands, _ = CleanCandidates(context.Background(), f.store)
+	if cands[0].Ready || !strings.Contains(cands[0].Reason, "api: commits not in its merged PR") {
+		t.Fatalf("a commit past the merged PR should block: %+v", cands[0])
+	}
+	run(t, api.Dir(), "git", "reset", "--quiet", "--hard", head)
+
 	// Untracked files, like an IDE's folder, don't count as work.
 	write(t, filepath.Join(api.Dir(), ".idea", "vcs.xml"), "<project/>", 0o644)
 
@@ -391,6 +410,27 @@ func TestClean(t *testing.T) {
 	}
 	if _, err := os.Stat(cc.Dir); !os.IsNotExist(err) {
 		t.Errorf("change dir survived: %v", err)
+	}
+}
+
+func TestClosedPRGivesWayToNewOne(t *testing.T) {
+	f := newFixture(t)
+	c := f.change()
+	api, _ := c.Leg("api")
+	api.PR = 2
+	f.pr("api", 2, "CLOSED", "", green)
+	if err := os.Rename(filepath.Join(f.ghDir, "api.json"), filepath.Join(f.ghDir, "api.2.json")); err != nil {
+		t.Fatal(err)
+	}
+
+	Snapshot(context.Background(), c, true)
+	if api.PR != 2 {
+		t.Fatalf("with no open PR the closed one should stay, got #%d", api.PR)
+	}
+	f.pr("api", 3, "OPEN", "", green)
+	states := Snapshot(context.Background(), c, true)
+	if api.PR != 3 || api.PRURL != "https://github.com/acme/api/pull/3" || states[1].PR.State != "OPEN" {
+		t.Errorf("leg on #%d %s, PR %+v", api.PR, api.PRURL, states[1].PR)
 	}
 }
 

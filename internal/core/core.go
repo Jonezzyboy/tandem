@@ -57,8 +57,8 @@ type LegState struct {
 }
 
 // Snapshot reads every leg's local and, with withPR, GitHub state
-// concurrently. A leg whose PR number was unknown gets it filled in, so
-// callers should save c after.
+// concurrently. A leg's PR number is filled in, or replaced along with its
+// PR, so callers should save c after.
 func Snapshot(ctx context.Context, c *change.Change, withPR bool) []LegState {
 	out := make([]LegState, len(c.Legs))
 	var wg sync.WaitGroup
@@ -76,19 +76,27 @@ func Snapshot(ctx context.Context, c *change.Change, withPR bool) []LegState {
 	}
 	wg.Wait()
 	for _, s := range out {
-		if s.PR != nil && s.Leg.PR == 0 {
+		if s.PR != nil && s.Leg.PR != s.PR.Number {
 			s.Leg.PR, s.Leg.PRURL = s.PR.Number, s.PR.URL
 		}
 	}
 	return out
 }
 
+// ViewPR is the leg's PR. A recorded PR closed without merging gives way to an
+// open one on the branch, as when a PR is closed and opened again as a new one.
 func ViewPR(ctx context.Context, c *change.Change, l *change.Leg) (*gh.PR, error) {
-	sel := c.Branch
-	if l.PR > 0 {
-		sel = strconv.Itoa(l.PR)
+	if l.PR == 0 {
+		return gh.View(ctx, l.Dir(), c.Branch)
 	}
-	return gh.View(ctx, l.Dir(), sel)
+	pr, err := gh.View(ctx, l.Dir(), strconv.Itoa(l.PR))
+	if err != nil || pr == nil || pr.State != "CLOSED" {
+		return pr, err
+	}
+	if open, err := gh.View(ctx, l.Dir(), c.Branch); err == nil && open != nil && open.State == "OPEN" {
+		return open, nil
+	}
+	return pr, nil
 }
 
 // OnBranch reports whether the repo has the change's branch checked out, which

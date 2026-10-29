@@ -192,7 +192,7 @@ func RunTrain(ctx context.Context, c *change.Change, g Graph, o TrainOptions) er
 			}
 			if pr.State != "MERGED" {
 				o.OnEvent(TrainEvent{Leg: l.Name(), Level: lvl, Phase: "merging", Detail: "#" + strconv.Itoa(pr.Number) + " --" + o.Method, URL: pr.URL})
-				if err := gh.Merge(ctx, l.Dir(), pr.Number, o.Method); err != nil {
+				if err := gh.Merge(ctx, l.Dir(), pr.Number, o.Method, pr.HeadRefOid); err != nil {
 					return fmt.Errorf("%s: %w", l.Name(), err)
 				}
 				if pr, err = waitMerged(ctx, c, l, o); err != nil {

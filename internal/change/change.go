@@ -229,10 +229,12 @@ func (s Store) SetOrder(ids []string) error {
 	return writeJSON(s.Home, orderFile, ids)
 }
 
-// List returns every change in the saved order. Changes it doesn't rank, such
-// as ones started since, come first, newest first.
+// List returns every change it can read in the saved order, and an error
+// naming any it can't. Changes it doesn't rank, such as ones started since,
+// come first, newest first.
 func (s Store) List() ([]*Change, error) {
 	var out []*Change
+	var bad []error
 	err := filepath.WalkDir(s.Home, func(path string, e fs.DirEntry, err error) error {
 		if err != nil {
 			if path == s.Home && errors.Is(err, fs.ErrNotExist) {
@@ -253,7 +255,8 @@ func (s Store) List() ([]*Change, error) {
 		}
 		c, err := s.Load(id)
 		if err != nil {
-			return err
+			bad = append(bad, err)
+			return fs.SkipDir
 		}
 		out = append(out, c)
 		// A change's directory holds its worktrees, never other changes.
@@ -279,7 +282,7 @@ func (s Store) List() ([]*Change, error) {
 		}
 		return out[i].Created.After(out[j].Created)
 	})
-	return out, nil
+	return out, errors.Join(bad...)
 }
 
 // Current picks the change for a command given no ID: the one whose directory

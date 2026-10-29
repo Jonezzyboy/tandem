@@ -50,6 +50,29 @@ func TestShellVars(t *testing.T) {
 	}
 }
 
+func TestSavePRsKeepsEditsMadeDuringRefresh(t *testing.T) {
+	a := NewApp(change.Store{Home: t.TempDir()}, nil)
+	c := &change.Change{ID: "DEV-1", Branch: "DEV-1", Legs: []change.Leg{{Repo: "acme/api"}, {Repo: "acme/web"}}}
+	if err := a.store.Save(c); err != nil {
+		t.Fatal(err)
+	}
+	found, _ := a.store.Load("DEV-1")
+	found.Legs[0].PR, found.Legs[0].PRURL = 7, "https://github.com/acme/api/pull/7"
+
+	c.Title = "Edited"
+	c.RemoveLeg("acme/web")
+	if err := a.store.Save(c); err != nil {
+		t.Fatal(err)
+	}
+	if err := a.savePRs("DEV-1", found); err != nil {
+		t.Fatal(err)
+	}
+	got, _ := a.store.Load("DEV-1")
+	if got.Title != "Edited" || len(got.Legs) != 1 || got.Legs[0].PR != 7 {
+		t.Errorf("after savePRs: %+v", got)
+	}
+}
+
 func TestSameViewIgnoresCheckedAt(t *testing.T) {
 	a := core.ChangeView{ID: "X", CheckedAt: time.Now()}
 	b := a
