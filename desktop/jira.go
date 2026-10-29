@@ -98,10 +98,9 @@ func (a *App) JiraLookup(link string) (JiraTicket, error) {
 		return JiraTicket{}, errors.New("not a Jira issue link")
 	}
 	t := JiraTicket{Key: r.Key, URL: r.URL()}
-	email := a.Settings().Jira.Email
 	ctx, cancel := context.WithTimeout(a.ctx, 15*time.Second)
 	defer cancel()
-	is, err := jira.Client{Email: email, Token: jiraToken(email)}.Issue(ctx, r)
+	is, err := a.jiraClient().Issue(ctx, r)
 	if err != nil {
 		t.Error, t.NoAccess = err.Error(), errors.Is(err, jira.ErrNoAccess)
 		return t, nil

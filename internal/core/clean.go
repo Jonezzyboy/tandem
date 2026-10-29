@@ -126,6 +126,8 @@ func candidate(ctx context.Context, store change.Store, c *change.Change) CleanC
 			deletable = true
 		case s.PR == nil:
 			why = append(why, fmt.Sprintf("%s: %d commits and no PR", l.Name(), s.Status.Ahead))
+		case s.PR.State == "MERGED" && !landed(ctx, l, c.Branch, s.PR.HeadRefOid):
+			why = append(why, l.Name()+": commits not in its merged PR")
 		case s.PR.State == "MERGED":
 			deletable = true
 		case s.PR.State == "CLOSED":
@@ -176,6 +178,17 @@ func unpushed(ctx context.Context, c *change.Change, l *change.Leg) int {
 	}
 	n, _ := strconv.Atoi(out)
 	return n
+}
+
+// landed reports whether the local branch holds nothing past head, its PR's
+// last commit. unpushed can't tell once origin has dropped the merged branch.
+func landed(ctx context.Context, l *change.Leg, branch, head string) bool {
+	ref := "refs/heads/" + branch
+	if !gitx.RefExists(ctx, l.Dir(), ref) {
+		return true
+	}
+	_, err := gitx.Run(ctx, l.Dir(), "merge-base", "--is-ancestor", ref, head)
+	return err == nil
 }
 
 // Clean does exactly what cc lists: moves repos off the change's branch onto

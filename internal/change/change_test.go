@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 )
@@ -126,5 +127,21 @@ func TestNestedIDs(t *testing.T) {
 		if err := s.CheckNew(id); (err == nil) != ok {
 			t.Errorf("CheckNew(%q) = %v, want ok=%v", id, err, ok)
 		}
+	}
+}
+
+func TestListSkipsUnreadableChange(t *testing.T) {
+	s := Store{Home: t.TempDir()}
+	for _, id := range []string{"A-1", "B-2"} {
+		if err := s.Save(&Change{ID: id, Branch: id}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.WriteFile(filepath.Join(s.Dir("A-1"), file), []byte("{"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	all, err := s.List()
+	if len(all) != 1 || all[0].ID != "B-2" || err == nil || !strings.Contains(err.Error(), "A-1") {
+		t.Errorf("List = %v, %v; want B-2 and an error naming A-1", all, err)
 	}
 }

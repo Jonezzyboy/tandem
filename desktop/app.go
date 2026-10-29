@@ -69,8 +69,9 @@ type App struct {
 	// installed, waiting for a restart.
 	installing  bool
 	updateReady string
-	// histMu serialises history files.
-	histMu sync.Mutex
+	// histMu serialises history files, sharesMu the shared-changes file.
+	histMu   sync.Mutex
+	sharesMu sync.Mutex
 	// reviewers are suggestions by the change's sorted repos.
 	reviewers map[string]reviewerCache
 
@@ -156,11 +157,17 @@ func (a *App) poll(ctx context.Context) {
 func (a *App) refreshAll() {
 	all, err := a.store.List()
 	if err != nil {
-		return
+		a.emit("error", err.Error())
 	}
+	// Each refresh runs gh per leg; all at once trips GitHub's secondary rate limit.
+	sem := make(chan struct{}, 6)
 	var wg sync.WaitGroup
 	for _, c := range all {
-		wg.Go(func() { a.refresh(c.ID, true) })
+		wg.Go(func() {
+			sem <- struct{}{}
+			defer func() { <-sem }()
+			a.refresh(c.ID, true)
+		})
 	}
 	wg.Go(func() { a.fetchInbox() })
 	wg.Wait()
@@ -223,7 +230,7 @@ func (a *App) buildView(id string, remote bool) (core.ChangeView, error) {
 	defer cancel()
 	states := core.Snapshot(ctx, c, remote)
 	if remote {
-		if err := a.store.Save(c); err != nil {
+		if err := a.savePRs(id, c); err != nil {
 			return core.ChangeView{}, err
 		}
 	}
@@ -274,6 +281,33 @@ func (a *App) buildView(id string, remote bool) (core.ChangeView, error) {
 		a.emit("changes", a.Changes())
 	}
 	return v, nil
+}
+
+// savePRs copies the PR numbers a refresh found onto the change as saved now,
+// so an edit made while GitHub was asked isn't overwritten. While an operation
+// or train holds the change it skips, and a later refresh saves them.
+func (a *App) savePRs(id string, found *change.Change) error {
+	lock := a.opLock(id)
+	if !lock.TryLock() {
+		return nil
+	}
+	defer lock.Unlock()
+	c, err := a.store.Load(id)
+	if err != nil {
+		return err
+	}
+	changed := false
+	for i := range c.Legs {
+		l := &c.Legs[i]
+		if f, err := found.Leg(l.Repo); err == nil && f.PR != 0 && f.PR != l.PR {
+			l.PR, l.PRURL = f.PR, f.PRURL
+			changed = true
+		}
+	}
+	if !changed {
+		return nil
+	}
+	return a.store.Save(c)
 }
 
 // goUp runs go get for pins whose upstream has merged, leaving go.mod and
@@ -719,12 +753,11 @@ func (a *App) Inbox(force bool) Inbox {
 
 func (a *App) fetchInbox() Inbox {
 	owners := map[string]string{}
-	if all, err := a.store.List(); err == nil {
-		for _, c := range all {
-			for _, l := range c.Legs {
-				if l.PRURL != "" {
-					owners[l.PRURL] = c.ID
-				}
+	all, _ := a.store.List()
+	for _, c := range all {
+		for _, l := range c.Legs {
+			if l.PRURL != "" {
+				owners[l.PRURL] = c.ID
 			}
 		}
 	}
@@ -949,11 +982,10 @@ func (a *App) within(path string) (string, error) {
 		return "", err
 	}
 	allowed := append([]string{a.store.Home}, a.codeRoots()...)
-	if all, err := a.store.List(); err == nil {
-		for _, c := range all {
-			for _, l := range c.Legs {
-				allowed = append(allowed, l.Dir())
-			}
+	all, _ := a.store.List()
+	for _, c := range all {
+		for _, l := range c.Legs {
+			allowed = append(allowed, l.Dir())
 		}
 	}
 	for _, dir := range allowed {

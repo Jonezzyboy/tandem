@@ -159,10 +159,7 @@ func (e *env) changeFrom(pos []string) (*change.Change, []string, error) {
 }
 
 func (e *env) changeForDir() *change.Change {
-	all, err := e.store.List()
-	if err != nil {
-		return nil
-	}
+	all, _ := e.store.List()
 	var matches []*change.Change
 	var repo string
 	for _, c := range all {

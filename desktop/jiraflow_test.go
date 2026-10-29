@@ -44,7 +44,7 @@ func TestMoveTicket(t *testing.T) {
 	if err := a.store.Save(&change.Change{ID: "DEV-1", Branch: "DEV-1", Ticket: ticket}); err != nil {
 		t.Fatal(err)
 	}
-	client := jira.Client{Email: "e", Token: "t", HTTP: srv.Client()}
+	client := jira.Client{Site: srv.URL, Email: "e", Token: "t", HTTP: srv.Client()}
 
 	a.moveTicketWith(client, "DEV-1", "in review")
 	if moved != "21" || len(log) != 1 || !strings.Contains(log[0], "moved DEV-1 from In Progress to In Review") {

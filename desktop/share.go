@@ -140,6 +140,8 @@ func (a *App) OpenShare(text string) (SharedChange, error) {
 	if err != nil {
 		return SharedChange{}, err
 	}
+	a.sharesMu.Lock()
+	defer a.sharesMu.Unlock()
 	all := a.shares()
 	all[s.Key()] = s
 	data, err := json.MarshalIndent(all, "", "  ")

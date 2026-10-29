@@ -89,7 +89,12 @@ type Issue struct {
 // ErrNoAccess means Jira wants credentials it wasn't given or refused them.
 var ErrNoAccess = errors.New("Jira needs a sign-in to read this ticket")
 
+// ErrOtherSite means the request was for a site other than the client's.
+var ErrOtherSite = errors.New("this ticket isn't on the Jira site in Settings, so Tandem won't send it your sign-in")
+
 type Client struct {
+	// Site is the only address Email and Token are sent to.
+	Site  string
 	Email string
 	Token string
 	HTTP  *http.Client
@@ -249,6 +254,9 @@ func (c Client) do(ctx context.Context, method, u string, in, out any) error {
 func (c Client) send(req *http.Request, out any) error {
 	if c.Email == "" || c.Token == "" {
 		return ErrNoAccess
+	}
+	if site, err := url.Parse(c.Site); err != nil || site.Host == "" || site.Scheme != req.URL.Scheme || !strings.EqualFold(site.Host, req.URL.Host) {
+		return ErrOtherSite
 	}
 	req.SetBasicAuth(c.Email, c.Token)
 	req.Header.Set("Accept", "application/json")
