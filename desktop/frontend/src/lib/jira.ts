@@ -26,3 +26,8 @@ const branchKey = /(?:^|\/)([A-Za-z][A-Za-z0-9_]+-[0-9]+)(?:$|[/._-])/
 export function keyInBranch(branch: string): string {
   return branch.trim().match(branchKey)?.[1].toUpperCase() ?? ''
 }
+
+// titlePrefix leads a change's PR titles. Keep in sync with core.TitlePrefix.
+export function titlePrefix(v: { id: string; branch: string }): string {
+  return keyInBranch(v.branch) || v.id
+}

@@ -948,8 +948,8 @@ func (a *App) Reorder(ids []string) error {
 	return nil
 }
 
-// Rename sets change id's title; a leading change ID is dropped, as PR titles
-// add it back.
+// Rename sets change id's title; a leading title prefix is dropped, as PR
+// titles add it back.
 func (a *App) Rename(id, title string) error {
 	lock := a.opLock(id)
 	lock.Lock()
@@ -958,7 +958,7 @@ func (a *App) Rename(id, title string) error {
 	if err != nil {
 		return err
 	}
-	c.Title = strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(title), c.ID))
+	c.Title = strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(title), core.TitlePrefix(c)))
 	if err := a.store.Save(c); err != nil {
 		return err
 	}
