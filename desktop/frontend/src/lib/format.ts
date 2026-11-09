@@ -29,7 +29,13 @@ export function shortRepo(repo: string): string {
 
 // slackMessage is the note posted in Slack once a change's PRs are open: the
 // ticket and title, then each repo's PR in merge order.
+// bareTitle drops a leading "<prefix>:" from title, as PR titles add it back.
+export function bareTitle(title: string, prefix: string): string {
+  return title.startsWith(prefix) ? title.slice(prefix.length).replace(/^[\s:]+/, '').trim() : title.trim()
+}
+
 export function slackMessage(key: string, title: string, prs: { repo: string; url: string; level: number }[]): string {
+  title = bareTitle(title, key)
   const sorted = prs.filter((p) => p.url).sort((a, b) => a.level - b.level)
   if (!sorted.length) return ''
   const head = `${key}${title ? ` - ${title}` : ''}:`

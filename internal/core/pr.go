@@ -39,7 +39,15 @@ type PROptions struct {
 	ForceWithLease bool
 }
 
-// PRTitle is title, else the change's title, as "<ID>: <title>".
+// TitlePrefix leads a change's PR titles: the Jira key in its branch, else its ID.
+func TitlePrefix(c *change.Change) string {
+	if key, _ := jira.KeyInBranch(c.Branch); key != "" {
+		return key
+	}
+	return c.ID
+}
+
+// PRTitle is title, else the change's title, as "<prefix>: <title>".
 func PRTitle(c *change.Change, title string) (string, error) {
 	if title == "" {
 		title = c.Title
@@ -47,13 +55,14 @@ func PRTitle(c *change.Change, title string) (string, error) {
 	if title == "" {
 		return "", fmt.Errorf("no title: give the change one, e.g. td start %s --title", c.ID)
 	}
-	if rest, ok := strings.CutPrefix(title, c.ID); ok {
+	prefix := TitlePrefix(c)
+	if rest, ok := strings.CutPrefix(title, prefix); ok {
 		title = strings.TrimLeft(rest, " :")
 	}
 	if title == "" {
-		return "", fmt.Errorf("no title after %s: give the change one", c.ID)
+		return "", fmt.Errorf("no title after %s: give the change one", prefix)
 	}
-	return c.ID + ": " + title, nil
+	return prefix + ": " + title, nil
 }
 
 // PlanPRs reads every leg's state and decides, per leg, whether to open a PR,

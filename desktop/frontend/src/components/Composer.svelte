@@ -3,7 +3,8 @@
   import { api } from '@lib/api'
   import { fail, log } from '@lib/state.svelte'
   import { prefs } from '@lib/settings.svelte'
-  import { slackMessage } from '@lib/format'
+  import { bareTitle, slackMessage } from '@lib/format'
+  import { titlePrefix } from '@lib/jira'
   import type { ChangeView, PRPreview, PRRequest } from '@lib/types'
   import CopySlack from './CopySlack.svelte'
   import Icon from './Icon.svelte'
@@ -111,7 +112,7 @@
   }
 
   // Every PR of the change, including legs this publish skipped.
-  const slackText = $derived(done ? slackMessage(ticketKey || view.id, title, done.items) : '')
+  const slackText = $derived(done ? slackMessage(ticketKey || titlePrefix(view), title, done.items) : '')
 
   function onKey(e: KeyboardEvent) {
     if (e.key === 'Escape') onclose()
@@ -171,7 +172,7 @@
         <div class="field">
           <label for="pr-title">Title</label>
           <input id="pr-title" class="input" bind:value={title} placeholder="What this change does" />
-          <span class="muted small">Sent as “{view.id}: {title.replace(view.id, '').replace(/^[\s:]+/, '').trim() || '…'}”</span>
+          <span class="muted small">Sent as “{titlePrefix(view)}: {bareTitle(title, titlePrefix(view)) || '…'}”</span>
         </div>
         <div class="field grow">
           <div class="label-row">
