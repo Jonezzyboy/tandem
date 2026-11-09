@@ -11,16 +11,18 @@ import (
 
 // ChangeView is a change's state flattened for rendering or JSON.
 type ChangeView struct {
-	ID         string     `json:"id"`
-	Title      string     `json:"title"`
-	Ticket     string     `json:"ticket"`
-	Branch     string     `json:"branch"`
-	Body       string     `json:"body"`
-	Reviewers  []string   `json:"reviewers"`
-	Legs       []LegView  `json:"legs"`
-	Edges      []EdgeView `json:"edges"`
-	GraphError string     `json:"graphError,omitempty"`
-	Blocked    int        `json:"blocked"`
+	ID     string `json:"id"`
+	Title  string `json:"title"`
+	Ticket string `json:"ticket"`
+	Branch string `json:"branch"`
+	// TitlePrefix leads the change's PR titles.
+	TitlePrefix string     `json:"titlePrefix"`
+	Body        string     `json:"body"`
+	Reviewers   []string   `json:"reviewers"`
+	Legs        []LegView  `json:"legs"`
+	Edges       []EdgeView `json:"edges"`
+	GraphError  string     `json:"graphError,omitempty"`
+	Blocked     int        `json:"blocked"`
 	// Worktrees is the change's mode: a worktree per leg, not the clone's checkout.
 	Worktrees bool `json:"worktrees"`
 	// Remote is false until GitHub state has been read at least once.
@@ -101,7 +103,7 @@ func NewPRView(pr *gh.PR) *PRView {
 func BuildView(c *change.Change, g Graph, graphErr error, states []LegState, remote bool) ChangeView {
 	SortByLevel(states, g.Levels)
 	v := ChangeView{
-		ID: c.ID, Title: c.Title, Ticket: c.Ticket, Branch: c.Branch, Body: c.Body, Reviewers: c.Reviewers, Worktrees: c.UsesWorktrees(),
+		ID: c.ID, Title: c.Title, Ticket: c.Ticket, Branch: c.Branch, TitlePrefix: TitlePrefix(c), Body: c.Body, Reviewers: c.Reviewers, Worktrees: c.UsesWorktrees(),
 		Legs: make([]LegView, 0, len(states)), Edges: []EdgeView{}, Remote: remote, CheckedAt: time.Now(),
 	}
 	if remote {

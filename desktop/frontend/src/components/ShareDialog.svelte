@@ -4,7 +4,6 @@
   import { api } from '@lib/api'
   import { fail } from '@lib/state.svelte'
   import { bareTitle } from '@lib/format'
-  import { titlePrefix } from '@lib/jira'
   import type { ChangeView, ShareLinks } from '@lib/types'
   import Icon from './Icon.svelte'
 
@@ -21,8 +20,8 @@
   })
 
   const unopened = $derived(view.legs.filter((l) => !l.pr).map((l) => l.name))
-  const prefix = $derived(titlePrefix(view))
-  const slack = $derived(links ? `Ready to test: ${prefix}${view.title ? ` · ${bareTitle(view.title, prefix)}` : ''}\n${links.web}` : '')
+  const bare = $derived(bareTitle(view.title, view.titlePrefix))
+  const slack = $derived(links ? `Ready to test: ${view.titlePrefix}${bare ? ` · ${bare}` : ''}\n${links.web}` : '')
 
   async function copy(what: 'link' | 'slack') {
     if (!links) return

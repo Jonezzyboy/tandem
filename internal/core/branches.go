@@ -5,9 +5,11 @@ import (
 	"fmt"
 	"slices"
 	"sort"
+	"strconv"
 	"sync"
 
 	"github.com/jonezzyboy/tandem/internal/change"
+	"github.com/jonezzyboy/tandem/internal/gh"
 	"github.com/jonezzyboy/tandem/internal/gitx"
 	"github.com/jonezzyboy/tandem/internal/workspace"
 )
@@ -138,8 +140,16 @@ func SetBranch(ctx context.Context, c *change.Change, branch string) error {
 	}
 	c.Branch = branch
 	for i := range c.Legs {
-		// The recorded PR's head is the old branch; the new one's PR is found by name.
-		c.Legs[i].PR, c.Legs[i].PRURL = 0, ""
+		l := &c.Legs[i]
+		if l.PR == 0 {
+			continue
+		}
+		// A merged PR stays so the leg isn't published again; any other is on the
+		// old branch, and the new branch's PR is found by name.
+		if pr, err := gh.View(ctx, l.Dir(), strconv.Itoa(l.PR)); err == nil && pr != nil && pr.State == "MERGED" {
+			continue
+		}
+		l.PR, l.PRURL = 0, ""
 	}
 	return nil
 }

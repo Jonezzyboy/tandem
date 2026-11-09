@@ -123,6 +123,7 @@ func (a *App) loadCached() {
 		}
 		var v core.ChangeView
 		if json.Unmarshal(data, &v) == nil {
+			v.TitlePrefix = core.TitlePrefix(c)
 			a.views[c.ID] = v
 		}
 	}

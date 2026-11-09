@@ -53,6 +53,7 @@ export interface ChangeView {
   title: string
   ticket: string
   branch: string
+  titlePrefix: string
   body: string
   reviewers: string[] | null
   legs: LegView[]

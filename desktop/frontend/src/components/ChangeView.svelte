@@ -2,7 +2,6 @@
   import { onDestroy, onMount } from 'svelte'
   import { api } from '@lib/api'
   import { ago, reviewLabel, slackMessage } from '@lib/format'
-  import { titlePrefix } from '@lib/jira'
   import { app, checkOut, fail, loadCleanPlan, loadHistory, log, navigate, switching as switchingIds } from '@lib/state.svelte'
   import { editorLabel, keycaps, shortcutFor } from '@lib/settings.svelte'
   import type { CleanItem, JiraTicket, LegView } from '@lib/types'
@@ -82,7 +81,7 @@
     return () => { live = false }
   })
   const ticketKey = $derived(view?.ticket ? view.ticket.split('/').pop() : '')
-  const slackText = $derived(view ? slackMessage(ticketKey || titlePrefix(view), view.title || jira?.summary || '', view.legs.map((l) => ({ repo: l.repo, url: l.pr?.url ?? '', level: l.level }))) : '')
+  const slackText = $derived(view ? slackMessage(ticketKey || view.titlePrefix, view.title || jira?.summary || '', view.legs.map((l) => ({ repo: l.repo, url: l.pr?.url ?? '', level: l.level }))) : '')
 
   let ticketDraft = $state<string | null>(null)
   async function saveTicket() {
