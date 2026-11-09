@@ -112,6 +112,8 @@ export function SaveJira(arg1:string,arg2:string):Promise<main.JiraAccount>;
 
 export function SaveSettings(arg1:main.Settings):Promise<main.Settings>;
 
+export function SetBranch(arg1:string,arg2:string):Promise<void>;
+
 export function SetTicket(arg1:string,arg2:string):Promise<void>;
 
 export function Settings():Promise<main.Settings>;

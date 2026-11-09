@@ -966,6 +966,26 @@ func (a *App) Rename(id, title string) error {
 	return nil
 }
 
+// SetBranch points change id at branch, renaming the current branch in legs
+// that don't have it yet.
+func (a *App) SetBranch(id, branch string) error {
+	lock := a.opLock(id)
+	lock.Lock()
+	defer lock.Unlock()
+	c, err := a.store.Load(id)
+	if err != nil {
+		return err
+	}
+	if err := core.SetBranch(a.ctx, c, strings.TrimSpace(branch)); err != nil {
+		return err
+	}
+	if err := a.store.Save(c); err != nil {
+		return err
+	}
+	go a.refresh(id, true)
+	return nil
+}
+
 func (a *App) OpenURL(url string) error {
 	if !strings.HasPrefix(url, "https://") {
 		return fmt.Errorf("refusing to open %q", url)
