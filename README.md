@@ -264,6 +264,7 @@ changes picks the one it has checked out.
 | `td start <ID> [repo...] [--existing] [--title T] [--worktree]` | Create a change: a branch per repo, checked out (or a worktree each). `--existing` also takes in every repo that already has a branch named `<ID>`. |
 | `td add [ID] [repo...] [--existing]` | Add repos to a change; the merge order updates. `--existing` adds every repo with the change's branch. |
 | `td remove [ID] <repo>...` | Take repos out of a change. Their branches stay. |
+| `td branch [ID] <branch>` | Point a change at another branch. Repos that already have it (locally or on origin) use it as is; the rest have their current branch renamed. |
 | `td switch [ID] [--base]` | Check out the change's branch in every repo, or with `--base` their main branch. |
 | `td status [ID] [--offline]` | Local state, PR, CI and review for every repo, in merge order. |
 | `td check [ID] [repo...]` | Run local checks, all repos at once. |

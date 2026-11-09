@@ -214,6 +214,10 @@ export function SaveSettings(arg1) {
   return window['go']['main']['App']['SaveSettings'](arg1);
 }
 
+export function SetBranch(arg1, arg2) {
+  return window['go']['main']['App']['SetBranch'](arg1, arg2);
+}
+
 export function SetTicket(arg1, arg2) {
   return window['go']['main']['App']['SetTicket'](arg1, arg2);
 }

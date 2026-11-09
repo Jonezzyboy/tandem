@@ -38,6 +38,7 @@ func init() {
 		{"start", "td start <ID> [repo...] [--existing] [--title T] [--worktree]", "create a change: a branch per repo, checked out (or a worktree each)", runStart},
 		{"add", "td add [ID] [repo...] [--existing]", "add repos to a change: each gets its branch, and the merge order updates", runAdd},
 		{"remove", "td remove [ID] <leg>...", "take repos out of a change (their branches stay)", runRemove},
+		{"branch", "td branch [ID] <branch>", "point a change at another branch: an existing one is used as is, otherwise the current one is renamed", runBranch},
 		{"switch", "td switch [ID] [--base]", "check out the change's branch in every repo, or with --base their main branch", runSwitch},
 		{"status", "td status [ID]", "local and GitHub state of every leg, in merge order", runStatus},
 		{"sync", "td sync [ID]", "fetch every leg and rebase clean ones onto their base", runSync},

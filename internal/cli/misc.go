@@ -123,6 +123,30 @@ func runSwitch(ctx context.Context, e *env, args []string) error {
 	return nil
 }
 
+func runBranch(ctx context.Context, e *env, args []string) error {
+	flags := newFlags("branch", "td branch [ID] <branch>")
+	pos, err := parseArgs(flags, args)
+	if err != nil {
+		return err
+	}
+	c, rest, err := e.changeFrom(pos)
+	if err != nil {
+		return err
+	}
+	if len(rest) != 1 {
+		flags.Usage()
+		return errReported
+	}
+	if err := core.SetBranch(ctx, c, rest[0]); err != nil {
+		return err
+	}
+	if err := e.store.Save(c); err != nil {
+		return err
+	}
+	fmt.Fprintf(e.out, "  %s %s is on branch %s\n", e.ui.Green("✓"), c.ID, c.Branch)
+	return nil
+}
+
 func runRemove(ctx context.Context, e *env, args []string) error {
 	flags := newFlags("remove", "td remove [ID] <leg>...")
 	pos, err := parseArgs(flags, args)

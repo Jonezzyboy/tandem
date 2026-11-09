@@ -2,9 +2,12 @@ package core
 
 import (
 	"context"
+	"fmt"
+	"slices"
 	"sort"
 	"sync"
 
+	"github.com/jonezzyboy/tandem/internal/change"
 	"github.com/jonezzyboy/tandem/internal/gitx"
 	"github.com/jonezzyboy/tandem/internal/workspace"
 )
@@ -69,4 +72,74 @@ func findBranch(ctx context.Context, r workspace.Repo, branch string) *BranchRep
 	}
 	b.Current = gitx.CurrentBranch(ctx, r.Path) == branch
 	return &b
+}
+
+// SetBranch points change c at branch. A leg that already has branch, locally
+// or on origin, uses it as it is; any other leg's current branch is renamed to
+// it. Worktree legs are moved onto it. Every leg is checked first, and steps
+// already taken are undone if one fails; c is updated, not saved.
+func SetBranch(ctx context.Context, c *change.Change, branch string) error {
+	if branch == c.Branch {
+		return nil
+	}
+	if _, err := gitx.Run(ctx, "", "check-ref-format", "--branch", branch); err != nil {
+		return fmt.Errorf("invalid branch name %q", branch)
+	}
+	type step struct {
+		l             *change.Leg
+		local, remote bool
+	}
+	steps := make([]step, len(c.Legs))
+	for i := range c.Legs {
+		l := &c.Legs[i]
+		s := step{l: l,
+			local:  gitx.RefExists(ctx, l.Dir(), "refs/heads/"+branch),
+			remote: gitx.RefExists(ctx, l.Dir(), "refs/remotes/origin/"+branch)}
+		if !s.local && !s.remote && !gitx.RefExists(ctx, l.Dir(), "refs/heads/"+c.Branch) {
+			return fmt.Errorf("%s has neither %s nor %s", l.Name(), branch, c.Branch)
+		}
+		if l.Worktree != "" && (s.local || s.remote) {
+			if out, err := gitx.Run(ctx, l.Dir(), "status", "--porcelain", "--untracked-files=no"); err != nil {
+				return err
+			} else if out != "" {
+				return fmt.Errorf("%s has uncommitted work: commit or stash it first", l.Name())
+			}
+		}
+		steps[i] = s
+	}
+	var undo []func()
+	rollback := func(err error) error {
+		for _, u := range slices.Backward(undo) {
+			u()
+		}
+		return err
+	}
+	for _, s := range steps {
+		dir := s.l.Dir()
+		if !s.local && !s.remote {
+			if _, err := gitx.Run(ctx, dir, "branch", "-m", c.Branch, branch); err != nil {
+				return rollback(fmt.Errorf("%s: %w", s.l.Name(), err))
+			}
+			undo = append(undo, func() { gitx.Run(context.WithoutCancel(ctx), dir, "branch", "-m", branch, c.Branch) })
+			continue
+		}
+		if !s.local {
+			if _, err := gitx.Run(ctx, dir, "branch", "--quiet", "--track", branch, "origin/"+branch); err != nil {
+				return rollback(fmt.Errorf("%s: %w", s.l.Name(), err))
+			}
+			undo = append(undo, func() { gitx.Run(context.WithoutCancel(ctx), dir, "branch", "-D", branch) })
+		}
+		if s.l.Worktree != "" {
+			if err := gitx.Switch(ctx, dir, branch); err != nil {
+				return rollback(fmt.Errorf("%s: %w", s.l.Name(), err))
+			}
+			undo = append(undo, func() { gitx.Switch(context.WithoutCancel(ctx), dir, c.Branch) })
+		}
+	}
+	c.Branch = branch
+	for i := range c.Legs {
+		// The recorded PR's head is the old branch; the new one's PR is found by name.
+		c.Legs[i].PR, c.Legs[i].PRURL = 0, ""
+	}
+	return nil
 }

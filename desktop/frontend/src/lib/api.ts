@@ -32,6 +32,7 @@ export const api = {
   link: (id: string, up: string, down: string) => App.Link(id, up, down),
   rename: (id: string, title: string) => App.Rename(id, title),
   reorder: (ids: string[]) => App.Reorder(ids),
+  setBranch: (id: string, branch: string) => App.SetBranch(id, branch),
   setTicket: (id: string, link: string) => App.SetTicket(id, link),
   jiraLookup: (link: string) => App.JiraLookup(link) as unknown as Promise<JiraTicket>,
   guessTicket: (branch: string) => App.GuessTicket(branch) as unknown as Promise<JiraTicket>,

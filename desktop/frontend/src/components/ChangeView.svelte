@@ -98,6 +98,23 @@
     else if (e.key === 'Escape') ticketDraft = null
   }
 
+  let branchDraft = $state<string | null>(null)
+  async function saveBranch() {
+    if (branchDraft === null) return
+    const next = branchDraft.trim()
+    branchDraft = null
+    if (!next || next === view?.branch) return
+    try {
+      await api.setBranch(id, next)
+    } catch (e) {
+      fail(e)
+    }
+  }
+  function branchKey(e: KeyboardEvent) {
+    if (e.key === 'Enter') saveBranch()
+    else if (e.key === 'Escape') branchDraft = null
+  }
+
   let titleDraft = $state<string | null>(null)
   function editTitle() {
     titleDraft = view?.title ?? ''
@@ -398,7 +415,13 @@
             <span class="accent">{view.id}</span><span>·</span>
             {#if ticketDraft === null}<button class="link" onclick={() => (ticketDraft = '')} style="--wails-draggable: no-drag">link Jira</button><span>·</span>{/if}
           {/if}
-          {#if view.branch !== view.id}<span>branch {view.branch}</span><span>·</span>{/if}
+          {#if branchDraft !== null}
+            <input class="input mono small" bind:value={branchDraft} use:selectAll onkeydown={branchKey} onblur={saveBranch}
+              aria-label="Branch" style="--wails-draggable: no-drag" /><span>·</span>
+          {:else}
+            <button class="link" onclick={() => (branchDraft = view.branch)} style="--wails-draggable: no-drag"
+              title="Point this change at another branch; one that doesn't exist yet is renamed from {view.branch}">branch {view.branch}</button><span>·</span>
+          {/if}
           <span title="Local git state is watched every few seconds; GitHub is read every minute">
             {view.remote ? `GitHub ${ago(view.remoteAt, now)} ago` : 'GitHub not read yet'}
           </span>
