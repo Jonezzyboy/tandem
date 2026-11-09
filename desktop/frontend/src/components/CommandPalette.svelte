@@ -99,7 +99,11 @@
       <p class="muted none">Nothing matches.</p>
     {/each}
   </div>
-  <div class="foot muted"><span>↑↓ to move</span><span>↩ to open</span><span>Esc to close</span></div>
+  <div class="foot muted">
+    <span><Kbd keys={['↑']} /><Kbd keys={['↓']} />to move</span>
+    <span><Kbd keys={['↩']} />to open</span>
+    <span><Kbd keys={['esc']} />to close</span>
+  </div>
 </div>
 
 <style>
@@ -121,4 +125,5 @@
   .label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .none { padding: 10px; margin: 0; font-size: 13px; }
   .foot { display: flex; gap: 16px; padding: 8px 16px; border-top: 1px solid var(--line); font-size: 11.5px; }
+  .foot span { display: inline-flex; align-items: center; gap: 4px; }
 </style>
