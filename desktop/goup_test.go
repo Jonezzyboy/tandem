@@ -351,6 +351,7 @@ func TestGoupLeavesUnreadyReposForCommit(t *testing.T) {
 			t.Errorf("%s: ok = %v (%s); want the off-branch repo committed and the edited one refused", r.Leg, r.OK, r.Message)
 		}
 	}
+	f.waitIdle()
 	if cur := sh(t, account.Dir(), "git", "branch", "--show-current"); cur != "main" {
 		t.Errorf("hosted-account left on %q, want main", cur)
 	}

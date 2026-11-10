@@ -254,3 +254,88 @@ func TestPullFollowsARewrittenBranch(t *testing.T) {
 		t.Errorf("HEAD is %q", got)
 	}
 }
+
+func TestLinkGoUsesLocalUpstreamUntilTestingEnds(t *testing.T) {
+	f := newFixture(t)
+	ctx := context.Background()
+	_, protoDev, proto := f.repo("proto")
+	_, apiDev, api := f.repo("api")
+	_, svcDev, svc := f.repo("svc")
+	_, webDev, web := f.repo("web")
+	const apiMod = "module example.com/api\n\ngo 1.21\n\nrequire example.com/proto v1.0.0\n"
+	f.commit(protoDev, "go.mod", "module example.com/proto\n\ngo 1.22\n", "module")
+	f.commit(apiDev, "go.mod", apiMod, "require proto")
+	f.commit(apiDev, "tools/go.mod", "module example.com/api/tools\n\ngo 1.21\n", "tools module")
+	f.commit(svcDev, "go.mod", "module example.com/svc\n\ngo 1.22\n\nrequire example.com/proto v1.0.0\n", "require proto")
+	f.commit(svcDev, "vendor/modules.txt", "# example.com/proto v1.0.0\n", "vendor")
+	f.commit(webDev, "go.mod", "module example.com/web\n\ngo 1.22\n\nrequire example.com/proto v1.0.0\n", "require proto")
+	for _, d := range []string{protoDev, apiDev, svcDev, webDev} {
+		git(t, d, "push", "--quiet", "origin", "DEV-1")
+	}
+	targets := []Target{{Name: "acme/proto", Dir: proto}, {Name: "acme/api", Dir: api}, {Name: "acme/svc", Dir: svc}, {Name: "acme/web", Dir: web}}
+	s, steps := Begin(ctx, "DEV-1", "", "", targets, Options{})
+	for _, st := range steps {
+		if !st.OK {
+			t.Fatalf("%s: %s", st.Repo, st.Message)
+		}
+	}
+	const own = "go 1.22\n\nuse .\n"
+	write(t, filepath.Join(web, "go.work"), own)
+
+	notes := LinkGo(ctx, s)
+	if notes["acme/api"] != "using local proto via go.work" || !strings.Contains(notes["acme/svc"], "vendors its modules") ||
+		!strings.Contains(notes["acme/web"], "already has a go.work") || notes["acme/proto"] != "" {
+		t.Fatalf("notes = %q", notes)
+	}
+	work, err := os.ReadFile(filepath.Join(api, "go.work"))
+	if err != nil || !strings.Contains(string(work), "go 1.22\n") || !strings.Contains(string(work), "\t.\n\t../proto\n\ttools\n") {
+		t.Fatalf("api go.work = %q, %v", work, err)
+	}
+	if _, err := os.Stat(filepath.Join(svc, "go.work")); err == nil {
+		t.Error("svc vendors, so it should get no go.work")
+	}
+	want, _ := filepath.EvalSymlinks(proto)
+	for _, dir := range []string{api, filepath.Join(api, "tools")} {
+		cmd := exec.Command("go", "list", "-m", "-f", "{{.Dir}}", "example.com/proto")
+		cmd.Dir, cmd.Env = dir, append(os.Environ(), "GOPROXY=off", "GOFLAGS=")
+		if out, err := cmd.CombinedOutput(); err != nil || strings.TrimSpace(string(out)) != want {
+			t.Errorf("in %s go resolves proto to %q, %v; want %s", dir, out, err, want)
+		}
+	}
+	if n := uncommitted(ctx, api); n != 0 {
+		t.Errorf("api has %d uncommitted files", n)
+	}
+
+	// A go command in workspace mode rewrote go.mod and left go.work.sum.
+	write(t, filepath.Join(api, "go.mod"), apiMod+"// rewritten\n")
+	write(t, filepath.Join(api, "go.work.sum"), "")
+
+	// An edit that blocks going back keeps api under test, still linked.
+	write(t, filepath.Join(api, "app.txt"), "edited\n")
+	if _, left := End(ctx, s); len(left) != 1 || left[0].Name != "acme/api" {
+		t.Fatalf("left = %+v, want only api", left)
+	}
+	if _, err := os.Stat(filepath.Join(api, "go.work")); err != nil {
+		t.Fatal("api lost its go.work while still under test")
+	}
+	git(t, api, "checkout", "--", "app.txt")
+	s.Repos = []Repo{s.Repos[1]}
+
+	steps, left := End(ctx, s)
+	if len(left) != 0 {
+		t.Fatalf("end: %+v", steps)
+	}
+	for _, st := range steps {
+		if st.Repo == "acme/api" && !strings.Contains(st.Message, "put back go.mod/go.sum in the root") {
+			t.Errorf("api end step = %q, want the rewritten go.mod put back", st.Message)
+		}
+	}
+	for _, f := range []string{"go.work", "go.work.sum"} {
+		if _, err := os.Stat(filepath.Join(api, f)); err == nil {
+			t.Errorf("api/%s left behind", f)
+		}
+	}
+	if got, _ := os.ReadFile(filepath.Join(web, "go.work")); string(got) != own {
+		t.Errorf("web's own go.work = %q, want it untouched", got)
+	}
+}
