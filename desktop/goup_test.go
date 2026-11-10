@@ -347,9 +347,12 @@ func TestGoupLeavesUnreadyReposForCommit(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, r := range results {
-		if r.OK {
-			t.Errorf("%s: committed despite %s", r.Leg, map[string]string{"app-hosted": "its own go.mod edits", "hosted-account": "being off its branch"}[r.Leg])
+		if want := r.Leg == "hosted-account"; r.OK != want {
+			t.Errorf("%s: ok = %v (%s); want the off-branch repo committed and the edited one refused", r.Leg, r.OK, r.Message)
 		}
+	}
+	if cur := sh(t, account.Dir(), "git", "branch", "--show-current"); cur != "main" {
+		t.Errorf("hosted-account left on %q, want main", cur)
 	}
 
 	sh(t, app.Dir(), "git", "checkout", "--", "go.mod")

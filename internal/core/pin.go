@@ -2,6 +2,7 @@ package core
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -235,8 +236,24 @@ func ManifestsClean(ctx context.Context, l *change.Leg, dir string) bool {
 }
 
 // CommitPins applies any of pins not yet in the working tree, commits go.mod
-// and go.sum for all of them and pushes the leg.
+// and go.sum for all of them and pushes the leg. A clone on another branch is
+// switched to the change's branch for this and then back.
 func CommitPins(ctx context.Context, c *change.Change, l *change.Leg, pins []PinView) error {
+	orig := gitx.CurrentBranch(ctx, l.Dir())
+	if orig == c.Branch || orig == "" || l.Worktree != "" {
+		return commitPins(ctx, c, l, pins)
+	}
+	if err := gitx.Switch(ctx, l.Dir(), c.Branch); err != nil {
+		return fmt.Errorf("%s: switching to %s: %w", l.Name(), c.Branch, err)
+	}
+	err := commitPins(ctx, c, l, pins)
+	if serr := gitx.Switch(ctx, l.Dir(), orig); serr != nil {
+		err = errors.Join(err, fmt.Errorf("%s was left on %s: %w", l.Name(), c.Branch, serr))
+	}
+	return err
+}
+
+func commitPins(ctx context.Context, c *change.Change, l *change.Leg, pins []PinView) error {
 	if err := requireBranch(ctx, c, l); err != nil {
 		return err
 	}
