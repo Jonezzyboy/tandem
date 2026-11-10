@@ -26,6 +26,7 @@ export const api = {
   publishPRs: (id: string, req: PRRequest) => App.PublishPRs(id, req as never) as unknown as Promise<PRPreview>,
   inbox: (force = false) => App.Inbox(force) as unknown as Promise<Inbox>,
   repos: () => App.Repos() as unknown as Promise<RepoInfo[]>,
+  keyBranches: (id: string) => App.KeyBranches(id),
   branchRepos: (branch: string) => App.BranchRepos(branch) as unknown as Promise<BranchInfo[]>,
   start: (id: string, title: string, repos: string[], worktrees = false, ticket = '') =>
     App.Start({ id, title, repos, worktrees, ticket } as never) as unknown as Promise<StartItem[]>,

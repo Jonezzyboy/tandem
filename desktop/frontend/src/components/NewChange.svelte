@@ -80,6 +80,16 @@
     reading = false
   }
 
+  // Branches already named for the typed ticket key, as DEV-1-login for DEV-1.
+  let keyBranches = $state<string[]>([])
+  $effect(() => {
+    const typed = id.trim()
+    keyBranches = []
+    if (!typed || keyInBranch(typed) !== typed.toUpperCase()) return
+    const t = setTimeout(() => api.keyBranches(typed).then((b) => { if (id.trim() === typed) keyBranches = b }).catch(fail), 300)
+    return () => clearTimeout(t)
+  })
+
   const validId = $derived(id.split('/').every((part) => /^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(part) && !part.includes('..') && !part.endsWith('.lock')))
   // ExistingBranches unmounts on an invalid ID and leaves its last matches behind.
   const loadable = $derived(validId ? existing : [])
@@ -111,6 +121,10 @@
       starting = false
     }
   }
+
+  function focus(el: HTMLInputElement) {
+    el.focus()
+  }
 </script>
 
 <div class="page">
@@ -125,7 +139,7 @@
         <label for="nc-id">Jira ticket or change ID</label>
         <div class="id-wrap" class:linked={ticket}>
           <Icon name="link" />
-          <input id="nc-id" class="input mono" bind:value={id} oninput={onIdInput} placeholder="Paste a Jira link, or type DEV-123" autocomplete="off" />
+          <input id="nc-id" class="input mono" bind:value={id} use:focus oninput={onIdInput} placeholder="Paste a Jira link, or type DEV-123" autocomplete="off" />
         </div>
         {#if ticket}
           <div class="ticket" class:plain={reading || ticket.error}>
@@ -158,6 +172,12 @@
         {/if}
         <span class="small muted">{ticket ? '' : 'A Jira link fills in the ID and title and keeps the link, as does a ticket key in the branch name. '}{worktrees ? 'The branch name in every repo’s worktree.' : 'The branch name in every repo. Clean repos switch to it; any with uncommitted work stay put.'} Repos that already have it keep their commits.</span>
       </div>
+      {#if keyBranches.length}
+        <div class="key-branches small">
+          <span class="muted">Branches for <span class="mono">{id.trim().toUpperCase()}</span>:</span>
+          {#each keyBranches as b (b)}<button class="link mono" onclick={() => (id = b)} title="Use {b} as this change's branch">{b}</button>{/each}
+        </div>
+      {/if}
       {#if validId}<ExistingBranches branch={id} bind:selected bind:existing />{/if}
       <div class="field">
         <div class="label-row">
@@ -225,6 +245,7 @@
   .id-wrap .input { flex: 1; padding-left: 36px; }
   .id-wrap :global(svg) { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--muted); pointer-events: none; }
   .id-wrap.linked :global(svg) { color: var(--accent-text); }
+  .key-branches { display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: baseline; }
   .ticket {
     display: flex; gap: 12px; align-items: flex-start; padding: 12px 8px 12px 14px; border-radius: 10px;
     background: var(--accent-bg); border: 1px solid var(--accent); font-size: 14px;
