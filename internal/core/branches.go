@@ -6,11 +6,13 @@ import (
 	"slices"
 	"sort"
 	"strconv"
+	"strings"
 	"sync"
 
 	"github.com/jonezzyboy/tandem/internal/change"
 	"github.com/jonezzyboy/tandem/internal/gh"
 	"github.com/jonezzyboy/tandem/internal/gitx"
+	"github.com/jonezzyboy/tandem/internal/jira"
 	"github.com/jonezzyboy/tandem/internal/workspace"
 )
 
@@ -51,6 +53,32 @@ func FindBranch(ctx context.Context, repos []workspace.Repo, branch string) []Br
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Repo.Name < out[j].Repo.Name })
 	return out
+}
+
+// KeyBranches lists the branch names, local or on origin, in any of repos
+// that carry Jira key, as DEV-1-login does DEV-1; key itself is left out.
+func KeyBranches(ctx context.Context, repos []workspace.Repo, key string) []string {
+	found := make([][]string, len(repos))
+	sem := make(chan struct{}, scanLimit)
+	var wg sync.WaitGroup
+	for i, r := range repos {
+		wg.Go(func() {
+			sem <- struct{}{}
+			defer func() { <-sem }()
+			out, err := gitx.Run(ctx, r.Path, "for-each-ref", "--format=%(refname)", "refs/heads", "refs/remotes/origin")
+			if err != nil {
+				return
+			}
+			for _, ref := range strings.Split(out, "\n") {
+				name := strings.TrimPrefix(strings.TrimPrefix(ref, "refs/heads/"), "refs/remotes/origin/")
+				if k, _ := jira.KeyInBranch(name); k == key && name != key {
+					found[i] = append(found[i], name)
+				}
+			}
+		})
+	}
+	wg.Wait()
+	return slices.Compact(slices.Sorted(slices.Values(slices.Concat(found...))))
 }
 
 func findBranch(ctx context.Context, r workspace.Repo, branch string) *BranchRepo {

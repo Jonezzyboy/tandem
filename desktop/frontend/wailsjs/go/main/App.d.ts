@@ -66,6 +66,8 @@ export function JiraLookup(arg1:string):Promise<main.JiraTicket>;
 
 export function JiraStatuses():Promise<Array<string>>;
 
+export function KeyBranches(arg1:string):Promise<Array<string>>;
+
 export function Link(arg1:string,arg2:string,arg3:string):Promise<void>;
 
 export function NotificationStatus():Promise<main.NotifyStatus>;

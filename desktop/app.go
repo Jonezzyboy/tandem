@@ -838,6 +838,16 @@ func (a *App) BranchRepos(branch string) []BranchInfo {
 	return out
 }
 
+// KeyBranches lists existing branches named for Jira key id, such as
+// DEV-1-login for DEV-1, to start a change on one of them.
+func (a *App) KeyBranches(id string) []string {
+	id = strings.TrimSpace(id)
+	if key, _ := jira.KeyInBranch(id); key == "" || !strings.EqualFold(key, id) {
+		return []string{}
+	}
+	return core.KeyBranches(a.ctx, workspace.List(a.codeRoots()), strings.ToUpper(id))
+}
+
 type StartRequest struct {
 	ID    string   `json:"id"`
 	Title string   `json:"title"`

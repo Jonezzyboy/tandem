@@ -409,18 +409,18 @@
       <div class="heading">
         <div class="meta mono">
           {#if view.ticket}
-            <button class="link ticket-id" onclick={() => api.openURL(view.ticket)} title="Open {ticketKey} in Jira" style="--wails-draggable: no-drag">{view.id}<Icon name="external" size={11} /></button><span>·</span>
+            <button class="link ticket-id" onclick={() => api.openURL(view.ticket)} title="Open {ticketKey} in Jira" style="--wails-draggable: no-drag">{ticketKey || view.id}<Icon name="external" size={11} /></button><span>·</span>
             {#if jira?.status}<span>Jira: {jira.status}</span><span>·</span>{/if}
           {:else}
-            <span class="accent">{view.id}</span><span>·</span>
+            {#if view.id !== view.branch}<span class="accent">{view.id}</span><span>·</span>{/if}
             {#if ticketDraft === null}<button class="link" onclick={() => (ticketDraft = '')} style="--wails-draggable: no-drag">link Jira</button><span>·</span>{/if}
           {/if}
           {#if branchDraft !== null}
             <input class="input mono small" bind:value={branchDraft} use:selectAll onkeydown={branchKey} onblur={saveBranch}
               aria-label="Branch" style="--wails-draggable: no-drag" /><span>·</span>
           {:else}
-            <button class="link" onclick={() => (branchDraft = view.branch)} style="--wails-draggable: no-drag"
-              title="Point this change at another branch; one that doesn't exist yet is renamed from {view.branch}">branch {view.branch}</button><span>·</span>
+            <button class="link branch-btn" onclick={() => (branchDraft = view.branch)} style="--wails-draggable: no-drag"
+              title="Branch: click to point this change at another; one that doesn't exist yet is renamed from {view.branch}"><Icon name="branch" size={11} />{view.branch}</button><span>·</span>
           {/if}
           <span title="Local git state is watched every few seconds; GitHub is read every minute">
             {view.remote ? `GitHub ${ago(view.remoteAt, now)} ago` : 'GitHub not read yet'}
@@ -755,8 +755,7 @@
   /* Actions drop below the title when both don't fit, rather than squeezing it. */
   header { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-end; gap: 14px 24px; padding-top: 28px; }
   .heading { display: flex; flex-direction: column; gap: 6px; min-width: min(360px, 100%); flex: 1 1 360px; }
-  .meta { display: flex; gap: 8px; font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; }
-  .meta > :last-child { overflow: hidden; text-overflow: ellipsis; }
+  .meta { display: flex; flex-wrap: wrap; gap: 2px 8px; font-size: 12px; color: var(--muted); white-space: nowrap; }
   .accent { color: var(--accent-text); }
   h1 { margin: 0; font-family: var(--display); font-weight: 700; font-size: 30px; letter-spacing: -0.01em; line-height: 1.15; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .title-btn { all: unset; cursor: text; max-width: 100%; overflow: hidden; text-overflow: ellipsis; border-radius: 6px; }
@@ -777,7 +776,7 @@
   .failed { min-width: 0; overflow-wrap: anywhere; }
   .failed a { text-decoration: underline; text-decoration-color: var(--warn-border); text-underline-offset: 2px; }
   .rerun { width: 24px; height: 24px; flex-shrink: 0; }
-  .ticket-id { display: inline-flex; align-items: center; gap: 4px; }
+  .ticket-id, .branch-btn { display: inline-flex; align-items: center; gap: 4px; }
   .ticket-strip {
     display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; padding: 10px 12px 10px 16px; border-radius: 12px;
     background: var(--panel); border: 1px solid var(--line); font-size: 13px;

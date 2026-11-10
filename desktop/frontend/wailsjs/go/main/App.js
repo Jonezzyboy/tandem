@@ -122,6 +122,10 @@ export function JiraStatuses() {
   return window['go']['main']['App']['JiraStatuses']();
 }
 
+export function KeyBranches(arg1) {
+  return window['go']['main']['App']['KeyBranches'](arg1);
+}
+
 export function Link(arg1, arg2, arg3) {
   return window['go']['main']['App']['Link'](arg1, arg2, arg3);
 }
