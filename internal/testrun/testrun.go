@@ -59,6 +59,12 @@ type Repo struct {
 	Stash string `json:"stash,omitempty"`
 	// Tested is the commit that was checked out when testing ended.
 	Tested string `json:"tested,omitempty"`
+	// Workspaces are the module directories, relative to Dir, where LinkGo
+	// wrote a go.work; End removes them.
+	Workspaces []string `json:"workspaces,omitempty"`
+	// GoClean are module directories linked by a go.work whose go.mod and
+	// go.sum matched HEAD then; End puts them back to HEAD.
+	GoClean []string `json:"goClean,omitempty"`
 }
 
 // Record is a finished test, newest first in State.History. Result is the
@@ -441,9 +447,26 @@ func End(ctx context.Context, s *Session) ([]Step, []Repo) {
 
 func end(ctx context.Context, r Repo) Step {
 	st := Step{Repo: r.Name, Done: true}
-	if dirty := uncommitted(ctx, r.Dir); dirty > 0 {
+	// go.mod and go.sum that unlinkGo puts back don't count, but it waits for
+	// this check so a repo that stays under test keeps its go.work.
+	var putBack []string
+	for _, d := range r.GoClean {
+		for _, p := range manifestPaths(d) {
+			putBack = append(putBack, ":(exclude)"+p)
+		}
+	}
+	if dirty := uncommitted(ctx, r.Dir, putBack...); dirty > 0 {
 		st.Message = fmt.Sprintf("%d uncommitted files from testing: commit or discard them, then try again", dirty)
 		return st
+	}
+	restored, err := unlinkGo(ctx, r)
+	if err != nil {
+		st.Message = "undoing the go.work Tandem wrote: " + firstLine(err)
+		return st
+	}
+	var notes []string
+	if len(restored) > 0 {
+		notes = append(notes, "put back go.mod/go.sum in "+strings.Join(restored, ", "))
 	}
 	gitx.Fetch(ctx, r.Dir)
 	base, err := gitx.DefaultBase(ctx, r.Dir)
@@ -455,7 +478,7 @@ func end(ctx context.Context, r Repo) Step {
 		st.Message = firstLine(err)
 		return st
 	}
-	notes := []string{"on " + base.Branch}
+	notes = append([]string{"on " + base.Branch}, notes...)
 	if base.Ref != base.Branch {
 		before := short(ctx, r.Dir, "HEAD")
 		if _, err := gitx.Run(ctx, r.Dir, "merge", "--ff-only", "--quiet", base.Ref); err != nil {
@@ -507,8 +530,13 @@ func Since(ctx context.Context, dir, branch, sha string) ([]Commit, error) {
 	return out, nil
 }
 
-func uncommitted(ctx context.Context, dir string) int {
-	out, err := gitx.Run(ctx, dir, "status", "--porcelain", "--untracked-files=no")
+// uncommitted counts changed tracked files, leaving out exclude pathspecs.
+func uncommitted(ctx context.Context, dir string, exclude ...string) int {
+	args := []string{"status", "--porcelain", "--untracked-files=no"}
+	if len(exclude) > 0 {
+		args = append(append(args, "--", "."), exclude...)
+	}
+	out, err := gitx.Run(ctx, dir, args...)
 	if err != nil || out == "" {
 		return 0
 	}

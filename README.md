@@ -127,6 +127,12 @@ The link goes through a small page at `jonezzyboy.github.io/tandem/test/` that
 hands off to the app or shows how to install it; the change rides after the `#`,
 which browsers never send to a server.
 
+When one repo under test is a Go module another one requires, Tandem writes an
+untracked `go.work` beside the requiring module, so builds use the checked-out
+branch instead of the pinned version. When testing ends it's removed, and any
+`go.mod` or `go.sum` it linked that a go command rewrote is put back. Modules
+that vendor, or already have a `go.work`, keep their pinned versions.
+
 <table>
   <tr>
     <td width="50%"><img src="docs/images/share.png" alt="Share with a tester: a note, what the link sets up, and the link"></td>

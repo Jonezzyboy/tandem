@@ -521,6 +521,14 @@ func (a *App) TesterStart(req TestStartRequest) ([]testrun.Step, error) {
 				}
 			}
 		}
+		for name, note := range testrun.LinkGo(ctx, s) {
+			for i := range steps {
+				if steps[i].Repo == name && steps[i].OK {
+					steps[i].Message += " · " + note
+					a.emit("tester-step", steps[i])
+				}
+			}
+		}
 		st.Current = s
 		if err := a.testStore().Save(st); err != nil {
 			return steps, err
