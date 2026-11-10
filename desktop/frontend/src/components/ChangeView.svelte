@@ -140,8 +140,8 @@
   }
 
   const offBranch = $derived(landed ? [] : (view?.legs ?? []).filter((l) => !l.onBranch))
-  // Off-branch legs are left to the switch banner: Commit & push needs them on it.
-  const pinLegs = $derived((view?.legs ?? []).filter((l) => l.pins?.length && l.onBranch))
+  // Commit & push switches an off-branch leg onto the branch and back.
+  const pinLegs = $derived((view?.legs ?? []).filter((l) => l.pins?.length))
   const pinsByUpstream = $derived.by(() => {
     const out = new Map<string, { rev: string; legs: string[] }>()
     for (const l of pinLegs) for (const p of l.pins!) {
@@ -151,7 +151,7 @@
     }
     return [...out].map(([upstream, u]) => ({ upstream, ...u }))
   })
-  const pinProblems = $derived(pinLegs.flatMap((l) => l.pins!.filter((p) => !p.applied).map((p) => `${l.name}: ${pinProblem(p)}`)))
+  const pinProblems = $derived(pinLegs.filter((l) => l.onBranch).flatMap((l) => l.pins!.filter((p) => !p.applied).map((p) => `${l.name}: ${pinProblem(p)}`)))
   const unpublished = $derived((view?.legs ?? []).some((l) => !l.pr || l.pr.draft))
   // What stands between the change and the merge train, beside its button.
   const trainState = $derived.by(() => {

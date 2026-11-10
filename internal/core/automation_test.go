@@ -640,6 +640,25 @@ func TestCommitPinsRefusesOtherGoModEdits(t *testing.T) {
 	}
 }
 
+func TestCommitPinsSwitchesOffBranchCloneAndBack(t *testing.T) {
+	f := newFixture(t)
+	c := f.change()
+	proto, _ := c.Leg("proto")
+	api, _ := c.Leg("api")
+	mergeSHA := run(t, proto.Dir(), "git", "rev-parse", "main")
+	run(t, api.Dir(), "git", "switch", "--quiet", "main")
+
+	if err := CommitPins(context.Background(), c, api, []PinView{{Module: "example.com/proto", Dir: ".", Rev: mergeSHA}}); err != nil {
+		t.Fatal(err)
+	}
+	if cur := run(t, api.Dir(), "git", "branch", "--show-current"); cur != "main" {
+		t.Errorf("api left on %q, want main", cur)
+	}
+	if msg := run(t, api.Dir(), "git", "log", "-1", "--format=%s", "origin/DEV-1"); msg != "Pin example.com/proto to merged "+mergeSHA[:12] {
+		t.Errorf("pushed DEV-1 tip = %q", msg)
+	}
+}
+
 func TestGoErrorDropsProgressLines(t *testing.T) {
 	out := "go: downloading github.com/acme/pkg v0.0.0-20260929150721-1bdce5128ac8\ngo: github.com/acme/pkg@v0.0.0-20260929150721-1bdce5128ac8: verifying module: checksum mismatch\n\tdownloaded: h1:abc\n"
 	want := "go: github.com/acme/pkg@v0.0.0-20260929150721-1bdce5128ac8: verifying module: checksum mismatch; downloaded: h1:abc"
