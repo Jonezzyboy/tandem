@@ -60,3 +60,11 @@ func TestApply(t *testing.T) {
 		t.Errorf("replace: %q", edited)
 	}
 }
+
+func TestBlockSkipsTableForLonePR(t *testing.T) {
+	got := Block([]Entry{pr(1, "a/b", 1)}, "https://github.com/a/b/pull/1", Ticket{Label: "DEV-1", URL: "https://x/browse/DEV-1"})
+	want := startMarker + "\nJira: [DEV-1](https://x/browse/DEV-1)\n" + endMarker
+	if got != want {
+		t.Errorf("got\n%s\nwant\n%s", got, want)
+	}
+}

@@ -29,7 +29,8 @@ type Ticket struct {
 }
 
 // Block renders the PRs as a table in merge order, marking self (a PR URL).
-// Links are explicit so GitHub doesn't expand each into the shared title.
+// A lone PR gets no table. Links are explicit so GitHub doesn't expand each
+// into the shared title.
 func Block(entries []Entry, self string, ticket Ticket) string {
 	sorted := slices.Clone(entries)
 	slices.SortFunc(sorted, func(a, b Entry) int {
@@ -38,7 +39,13 @@ func Block(entries []Entry, self string, ticket Ticket) string {
 	var b strings.Builder
 	b.WriteString(startMarker + "\n")
 	if ticket.URL != "" {
-		b.WriteString("Jira: [" + ticket.Label + "](" + ticket.URL + ")\n\n")
+		b.WriteString("Jira: [" + ticket.Label + "](" + ticket.URL + ")\n")
+	}
+	if len(entries) < 2 {
+		return b.String() + endMarker
+	}
+	if ticket.URL != "" {
+		b.WriteString("\n")
 	}
 	b.WriteString("### Related PRs — merge in this order\n\n| Step | Repo | PR |\n| :-: | --- | --- |\n")
 	step, shared := 0, false

@@ -223,18 +223,22 @@
               </div>
             </div>
           {/each}
-          <div class="related mono">
-            <div class="muted">Kept in every PR · numbers fill in as they open</div>
-            {#if view.ticket}<div>Jira: {view.ticket.split('/').pop()}{view.title ? ` · ${view.title}` : ''}</div>{/if}
-            <div>### Related PRs — merge in this order</div>
-            <table>
-              <thead><tr><th>Step</th><th>Repo</th><th>PR</th></tr></thead>
-              <tbody>
-                {#each relatedPreview as r (r.repo)}<tr><td class="step">{r.step}</td><td>{r.repo}</td><td>{r.pr}</td></tr>{/each}
-              </tbody>
-            </table>
-            {#if sharedStep}<div class="muted">PRs sharing a step can merge in either order.</div>{/if}
-          </div>
+          {#if relatedPreview.length > 1 || view.ticket}
+            <div class="related mono">
+              <div class="muted">Kept in every PR{relatedPreview.length > 1 ? ' · numbers fill in as they open' : ''}</div>
+              {#if view.ticket}<div>Jira: {view.ticket.split('/').pop()}{view.title ? ` · ${view.title}` : ''}</div>{/if}
+              {#if relatedPreview.length > 1}
+                <div>### Related PRs — merge in this order</div>
+                <table>
+                  <thead><tr><th>Step</th><th>Repo</th><th>PR</th></tr></thead>
+                  <tbody>
+                    {#each relatedPreview as r (r.repo)}<tr><td class="step">{r.step}</td><td>{r.repo}</td><td>{r.pr}</td></tr>{/each}
+                  </tbody>
+                </table>
+                {#if sharedStep}<div class="muted">PRs sharing a step can merge in either order.</div>{/if}
+              {/if}
+            </div>
+          {/if}
         {/if}
       </div>
     </div>
