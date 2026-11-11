@@ -261,7 +261,7 @@ changes picks the one it has checked out.
   first. Cycles are refused.
 - **PRs** each carry a Related PRs section between
   `<!-- tandem:related -->` markers. Publishing rewrites only that section, never
-  your description.
+  your description. A change with one PR gets just the Jira link, no table.
 
 ## Commands
 
