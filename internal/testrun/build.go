@@ -12,6 +12,8 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"syscall"
+	"time"
 )
 
 // BuildTarget is a package in a repo with a build script.
@@ -80,7 +82,12 @@ func Build(ctx context.Context, dir, npm string, onLine func(string)) error {
 	if npm == "" {
 		npm = "npm"
 	}
-	for _, args := range [][]string{{"install", "--no-audit", "--no-fund"}, {"run", "build"}} {
+	install := []string{"install", "--no-audit", "--no-fund"}
+	// ci never rewrites the lockfile, which would leave the repo dirty and block going back to main.
+	if _, err := os.Stat(filepath.Join(dir, "package-lock.json")); err == nil {
+		install[0] = "ci"
+	}
+	for _, args := range [][]string{install, {"run", "build"}} {
 		onLine("$ npm " + strings.Join(args, " "))
 		if err := stream(ctx, dir, npm, args, onLine); err != nil {
 			return err
@@ -92,6 +99,10 @@ func Build(ctx context.Context, dir, npm string, onLine func(string)) error {
 func stream(ctx context.Context, dir, name string, args []string, onLine func(string)) error {
 	cmd := exec.CommandContext(ctx, name, args...)
 	cmd.Dir = dir
+	// npm's children (sh, node) hold the output open, so stopping must kill the whole group.
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	cmd.Cancel = func() error { return syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL) }
+	cmd.WaitDelay = 5 * time.Second
 	r, w := io.Pipe()
 	cmd.Stdout, cmd.Stderr = w, w
 	if err := cmd.Start(); err != nil {

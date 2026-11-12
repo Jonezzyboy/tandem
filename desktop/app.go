@@ -293,22 +293,7 @@ func (a *App) savePRs(id string, found *change.Change) error {
 		return nil
 	}
 	defer lock.Unlock()
-	c, err := a.store.Load(id)
-	if err != nil {
-		return err
-	}
-	changed := false
-	for i := range c.Legs {
-		l := &c.Legs[i]
-		if f, err := found.Leg(l.Repo); err == nil && f.PR != 0 && f.PR != l.PR {
-			l.PR, l.PRURL = f.PR, f.PRURL
-			changed = true
-		}
-	}
-	if !changed {
-		return nil
-	}
-	return a.store.Save(c)
+	return a.store.SavePRs(found)
 }
 
 // goUp runs go get for pins whose upstream has merged, leaving go.mod and
@@ -529,7 +514,7 @@ func (a *App) Sync(id string) ([]LegResult, error) {
 	g, _ := core.BuildGraph(c)
 	results := core.Sync(a.ctx, c, core.OrderedLegs(c, g.Levels))
 	a.saveSyncUndo(id, results)
-	var out []LegResult
+	out := []LegResult{}
 	for _, r := range results {
 		out = append(out, LegResult{Leg: r.Leg.Name(), OK: r.OK, Message: r.Message})
 	}
@@ -567,7 +552,7 @@ func (a *App) Check(id, leg string, changedOnly bool) ([]CheckEvent, error) {
 	}
 	passed := a.passedChecks(id)
 	var mu sync.Mutex
-	var out []CheckEvent
+	out := []CheckEvent{}
 	var errs []error
 	var wg sync.WaitGroup
 	for _, l := range legs {
@@ -845,7 +830,7 @@ func (a *App) KeyBranches(id string) []string {
 	if key, _ := jira.KeyInBranch(id); key == "" || !strings.EqualFold(key, id) {
 		return []string{}
 	}
-	return core.KeyBranches(a.ctx, workspace.List(a.codeRoots()), strings.ToUpper(id))
+	return append([]string{}, core.KeyBranches(a.ctx, workspace.List(a.codeRoots()), strings.ToUpper(id))...)
 }
 
 type StartRequest struct {

@@ -121,6 +121,9 @@ func (a *App) undoLeg(c *change.Change, r rebased) LegResult {
 	if head, _ := gitx.Run(a.ctx, dir, "rev-parse", "HEAD"); head != r.After {
 		return LegResult{Leg: r.Leg, Message: "left alone: it has new commits since the sync"}
 	}
+	if pushed, _ := gitx.Run(a.ctx, dir, "rev-parse", "--verify", "--quiet", "refs/remotes/origin/"+c.Branch); pushed == r.After {
+		return LegResult{Leg: r.Leg, Message: "left alone: the synced commits are already pushed"}
+	}
 	if _, err := gitx.Run(a.ctx, dir, "reset", "--keep", r.Before); err != nil {
 		return LegResult{Leg: r.Leg, Message: core.FirstLine(err.Error())}
 	}

@@ -185,8 +185,8 @@ func TestEditorCommand(t *testing.T) {
 	check(goRepo, "open", "-a", "/Apps/GoLand.app", goRepo)
 	check(phpRepo, "open", "-a", "/Apps/PhpStorm.app", phpRepo)
 	// WebStorm is not installed, so JS falls back to the "other" command.
-	check(jsRepo, filepath.Join(bin, "fake-editor"), "--wait", jsRepo)
-	check(plain, filepath.Join(bin, "fake-editor"), "--wait", plain)
+	check(jsRepo, "/bin/sh", "-c", `fake-editor --wait "$0"`, jsRepo)
+	check(plain, "/bin/sh", "-c", `fake-editor --wait "$0"`, plain)
 
 	a.settings.Editors["other"] = "webstorm"
 	if _, err := a.editorCommand(jsRepo); err == nil || !strings.Contains(err.Error(), "WebStorm isn't installed") {
