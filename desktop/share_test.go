@@ -72,3 +72,22 @@ func TestParseShareRejectsUnsafeNames(t *testing.T) {
 		t.Error("garbage accepted")
 	}
 }
+
+func TestOpenShareDropsTicketFromAnotherJiraSite(t *testing.T) {
+	a := NewApp(change.Store{Home: t.TempDir()}, nil)
+	a.settings = normalize(Settings{Jira: JiraSettings{Site: "acme.atlassian.net"}})
+	data, _ := json.Marshal(Share{V: 1, ID: "X-9", Ticket: "https://other.atlassian.net/browse/DEV-123", Repos: []ShareRepo{{Name: "acme/api", Branch: "x-9"}}})
+	sc, err := a.OpenShare(base64.RawURLEncoding.EncodeToString(data))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if sc.Key != "X-9" || sc.Share.Ticket != "" {
+		t.Errorf("share filed under %q with ticket %q", sc.Key, sc.Share.Ticket)
+	}
+}
+
+func TestNormalizeUpgradesHTTPJiraSite(t *testing.T) {
+	if got := normalize(Settings{Jira: JiraSettings{Site: " http://acme.atlassian.net/ "}}).Jira.Site; got != "https://acme.atlassian.net" {
+		t.Errorf("site = %q", got)
+	}
+}

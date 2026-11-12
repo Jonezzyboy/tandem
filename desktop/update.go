@@ -17,13 +17,19 @@ import (
 // attached, so a version read from it can always be installed.
 var caskURL = "https://raw.githubusercontent.com/Jonezzyboy/homebrew-tandem/main/Casks/tandem-repos.rb"
 
-var caskVersion = regexp.MustCompile(`(?m)^\s*version\s+"([^"]+)"`)
+var (
+	caskVersion = regexp.MustCompile(`(?m)^\s*version\s+"([^"]+)"`)
+	caskSHA256  = regexp.MustCompile(`(?m)^\s*sha256\s+"([0-9a-f]{64})"`)
+)
 
 type Update struct {
 	Version string `json:"version"`
 	URL     string `json:"url"`
 	// Newer is whether Version is ahead of the running app.
 	Newer bool `json:"newer"`
+	// SHA256 is the release zip's checksum from the cask. It lives in a
+	// different repo from the release, so one leaked token can't swap both.
+	SHA256 string `json:"-"`
 }
 
 // CheckUpdate reads the latest installable version from the cask. A dev
@@ -53,7 +59,11 @@ func (a *App) CheckUpdate() (Update, error) {
 		return Update{}, errors.New("the Homebrew cask names no version")
 	}
 	v := string(m[1])
-	return Update{Version: v, URL: "https://github.com/Jonezzyboy/tandem/releases/tag/v" + v, Newer: newerVersion(v, version)}, nil
+	u := Update{Version: v, URL: "https://github.com/Jonezzyboy/tandem/releases/tag/v" + v, Newer: newerVersion(v, version)}
+	if m := caskSHA256.FindSubmatch(body); m != nil {
+		u.SHA256 = string(m[1])
+	}
+	return u, nil
 }
 
 // newerVersion reports whether a is a higher x.y.z than b; anything that

@@ -79,7 +79,7 @@ func (a *App) InstallUpdate() error {
 			err = streamCommand(ctx, line, brew, "upgrade", "--cask", caskName)
 		}
 	} else {
-		err = installZip(ctx, u.Version, bundle, func(line string) { report("installing", line) })
+		err = installZip(ctx, u.Version, u.SHA256, bundle, func(line string) { report("installing", line) })
 	}
 	if err != nil {
 		return fail(err)
@@ -219,9 +219,13 @@ func streamCommand(ctx context.Context, line func(string), name string, args ...
 	return err
 }
 
-// installZip downloads the release's app, checks it against checksums.txt,
-// and swaps it in for bundle, keeping the old one until the new one is placed.
-func installZip(ctx context.Context, v, bundle string, line func(string)) error {
+// installZip downloads the release's app, checks it against want, the
+// cask's SHA-256, and swaps it in for bundle, keeping the old one until the
+// new one is placed.
+func installZip(ctx context.Context, v, want, bundle string, line func(string)) error {
+	if want == "" {
+		return errors.New("the Homebrew cask has no checksum for this release, so it wasn't installed")
+	}
 	zipName := fmt.Sprintf("Tandem_v%s_macos_universal.zip", v)
 	dir, err := os.MkdirTemp("", "tandem-update-")
 	if err != nil {
@@ -229,14 +233,6 @@ func installZip(ctx context.Context, v, bundle string, line func(string)) error 
 	}
 	defer os.RemoveAll(dir)
 	line("Downloading " + zipName)
-	sums, err := download(ctx, releaseDownURL+"v"+v+"/checksums.txt", filepath.Join(dir, "checksums.txt"))
-	if err != nil {
-		return err
-	}
-	want, ok := parseChecksums(string(sums))[zipName]
-	if !ok {
-		return fmt.Errorf("checksums.txt doesn't list %s", zipName)
-	}
 	zipPath := filepath.Join(dir, zipName)
 	data, err := download(ctx, releaseDownURL+"v"+v+"/"+zipName, zipPath)
 	if err != nil {
@@ -292,15 +288,4 @@ func download(ctx context.Context, url, path string) ([]byte, error) {
 		return nil, err
 	}
 	return data, os.WriteFile(path, data, 0o644)
-}
-
-// parseChecksums reads shasum output: "<hex>  <file>" per line.
-func parseChecksums(text string) map[string]string {
-	out := map[string]string{}
-	for l := range strings.SplitSeq(text, "\n") {
-		if f := strings.Fields(l); len(f) == 2 {
-			out[strings.TrimPrefix(f[1], "*")] = strings.ToLower(f[0])
-		}
-	}
-	return out
 }

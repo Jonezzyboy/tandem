@@ -153,7 +153,8 @@ func normalize(s Settings) Settings {
 	if s.Mode != "tester" {
 		s.Mode = "developer"
 	}
-	s.Jira.Site = strings.TrimRight(strings.TrimSpace(s.Jira.Site), "/")
+	// Requests carry the API token, so http:// is upgraded rather than kept.
+	s.Jira.Site = strings.TrimPrefix(strings.TrimRight(strings.TrimSpace(s.Jira.Site), "/"), "http://")
 	if s.Jira.Site != "" && !strings.Contains(s.Jira.Site, "://") {
 		s.Jira.Site = "https://" + s.Jira.Site
 	}

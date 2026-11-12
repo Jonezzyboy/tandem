@@ -30,13 +30,6 @@ func TestNewerVersion(t *testing.T) {
 	}
 }
 
-func TestParseChecksums(t *testing.T) {
-	got := parseChecksums("AB12  Tandem_v1.0.0_macos_universal.zip\ncd34 *td.tar.gz\n\nbroken line here\n")
-	if got["Tandem_v1.0.0_macos_universal.zip"] != "ab12" || got["td.tar.gz"] != "cd34" || len(got) != 2 {
-		t.Errorf("parseChecksums = %v", got)
-	}
-}
-
 func TestBundleOf(t *testing.T) {
 	if b, err := bundleOf("/Applications/Tandem.app/Contents/MacOS/Tandem"); err != nil || b != "/Applications/Tandem.app" {
 		t.Errorf("bundleOf = %q, %v", b, err)
@@ -50,7 +43,7 @@ func TestBundleOf(t *testing.T) {
 
 func TestCheckUpdateReadsCask(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		fmt.Fprint(w, "# comment\ncask \"tandem-repos\" do\n  version \"9.9.9\"\n  sha256 \"abc\"\nend\n")
+		fmt.Fprint(w, "# comment\ncask \"tandem-repos\" do\n  version \"9.9.9\"\n  sha256 \"abababababababababababababababababababababababababababababababab\"\nend\n")
 	}))
 	defer srv.Close()
 	defer func(old string) { caskURL = old }(caskURL)
@@ -60,7 +53,7 @@ func TestCheckUpdateReadsCask(t *testing.T) {
 	a := NewApp(change.Store{Home: t.TempDir()}, nil)
 	a.ctx = context.Background()
 	u, err := a.CheckUpdate()
-	if err != nil || u.Version != "9.9.9" || !u.Newer || !strings.HasSuffix(u.URL, "/releases/tag/v9.9.9") {
+	if err != nil || u.Version != "9.9.9" || !u.Newer || !strings.HasSuffix(u.URL, "/releases/tag/v9.9.9") || u.SHA256 != strings.Repeat("ab", 32) {
 		t.Errorf("CheckUpdate = %+v, %v", u, err)
 	}
 }

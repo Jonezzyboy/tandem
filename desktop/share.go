@@ -140,6 +140,12 @@ func (a *App) OpenShare(text string) (SharedChange, error) {
 	if err != nil {
 		return SharedChange{}, err
 	}
+	// A ticket on another Jira site would be filed under a key that may be one of the tester's own.
+	if r, ok := jira.Parse(s.Ticket); ok {
+		if site := a.Settings().Jira.Site; site != "" && !strings.EqualFold(r.Site, site) {
+			s.Ticket = ""
+		}
+	}
 	a.sharesMu.Lock()
 	defer a.sharesMu.Unlock()
 	all := a.shares()
