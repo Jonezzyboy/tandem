@@ -13,7 +13,7 @@
 <p align="center">
   <a href="https://github.com/Jonezzyboy/tandem/releases/latest"><img src="https://img.shields.io/github/v/release/Jonezzyboy/tandem?label=release" alt="Latest release"></a>
   <img src="https://img.shields.io/badge/macOS-universal-lightgrey" alt="macOS, Apple Silicon and Intel">
-  <img src="https://img.shields.io/badge/Go-1.26-00ADD8" alt="Go 1.26">
+  <img src="https://img.shields.io/badge/Go-1.27-00ADD8" alt="Go 1.27">
 </p>
 
 ```sh
