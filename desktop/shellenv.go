@@ -23,7 +23,10 @@ func adoptShellEnv() {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	out, err := exec.CommandContext(ctx, shell, "-ilc", `printf '`+envMarker+`'; env -0; printf '`+envMarker+`'`).Output()
+	cmd := exec.CommandContext(ctx, shell, "-ilc", `printf '`+envMarker+`'; env -0; printf '`+envMarker+`'`)
+	// A background job started by an rc file keeps stdout open past the timeout without this.
+	cmd.WaitDelay = time.Second
+	out, err := cmd.Output()
 	if err != nil {
 		return
 	}

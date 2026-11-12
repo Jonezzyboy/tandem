@@ -38,8 +38,6 @@ func TestInstallZip(t *testing.T) {
 	checksum := hex.EncodeToString(sum[:])
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch filepath.Base(r.URL.Path) {
-		case "checksums.txt":
-			fmt.Fprintf(w, "%s  Tandem_v9.9.9_macos_universal.zip\n", checksum)
 		case "Tandem_v9.9.9_macos_universal.zip":
 			w.Write(data)
 		default:
@@ -51,7 +49,7 @@ func TestInstallZip(t *testing.T) {
 	releaseDownURL = srv.URL + "/"
 
 	installed := fakeApp(t, t.TempDir(), "1.0.0")
-	if err := installZip(context.Background(), "9.9.9", installed, func(string) {}); err != nil {
+	if err := installZip(context.Background(), "9.9.9", checksum, installed, func(string) {}); err != nil {
 		t.Fatal(err)
 	}
 	if v := bundleVersion(installed); v != "9.9.9" {
@@ -63,10 +61,11 @@ func TestInstallZip(t *testing.T) {
 		}
 	}
 
-	checksum = "0000"
 	kept := fakeApp(t, t.TempDir(), "1.0.0")
-	if err := installZip(context.Background(), "9.9.9", kept, func(string) {}); err == nil {
-		t.Error("a download with the wrong checksum was installed")
+	for _, want := range []string{"0000", ""} {
+		if err := installZip(context.Background(), "9.9.9", want, kept, func(string) {}); err == nil {
+			t.Errorf("a download checked against %q was installed", want)
+		}
 	}
 	if v := bundleVersion(kept); v != "1.0.0" {
 		t.Errorf("after a failed install the app is %q", v)
