@@ -297,7 +297,7 @@ func download(ctx context.Context, url, path string) ([]byte, error) {
 // parseChecksums reads shasum output: "<hex>  <file>" per line.
 func parseChecksums(text string) map[string]string {
 	out := map[string]string{}
-	for _, l := range strings.Split(text, "\n") {
+	for l := range strings.SplitSeq(text, "\n") {
 		if f := strings.Fields(l); len(f) == 2 {
 			out[strings.TrimPrefix(f[1], "*")] = strings.ToLower(f[0])
 		}

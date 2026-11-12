@@ -134,7 +134,7 @@ func resolveRepos(e *env, names []string) ([]workspace.Repo, error) {
 
 func printStart(e *env, c *change.Change, results []core.AddResult) error {
 	failed := 0
-	rows := [][]ui.Cell{}
+	var rows [][]ui.Cell
 	for _, res := range results {
 		switch {
 		case res.Existing:

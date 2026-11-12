@@ -81,7 +81,7 @@ func runList(ctx context.Context, e *env, args []string) error {
 		}
 		return err
 	}
-	rows := [][]ui.Cell{}
+	var rows [][]ui.Cell
 	for _, c := range all {
 		rows = append(rows, []ui.Cell{
 			{Text: c.ID, Color: e.ui.Bold}, ui.Plain(strconv.Itoa(len(c.Legs)) + " legs"), ui.Plain(c.Title),
@@ -103,7 +103,7 @@ func runSwitch(ctx context.Context, e *env, args []string) error {
 		return err
 	}
 	failed := false
-	rows := [][]ui.Cell{}
+	var rows [][]ui.Cell
 	for _, r := range core.Switch(ctx, c, *toBase) {
 		if r.Skipped {
 			rows = append(rows, []ui.Cell{{Text: "•", Color: e.ui.Dim}, ui.Plain(r.Leg.Name()), {Text: "worktree, always on " + r.To, Color: e.ui.Dim}})

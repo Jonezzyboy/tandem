@@ -46,7 +46,7 @@ func adoptShellEnv() {
 // itself rather than the user's settings.
 func shellVars(out string) map[string]string {
 	vars := map[string]string{}
-	for _, kv := range strings.Split(out, "\x00") {
+	for kv := range strings.SplitSeq(out, "\x00") {
 		k, v, ok := strings.Cut(kv, "=")
 		if !ok || k == "" {
 			continue

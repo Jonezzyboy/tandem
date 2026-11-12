@@ -51,7 +51,7 @@ func runPin(ctx context.Context, e *env, args []string) error {
 		return nil
 	}
 	failed := false
-	rows := [][]ui.Cell{}
+	var rows [][]ui.Cell
 	for _, r := range results {
 		target := r.Downstream.Name() + " ← " + r.Module
 		switch {
@@ -113,7 +113,7 @@ func runMerge(ctx context.Context, e *env, args []string) error {
 	}
 	checks := core.TrainPreflight(ctx, c, g)
 	blocked, toMerge := 0, 0
-	rows := [][]ui.Cell{}
+	var rows [][]ui.Cell
 	for _, tc := range checks {
 		pr := "—"
 		if tc.PR != nil {

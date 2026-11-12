@@ -197,7 +197,7 @@ func StatusJQL(statuses []string) string {
 // Comment adds text to the issue as a plain comment, a paragraph per line.
 func (c Client) Comment(ctx context.Context, r Ref, text string) error {
 	var paras []map[string]any
-	for _, line := range strings.Split(strings.TrimSpace(text), "\n") {
+	for line := range strings.SplitSeq(strings.TrimSpace(text), "\n") {
 		p := map[string]any{"type": "paragraph"}
 		if line != "" {
 			p["content"] = []map[string]any{{"type": "text", "text": line}}

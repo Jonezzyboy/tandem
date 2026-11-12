@@ -71,7 +71,7 @@ func checkLeg(ctx context.Context, e *env, c *change.Change, l *change.Leg, b *s
 		return true
 	}
 	ok := true
-	rows := [][]ui.Cell{}
+	var rows [][]ui.Cell
 	var failures []checks.Result
 	for _, r := range results {
 		c := r.Check

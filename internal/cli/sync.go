@@ -19,7 +19,7 @@ func runSync(ctx context.Context, e *env, args []string) error {
 	}
 	g, _ := core.BuildGraph(c)
 	failed := false
-	rows := [][]ui.Cell{}
+	var rows [][]ui.Cell
 	for _, r := range core.Sync(ctx, c, core.OrderedLegs(c, g.Levels)) {
 		mark := ui.Cell{Text: "✓", Color: e.ui.Green}
 		if !r.OK {
