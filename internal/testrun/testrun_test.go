@@ -325,6 +325,9 @@ func TestLinkGoUsesLocalUpstreamUntilTestingEnds(t *testing.T) {
 	if len(left) != 0 {
 		t.Fatalf("end: %+v", steps)
 	}
+	if rec := s.Record(); len(rec.Repos) != 4 {
+		t.Errorf("record after a retried end lists %+v, want every repo tested", rec.Repos)
+	}
 	for _, st := range steps {
 		if st.Repo == "acme/api" && !strings.Contains(st.Message, "put back go.mod/go.sum in the root") {
 			t.Errorf("api end step = %q, want the rewritten go.mod put back", st.Message)

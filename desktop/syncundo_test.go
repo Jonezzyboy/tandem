@@ -102,3 +102,19 @@ func TestUndoSyncLeavesMovedLegs(t *testing.T) {
 		t.Error("undo moved a leg with new commits")
 	}
 }
+
+func TestUndoSyncLeavesPushedLegs(t *testing.T) {
+	a, clone := syncFixture(t)
+	if _, err := a.Sync("X-1"); err != nil {
+		t.Fatal(err)
+	}
+	gitIn(t, clone, "push", "-q", "origin", "X-1")
+	synced := gitIn(t, clone, "rev-parse", "HEAD")
+	res, err := a.UndoSync("X-1")
+	if err != nil || len(res) != 1 || res[0].OK || !strings.Contains(res[0].Message, "already pushed") {
+		t.Fatalf("undo = %+v, %v", res, err)
+	}
+	if gitIn(t, clone, "rev-parse", "HEAD") != synced {
+		t.Error("undo reset a leg whose synced commits are on origin")
+	}
+}

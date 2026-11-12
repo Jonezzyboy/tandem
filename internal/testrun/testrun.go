@@ -10,6 +10,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -30,6 +31,9 @@ type Session struct {
 	// Verdict is the result recorded on the ticket, before the repos go back.
 	Verdict *Verdict `json:"verdict,omitempty"`
 	Checks  []Check  `json:"checks,omitempty"`
+	// Done is what repos that already went back were tested at, kept while
+	// others stay under test for a retry.
+	Done []Tested `json:"done,omitempty"`
 }
 
 // Check is one thing to try while testing, ticked once tried.
@@ -102,8 +106,10 @@ func (s *Session) Record() Record {
 			r.Checked++
 		}
 	}
+	r.Repos = slices.Clone(s.Done)
 	for _, repo := range s.Repos {
-		if repo.Tested != "" {
+		done := slices.ContainsFunc(r.Repos, func(t Tested) bool { return t.Name == repo.Name })
+		if repo.Tested != "" && !done {
 			r.Repos = append(r.Repos, Tested{Name: repo.Name, Branch: repo.branch(s.Key), SHA: repo.Tested})
 		}
 	}
@@ -438,8 +444,11 @@ func End(ctx context.Context, s *Session) ([]Step, []Repo) {
 	wg.Wait()
 	var left []Repo
 	for i, st := range steps {
-		if !st.OK {
-			left = append(left, s.Repos[i])
+		switch r := s.Repos[i]; {
+		case !st.OK:
+			left = append(left, r)
+		case r.Tested != "":
+			s.Done = append(s.Done, Tested{Name: r.Name, Branch: r.branch(s.Key), SHA: r.Tested})
 		}
 	}
 	return steps, left

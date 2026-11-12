@@ -132,10 +132,11 @@ func commandFor(cmd, dir string) ([]string, error) {
 	if cmd == "" {
 		cmd = "code"
 	}
-	parts := strings.Fields(cmd)
-	bin, err := exec.LookPath(parts[0])
-	if err != nil {
-		return nil, fmt.Errorf("editor %q not found: set one in Settings → Editors", parts[0])
+	// The shell honours quoting, as in open -a "Sublime Text".
+	if name := strings.Fields(cmd)[0]; !strings.ContainsAny(name, `"'`) {
+		if _, err := exec.LookPath(name); err != nil {
+			return nil, fmt.Errorf("editor %q not found: set one in Settings → Editors", name)
+		}
 	}
-	return append(append([]string{bin}, parts[1:]...), dir), nil
+	return []string{"/bin/sh", "-c", cmd + ` "$0"`, dir}, nil
 }

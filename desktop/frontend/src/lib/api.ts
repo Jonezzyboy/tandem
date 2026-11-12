@@ -74,8 +74,6 @@ export const api = {
   setup: () => App.Setup() as unknown as Promise<SetupItem[]>,
   runSetupFix: (id: string) => App.RunSetupFix(id),
   codeRoots: () => App.CodeRoots() as unknown as Promise<RootInfo[]>,
-  defaultRoots: () => App.DefaultRoots(),
-  chooseFolder: (title: string) => App.ChooseFolder(title),
   notificationStatus: () => App.NotificationStatus() as unknown as Promise<NotifyStatus>,
   allowNotifications: () => App.AllowNotifications() as unknown as Promise<NotifyStatus>,
   testNotification: () => App.TestNotification(),
@@ -88,7 +86,6 @@ export const api = {
   shareLink: (id: string, note: string) => App.ShareLink(id, note) as unknown as Promise<ShareLinks>,
   openShare: (text: string) => App.OpenShare(text) as unknown as Promise<{ key: string; share: Share }>,
   takeShareLink: () => App.TakeShareLink(),
-  checkUpdate: () => App.CheckUpdate() as unknown as Promise<Update>,
 }
 
 export function on<T>(event: string, fn: (data: T) => void): () => void {

@@ -192,7 +192,7 @@ func (a *App) StartTrain(id, method string) error {
 		o.Triage, o.Retries = triage.New(t), t.Retries
 	}
 	err = core.RunTrain(ctx, c, g, o)
-	if saveErr := a.store.Save(c); saveErr != nil && err == nil {
+	if saveErr := a.store.SavePRs(c); saveErr != nil && err == nil {
 		err = saveErr
 	}
 	go a.refresh(id, true)

@@ -7,6 +7,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestFindBuilds(t *testing.T) {
@@ -44,5 +45,33 @@ func TestBuildStreamsAndStopsOnFailure(t *testing.T) {
 	got := strings.Join(lines, "|")
 	if err == nil || got != "$ npm install --no-audit --no-fund|ran install|$ npm run build|ran run|boom" {
 		t.Errorf("err %v, lines %q", err, got)
+	}
+}
+
+func TestBuildUsesCIWithLockfile(t *testing.T) {
+	dir := t.TempDir()
+	npm := filepath.Join(dir, "npm")
+	os.WriteFile(npm, []byte("#!/bin/sh\nexit 0\n"), 0o755)
+	os.WriteFile(filepath.Join(dir, "package-lock.json"), []byte("{}"), 0o644)
+	var lines []string
+	if err := Build(context.Background(), dir, npm, func(l string) { lines = append(lines, l) }); err != nil {
+		t.Fatal(err)
+	}
+	if lines[0] != "$ npm ci --no-audit --no-fund" {
+		t.Errorf("first line %q", lines[0])
+	}
+}
+
+func TestBuildStopKillsChildren(t *testing.T) {
+	dir := t.TempDir()
+	// Like npm: a child keeps the output open after the parent is killed.
+	npm := filepath.Join(dir, "npm")
+	os.WriteFile(npm, []byte("#!/bin/sh\nsleep 30 &\nwait\n"), 0o755)
+	ctx, cancel := context.WithTimeout(context.Background(), 300*time.Millisecond)
+	defer cancel()
+	start := time.Now()
+	Build(ctx, dir, npm, func(string) {})
+	if d := time.Since(start); d > 3*time.Second {
+		t.Errorf("stop took %v", d)
 	}
 }
