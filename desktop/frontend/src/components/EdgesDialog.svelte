@@ -76,7 +76,7 @@
 
     <section>
       <div class="eyebrow">From manifests</div>
-      {#each inferred as e (e.from + e.to)}
+      {#each inferred as e (e.from + ' ' + e.to + ' ' + e.via)}
         <div class="edge">
           <span class="mono">{name(e.from)}</span><span class="muted">merges before</span><span class="mono">{name(e.to)}</span>
           <span class="grow"></span>

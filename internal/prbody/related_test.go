@@ -68,3 +68,13 @@ func TestBlockSkipsTableForLonePR(t *testing.T) {
 		t.Errorf("got\n%s\nwant\n%s", got, want)
 	}
 }
+
+func TestApplyKeepsTextAfterAnOrphanedStartMarker(t *testing.T) {
+	block := Block([]Entry{pr(1, "a/b", 1)}, "", Ticket{})
+	broken := "Intro\n\n" + strings.Replace(block, endMarker, "", 1) + "\n\nMy notes"
+	once := Apply(broken, block)
+	twice := Apply(once, block)
+	if !strings.Contains(twice, "My notes") {
+		t.Errorf("user text lost: %q", twice)
+	}
+}

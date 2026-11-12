@@ -145,3 +145,26 @@ func TestListSkipsUnreadableChange(t *testing.T) {
 		t.Errorf("List = %v, %v; want B-2 and an error naming A-1", all, err)
 	}
 }
+
+func TestSavePRsKeepsEditsMadeMeanwhile(t *testing.T) {
+	s := Store{Home: t.TempDir()}
+	if err := s.Save(&Change{ID: "X-1", Title: "old", Legs: []Leg{{Repo: "acme/api"}}}); err != nil {
+		t.Fatal(err)
+	}
+	stale, _ := s.Load("X-1")
+	stale.Legs[0].PR, stale.Legs[0].PRURL = 7, "https://github.com/acme/api/pull/7"
+
+	edited, _ := s.Load("X-1")
+	edited.Title = "new"
+	edited.Legs = append(edited.Legs, Leg{Repo: "acme/web"})
+	if err := s.Save(edited); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SavePRs(stale); err != nil {
+		t.Fatal(err)
+	}
+	got, _ := s.Load("X-1")
+	if got.Title != "new" || len(got.Legs) != 2 || got.Legs[0].PR != 7 {
+		t.Errorf("after SavePRs: %+v", got)
+	}
+}

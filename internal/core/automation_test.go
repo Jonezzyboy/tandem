@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/jonezzyboy/tandem/internal/change"
+	"github.com/jonezzyboy/tandem/internal/gitx"
 	"github.com/jonezzyboy/tandem/internal/triage"
 	"github.com/jonezzyboy/tandem/internal/workspace"
 )
@@ -50,7 +51,7 @@ const fakeGo = `#!/bin/sh
 mod=${2%@*}
 rev=$(echo "${2#*@}" | cut -c1-12)
 sed "s#^require $mod .*#require $mod v0.0.0-20260101000000-$rev#" go.mod > go.mod.tmp && mv go.mod.tmp go.mod
-echo "// pinned $2" >> go.mod
+grep -q "// pinned $2" go.mod || echo "// pinned $2" >> go.mod
 `
 
 type fixture struct {
@@ -375,7 +376,11 @@ func TestClean(t *testing.T) {
 	run(t, api.Dir(), "git", "checkout", "--", "work.txt")
 
 	// A commit made after the merge, once origin has dropped the branch, is
-	// still work.
+	// still work. By then a refresh has recorded the PR on the leg.
+	c.Legs[1].PR = 2
+	if err := f.store.Save(c); err != nil {
+		t.Fatal(err)
+	}
 	head := run(t, api.Dir(), "git", "rev-parse", "DEV-1")
 	prJSON, _ := os.ReadFile(filepath.Join(f.ghDir, "api.json"))
 	write(t, filepath.Join(f.ghDir, "api.json"), strings.Replace(string(prJSON), "__HEAD__", head, 1), 0o644)
@@ -513,6 +518,7 @@ func TestPinUsesMergeCommitOnceUpstreamMerged(t *testing.T) {
 	api, _ := c.Leg("api")
 	mergeSHA := run(t, proto.Dir(), "git", "rev-parse", "main")
 	f.mergedPR("proto", 1, mergeSHA)
+	proto.PR = 1
 	f.commit(*proto, "more.txt", "unpushed after merge")
 
 	res := Pin(context.Background(), c, g, true, true)
@@ -558,6 +564,10 @@ func TestPreflightToleratesFailingChecksUntilPinnedToMerge(t *testing.T) {
 		t.Errorf("an uncommitted pin should block: %q", got)
 	}
 	run(t, api.Dir(), "git", "commit", "--quiet", "-am", "pin")
+	if got := problems(); got != "|" {
+		t.Errorf("an unpushed pin is pushed by the train, so the old head's CI should be tolerated: %q", got)
+	}
+	run(t, api.Dir(), "git", "push", "--quiet")
 	if got := problems(); got != "|failing checks: test" {
 		t.Errorf("once pinned to the merge, api's failing CI should block: %q", got)
 	}
@@ -772,5 +782,70 @@ func TestNestedIDStartsAndCleansUp(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(f.store.Home, "feature")); !os.IsNotExist(err) {
 		t.Errorf("empty parent directory survived: %v", err)
+	}
+}
+
+func TestTrainPushesAPinCommittedButNotPushed(t *testing.T) {
+	f := newFixture(t)
+	c := f.change()
+	protoSHA := run(t, filepath.Join(f.root, "..", "origins", "proto.git"), "git", "rev-parse", "DEV-1")
+	f.mergedPR("proto", 1, protoSHA)
+	f.pr("api", 2, "OPEN", "APPROVED", green)
+	g, _ := BuildGraph(c)
+	for _, r := range Pin(context.Background(), c, g, true, false) {
+		if r.Err != nil || !r.Committed || r.Pushed {
+			t.Fatalf("pin: %+v", r)
+		}
+	}
+	var events []TrainEvent
+	if err := RunTrain(context.Background(), c, g, fastTrain(&events)); err != nil {
+		t.Fatalf("train: %v %+v", err, events)
+	}
+	gomod := run(t, filepath.Join(f.root, "..", "origins", "api.git"), "git", "show", "DEV-1:go.mod")
+	if !strings.Contains(gomod, protoSHA) {
+		t.Errorf("api merged without its pin on origin:\n%s", gomod)
+	}
+}
+
+func TestViewPRIgnoresAnOlderChangesPROnAReusedBranch(t *testing.T) {
+	f := newFixture(t)
+	c := f.change()
+	api, _ := c.Leg("api")
+	f.mergedPR("api", 9, "abc")
+	old := run(t, api.Dir(), "git", "rev-parse", "main")
+	prJSON, _ := os.ReadFile(filepath.Join(f.ghDir, "api.json"))
+	write(t, filepath.Join(f.ghDir, "api.json"), strings.Replace(string(prJSON), "__HEAD__", old, 1), 0o644)
+	if pr, err := ViewPR(context.Background(), c, api); err != nil || pr != nil {
+		t.Errorf("a merged PR the branch has moved past was taken as this change's: %+v, %v", pr, err)
+	}
+	head := run(t, api.Dir(), "git", "rev-parse", "DEV-1")
+	write(t, filepath.Join(f.ghDir, "api.json"), strings.Replace(string(prJSON), "__HEAD__", head, 1), 0o644)
+	if pr, err := ViewPR(context.Background(), c, api); err != nil || pr == nil || pr.Number != 9 {
+		t.Errorf("this change's own merged PR wasn't found: %+v, %v", pr, err)
+	}
+}
+
+func TestCleanKeepsABranchThatMovedAfterTheCheck(t *testing.T) {
+	f := newFixture(t)
+	c := f.change()
+	for i, l := range c.Legs {
+		f.mergedPR(filepath.Base(l.Repo), i+1, "abc")
+		prJSON, _ := os.ReadFile(filepath.Join(f.ghDir, filepath.Base(l.Repo)+".json"))
+		write(t, filepath.Join(f.ghDir, filepath.Base(l.Repo)+".json"), strings.Replace(string(prJSON), "__HEAD__", run(t, l.Dir(), "git", "rev-parse", "DEV-1"), 1), 0o644)
+	}
+	cands, err := CleanCandidates(context.Background(), f.store)
+	if err != nil || len(cands) != 1 || !cands[0].Ready {
+		t.Fatalf("candidates: %+v, %v", cands, err)
+	}
+	api, _ := c.Leg("api")
+	f.commit(*api, "late.txt", "late")
+	if err := Clean(context.Background(), cands[0]); err == nil || !strings.Contains(err.Error(), "new commits since it was checked") {
+		t.Errorf("clean = %v", err)
+	}
+	if !gitx.RefExists(context.Background(), api.Source, "refs/heads/DEV-1") {
+		t.Error("deleted a branch with a commit made after the check")
+	}
+	if _, err := f.store.Load("DEV-1"); err != nil {
+		t.Errorf("the change was dropped while one of its branches was kept: %v", err)
 	}
 }

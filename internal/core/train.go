@@ -22,7 +22,7 @@ type TrainOptions struct {
 	// for a merge (a merge queue can hold it) to land.
 	CheckTimeout time.Duration
 	MergeTimeout time.Duration
-	// Settle is how long a freshly pushed pin may show no checks before the
+	// Settle is how long a PR may show no checks before the
 	// repo is taken to have no CI at all.
 	Settle  time.Duration
 	OnEvent func(TrainEvent)
@@ -95,11 +95,11 @@ func TrainPreflight(ctx context.Context, c *change.Change, g Graph) []TrainCheck
 			continue
 		}
 		down, err := c.Leg(e.To)
-		if err != nil || merged[e.To] || pinnedTo(ctx, down, e.Dir, e.Via, mergedSHA[e.From], "HEAD") {
+		if err != nil || merged[e.To] || pinnedTo(ctx, down, e.Dir, e.Via, mergedSHA[e.From], branchTip(ctx, down, c.Branch)) {
 			continue
 		}
 		repinned[e.To] = true
-		if pinnedTo(ctx, down, e.Dir, e.Via, mergedSHA[e.From], "") {
+		if !pinnedTo(ctx, down, e.Dir, e.Via, mergedSHA[e.From], "HEAD") && pinnedTo(ctx, down, e.Dir, e.Via, mergedSHA[e.From], "") {
 			uncommitted[e.To] = append(uncommitted[e.To], e.Via)
 		}
 	}
@@ -229,11 +229,12 @@ func pinLevel(ctx context.Context, c *change.Change, g Graph, lvl int, mergedSHA
 		if err != nil {
 			return err
 		}
-		if !changed {
+		// A pin committed earlier but never pushed still has to reach the PR.
+		if !changed && unpushed(ctx, c, down) == 0 {
 			o.OnEvent(TrainEvent{Leg: down.Name(), Level: g.Levels[e.To], Phase: "pinned", Detail: e.Via + " already at " + short(sha)})
 			continue
 		}
-		if committed {
+		if committed || !changed {
 			if err := pushBranch(ctx, c, down, false); err != nil {
 				return fmt.Errorf("%s: pinned %s but the push failed: %w", down.Name(), e.Via, err)
 			}
@@ -301,7 +302,7 @@ func waitReady(ctx context.Context, c *change.Change, l *change.Leg, lvl int, ex
 			}
 			return nil, fmt.Errorf("%s: checks failed on #%d: %s%s", l.Name(), pr.Number, strings.Join(r.Failing, ", "), note)
 		}
-		settled := r.Pass+r.Pending > 0 || expectHead == "" || time.Since(start) > o.Settle
+		settled := r.Pass+r.Pending > 0 || time.Since(start) > o.Settle
 		if onHead && r.Pending == 0 && settled {
 			if p := readiness(pr, true); len(p) > 0 {
 				return nil, fmt.Errorf("%s: #%d is not ready: %s", l.Name(), pr.Number, strings.Join(p, ", "))

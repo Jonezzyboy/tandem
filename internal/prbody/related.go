@@ -70,9 +70,11 @@ func Block(entries []Entry, self string, ticket Ticket) string {
 
 // Apply replaces the block in body, or appends it when absent.
 func Apply(body, block string) string {
-	if i := strings.Index(body, startMarker); i >= 0 {
-		if j := strings.Index(body[i:], endMarker); j >= 0 {
-			return body[:i] + block + body[i+j+len(endMarker):]
+	// Pair the first end marker with the start nearest before it: an orphaned
+	// start left by a deleted end marker must not swallow the text after it.
+	if j := strings.Index(body, endMarker); j >= 0 {
+		if i := strings.LastIndex(body[:j], startMarker); i >= 0 {
+			return body[:i] + block + body[j+len(endMarker):]
 		}
 	}
 	body = strings.TrimRight(body, "\n")

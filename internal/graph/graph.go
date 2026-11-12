@@ -164,12 +164,10 @@ func Infer(nodes []Node) []Edge {
 			if a.Name == b.Name {
 				continue
 			}
-		provides:
 			for _, p := range a.Manifest.Provides {
 				for _, r := range b.Manifest.Requires {
 					if r.Name == p.Name && r.Kind == p.Kind {
 						edges = append(edges, Edge{From: a.Name, To: b.Name, Via: p.Name, Kind: p.Kind, Dir: r.Dir})
-						break provides
 					}
 				}
 			}

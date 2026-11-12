@@ -2,6 +2,7 @@ package core
 
 import (
 	"path/filepath"
+	"slices"
 	"time"
 
 	"github.com/jonezzyboy/tandem/internal/change"
@@ -113,7 +114,10 @@ func BuildView(c *change.Change, g Graph, graphErr error, states []LegState, rem
 		v.GraphError = graphErr.Error()
 	}
 	for _, e := range g.Edges {
-		v.Edges = append(v.Edges, EdgeView{From: e.From, To: e.To, Via: e.Via, Kind: string(e.Kind)})
+		// A module required from several directories is one edge to the user.
+		if ev := (EdgeView{From: e.From, To: e.To, Via: e.Via, Kind: string(e.Kind)}); !slices.Contains(v.Edges, ev) {
+			v.Edges = append(v.Edges, ev)
+		}
 	}
 	for _, s := range states {
 		lv := LegView{
