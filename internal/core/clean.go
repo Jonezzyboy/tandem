@@ -22,6 +22,9 @@ type BranchRef struct {
 	Repo   string
 	Source string
 	Branch string
+	// SHA is the branch's tip when it was judged safe to delete; Clean leaves
+	// it alone if it has moved since.
+	SHA string
 }
 
 // SwitchRef is a repo that has the change's branch checked out and must move
@@ -83,7 +86,7 @@ func DiscardCandidate(ctx context.Context, store change.Store, id string) (Clean
 			cc.Warnings = append(cc.Warnings, l.Name()+": couldn't read its PR from GitHub")
 		}
 		if s.OnBranch() && s.Status.Dirty > 0 {
-			cc.Warnings = append(cc.Warnings, fmt.Sprintf("%s: %d uncommitted files, carried onto %s (git refuses if they clash, and nothing is deleted)", l.Name(), s.Status.Dirty, l.Base))
+			cc.Warnings = append(cc.Warnings, fmt.Sprintf("%s: %d uncommitted files: the discard stops, deleting nothing, until they are committed or stashed", l.Name(), s.Status.Dirty))
 		}
 		switch n := unpushed(ctx, c, l); {
 		case n > 0:
@@ -100,10 +103,15 @@ func DiscardCandidate(ctx context.Context, store change.Store, id string) (Clean
 		} else if s.OnBranch() {
 			cc.Switches = append(cc.Switches, SwitchRef{Repo: l.Repo, Source: l.Source, Base: l.Base})
 		}
-		cc.Branches = append(cc.Branches, BranchRef{Repo: l.Repo, Source: l.Source, Branch: c.Branch})
+		cc.Branches = append(cc.Branches, branchRef(ctx, l, c.Branch))
 	}
 	cc.Files = changeFiles(cc)
 	return cc, nil
+}
+
+func branchRef(ctx context.Context, l *change.Leg, branch string) BranchRef {
+	sha, _ := gitx.Run(ctx, l.Source, "rev-parse", "--verify", "--quiet", "refs/heads/"+branch)
+	return BranchRef{Repo: l.Repo, Source: l.Source, Branch: branch, SHA: sha}
 }
 
 func candidate(ctx context.Context, store change.Store, c *change.Change) CleanCandidate {
@@ -111,7 +119,7 @@ func candidate(ctx context.Context, store change.Store, c *change.Change) CleanC
 	var why []string
 	for _, s := range Snapshot(ctx, c, true) {
 		l := s.Leg
-		ref := BranchRef{Repo: l.Repo, Source: l.Source, Branch: c.Branch}
+		ref := branchRef(ctx, l, c.Branch)
 		deletable := false
 		switch {
 		case s.StatusErr != nil:
@@ -218,11 +226,19 @@ func Clean(ctx context.Context, cc CleanCandidate) error {
 		return errors.Join(errs...)
 	}
 	for _, b := range cc.Branches {
-		if gitx.RefExists(ctx, b.Source, "refs/heads/"+b.Branch) {
-			if _, err := gitx.Run(ctx, b.Source, "branch", "-D", b.Branch); err != nil {
-				errs = append(errs, err)
-			}
+		if !gitx.RefExists(ctx, b.Source, "refs/heads/"+b.Branch) {
+			continue
 		}
+		if tip, _ := gitx.Run(ctx, b.Source, "rev-parse", "refs/heads/"+b.Branch); tip != b.SHA {
+			errs = append(errs, fmt.Errorf("%s: %s has new commits since it was checked, so it was kept", filepath.Base(b.Repo), b.Branch))
+			continue
+		}
+		if _, err := gitx.Run(ctx, b.Source, "branch", "-D", b.Branch); err != nil {
+			errs = append(errs, err)
+		}
+	}
+	if len(errs) > 0 {
+		return errors.Join(errs...)
 	}
 	for _, f := range cc.Files {
 		if err := os.Remove(f); err != nil && !errors.Is(err, os.ErrNotExist) {

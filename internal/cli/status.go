@@ -28,7 +28,7 @@ func runStatus(ctx context.Context, e *env, args []string) error {
 	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
 	states := core.Snapshot(ctx, c, !*offline)
-	if err := e.store.Save(c); err != nil {
+	if err := e.store.SavePRs(c); err != nil {
 		return err
 	}
 	core.SortByLevel(states, g.Levels)

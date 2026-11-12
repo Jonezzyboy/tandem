@@ -85,9 +85,15 @@ func Snapshot(ctx context.Context, c *change.Change, withPR bool) []LegState {
 
 // ViewPR is the leg's PR. A recorded PR closed without merging gives way to an
 // open one on the branch, as when a PR is closed and opened again as a new one.
+// With none recorded, a finished PR on the branch counts only if the local
+// branch is part of it: a reused branch name can find an older change's PR.
 func ViewPR(ctx context.Context, c *change.Change, l *change.Leg) (*gh.PR, error) {
 	if l.PR == 0 {
-		return gh.View(ctx, l.Dir(), c.Branch)
+		pr, err := gh.View(ctx, l.Dir(), c.Branch)
+		if err != nil || pr == nil || pr.State == "OPEN" || landed(ctx, l, c.Branch, pr.HeadRefOid) {
+			return pr, err
+		}
+		return nil, nil
 	}
 	pr, err := gh.View(ctx, l.Dir(), strconv.Itoa(l.PR))
 	if err != nil || pr == nil || pr.State != "CLOSED" {

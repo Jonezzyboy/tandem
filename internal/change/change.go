@@ -188,6 +188,27 @@ func (s Store) Save(c *Change) error {
 	return writeJSON(dir, file, c)
 }
 
+// SavePRs copies found's PR numbers onto the change as saved now, so a long
+// operation doesn't write back a stale copy over edits made meanwhile.
+func (s Store) SavePRs(found *Change) error {
+	c, err := s.Load(found.ID)
+	if err != nil {
+		return err
+	}
+	changed := false
+	for i := range c.Legs {
+		l := &c.Legs[i]
+		if f, err := found.Leg(l.Repo); err == nil && f.PR != 0 && f.PR != l.PR {
+			l.PR, l.PRURL = f.PR, f.PRURL
+			changed = true
+		}
+	}
+	if !changed {
+		return nil
+	}
+	return s.Save(c)
+}
+
 // writeJSON replaces dir/name in one rename, so a reader never sees half a file.
 func writeJSON(dir, name string, v any) error {
 	data, err := json.MarshalIndent(v, "", "  ")

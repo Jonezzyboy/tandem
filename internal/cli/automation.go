@@ -174,7 +174,7 @@ func runMerge(ctx context.Context, e *env, args []string) error {
 		o.Triage, o.Retries = triage.New(t), t.Retries
 	}
 	err = core.RunTrain(ctx, c, g, o)
-	if saveErr := e.store.Save(c); saveErr != nil && err == nil {
+	if saveErr := e.store.SavePRs(c); saveErr != nil && err == nil {
 		err = saveErr
 	}
 	if err != nil {

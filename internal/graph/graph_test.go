@@ -119,3 +119,18 @@ func TestLanguage(t *testing.T) {
 		}
 	}
 }
+
+func TestInferKeepsEveryPackageBetweenTwoRepos(t *testing.T) {
+	nodes := []Node{
+		{Name: "a", Manifest: Manifest{Provides: []Package{{Name: "vendor/x", Kind: Composer}, {Name: "example.com/x/sdk", Kind: Go}}}},
+		{Name: "b", Manifest: Manifest{Requires: []Package{{Name: "vendor/x", Kind: Composer}, {Name: "example.com/x/sdk", Kind: Go, Dir: "."}, {Name: "example.com/x/sdk", Kind: Go, Dir: "cmd"}}}},
+	}
+	var got []string
+	for _, e := range Infer(nodes) {
+		got = append(got, string(e.Kind)+" "+e.Via+" "+e.Dir)
+	}
+	want := []string{"composer vendor/x ", "go example.com/x/sdk .", "go example.com/x/sdk cmd"}
+	if !slices.Equal(got, want) {
+		t.Errorf("Infer = %q, want %q", got, want)
+	}
+}
