@@ -107,8 +107,8 @@ func (a *App) editorCommand(dir string) ([]string, error) {
 	var missing string
 	for _, key := range []string{lang, "other"} {
 		choice := editors[key]
-		if strings.HasPrefix(choice, cmdPrefix) {
-			return commandFor(strings.TrimPrefix(choice, cmdPrefix), dir)
+		if after, ok := strings.CutPrefix(choice, cmdPrefix); ok {
+			return commandFor(after, dir)
 		}
 		app, ok := a.editorApp(choice)
 		if ok && app.Installed {

@@ -30,7 +30,7 @@ var skipDirs = map[string]bool{"node_modules": true, ".git": true, "vendor": tru
 // FindBuilds lists the packages under root whose package.json has a build
 // script, shallowest first.
 func FindBuilds(repo, root string) []BuildTarget {
-	out := []BuildTarget{}
+	var out []BuildTarget
 	filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return nil

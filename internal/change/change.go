@@ -302,7 +302,7 @@ func (s Store) Current(cwd string) (*Change, error) {
 	}
 	switch len(all) {
 	case 0:
-		return nil, errors.New("no changes yet: run td start <ID> <repo>...")
+		return nil, errors.New("no changes yet: run td start <ID> <repo>")
 	case 1:
 		return all[0], nil
 	}

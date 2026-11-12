@@ -69,7 +69,7 @@ func KeyBranches(ctx context.Context, repos []workspace.Repo, key string) []stri
 			if err != nil {
 				return
 			}
-			for _, ref := range strings.Split(out, "\n") {
+			for ref := range strings.SplitSeq(out, "\n") {
 				name := strings.TrimPrefix(strings.TrimPrefix(ref, "refs/heads/"), "refs/remotes/origin/")
 				if k, _ := jira.KeyInBranch(name); k == key && name != key {
 					found[i] = append(found[i], name)

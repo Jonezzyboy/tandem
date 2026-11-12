@@ -343,7 +343,7 @@ func PinTo(ctx context.Context, c *change.Change, l *change.Leg, dir, module, re
 // show only the first line, and "go: downloading" would hide the failure.
 func goError(out string) string {
 	var keep []string
-	for _, line := range strings.Split(out, "\n") {
+	for line := range strings.SplitSeq(out, "\n") {
 		line = strings.TrimSpace(line)
 		if line == "" || strings.HasPrefix(line, "go: downloading ") || strings.HasPrefix(line, "go: finding ") || strings.HasPrefix(line, "go: extracting ") {
 			continue

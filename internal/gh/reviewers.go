@@ -145,11 +145,12 @@ const assignablePage = 100
 func reviewersQuery(repos []string) string {
 	var b strings.Builder
 	b.WriteString("query {\n  viewer { login }\n")
-	search := "is:pr author:@me sort:updated-desc"
+	var search strings.Builder
+	search.WriteString("is:pr author:@me sort:updated-desc")
 	for i, r := range repos {
 		owner, name, _ := strings.Cut(r, "/")
 		fmt.Fprintf(&b, "  r%d: repository(owner: %q, name: %q) { assignableUsers(first: %d) { nodes { login name } } }\n", i, owner, name, assignablePage)
-		search += " repo:" + r
+		search.WriteString(" repo:" + r)
 	}
 	fmt.Fprintf(&b, `  recent: search(query: %q, type: ISSUE, first: 30) {
     nodes { ... on PullRequest {
@@ -157,7 +158,7 @@ func reviewersQuery(repos []string) string {
       reviewRequests(first: 10) { nodes { requestedReviewer { ... on User { login name } ... on Team { combinedSlug name } } } }
     } }
   }
-}`, search)
+}`, search.String())
 	return b.String()
 }
 

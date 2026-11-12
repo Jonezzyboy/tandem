@@ -60,7 +60,7 @@ func runPR(ctx context.Context, e *env, args []string) error {
 	plans := core.PlanPRs(ctx, c, g, opts)
 
 	fmt.Fprintf(e.out, "%s  %s\n", e.ui.Bold(c.ID), t)
-	rows := [][]ui.Cell{}
+	var rows [][]ui.Cell
 	for _, p := range plans {
 		note := ui.Cell{Text: p.Note}
 		switch {

@@ -72,7 +72,7 @@ func legState(ctx context.Context, dir string) string {
 		h.Write([]byte(s))
 		h.Write([]byte{0})
 	}
-	for _, line := range strings.Split(status, "\n") {
+	for line := range strings.SplitSeq(status, "\n") {
 		if len(line) > 3 && line[:2] == "??" {
 			if data, err := os.ReadFile(filepath.Join(dir, line[3:])); err == nil {
 				h.Write(data)

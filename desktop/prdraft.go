@@ -74,7 +74,7 @@ func draftBody(why string, legs []legCommits) string {
 func leadParagraph(desc string) string {
 	var para []string
 	fenced := false
-	for _, line := range strings.Split(desc, "\n") {
+	for line := range strings.SplitSeq(desc, "\n") {
 		t := strings.TrimSpace(line)
 		if strings.HasPrefix(t, "```") {
 			fenced = !fenced

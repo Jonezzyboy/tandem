@@ -115,7 +115,7 @@ func (a *App) openPRs(ctx context.Context) ([]gh.OpenPR, error) {
 		})
 	}
 	wg.Wait()
-	all := []gh.OpenPR{}
+	var all []gh.OpenPR
 	failed := 0
 	for i := range owners {
 		all = append(all, found[i]...)
@@ -821,7 +821,7 @@ func checklist(desc string) []testrun.Check {
 	var all, under []testrun.Check
 	in, found, inList := false, false, false
 	group, lead := "", ""
-	for _, line := range strings.Split(desc, "\n") {
+	for line := range strings.SplitSeq(desc, "\n") {
 		if strings.TrimSpace(line) == "" {
 			continue
 		}
