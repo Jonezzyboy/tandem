@@ -383,8 +383,8 @@
   .row > :global(kbd) { flex-shrink: 0; }
   .id { font-size: 12px; color: var(--accent-text); }
   /* Plain wrapping text, so the dot trails the ID's last word however it wraps. */
-  .id-line { flex: 1; min-width: 0; overflow-wrap: anywhere; }
-  .live { display: inline-block; width: 6px; height: 6px; margin-left: 6px; border-radius: 3px; background: var(--ok); vertical-align: middle; }
+  .id-line { flex: 1; min-width: 0; overflow-wrap: anywhere; display: flex; align-items: center; gap: 6px; }
+  .live { flex-shrink: 0; width: 6px; height: 6px; border-radius: 3px; background: var(--ok); }
   .title { font-size: 14px; line-height: 1.3; }
   .headline { font-size: 12px; color: var(--muted); }
   .headline.warn { color: var(--warn-text); }
